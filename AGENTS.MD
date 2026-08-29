@@ -8,6 +8,7 @@
 - Production URL: https://vivian-chan.vercel.app
 - GitHub: https://github.com/celestial-sora/ai-waifu
 - Primary devices: iPhone and iPad Safari
+- Latest production deployment: dpl_2GMB7wU1m2oGAHDhx2TKTWAxaLhx
 
 ## Stack
 
@@ -18,6 +19,8 @@
 - ElevenLabs for STT and TTS
 - Supabase PostgreSQL for conversations, messages, and memories
 - Live2D Cubism 4 model with 4096px textures
+- Live2D expressions: shy, sad, flustered, side_eye, dark, umbrella_closed
+- Live2D motion: Scene1 idle motion
 
 ## Product Rules
 
@@ -28,6 +31,7 @@
 - Keep camera and GPS out of scope unless explicitly requested.
 - TTS and Live2D failures must not break text chat.
 - Use the existing Vivian model paths and preserve 4096px textures for iPad stability.
+- Map chat context to Live2D expressions and motion with a neutral fallback.
 
 ## Memory and Search
 
