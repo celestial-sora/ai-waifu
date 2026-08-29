@@ -33,6 +33,7 @@ export default function Home() {
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const lipSyncFrameRef = useRef<number | null>(null);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([greeting]);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -89,6 +90,7 @@ export default function Home() {
       window.visualViewport?.removeEventListener("resize", resizeModel);
       app?.destroy(true, { children: true });
       modelRef.current = null;
+      stopLipSync();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -107,6 +109,40 @@ export default function Home() {
     audioContextRef.current ??= new AudioContextClass();
     if (audioContextRef.current.state === "suspended") void audioContextRef.current.resume();
   }
+  function setMouthOpen(value: number) {
+    const coreModel = modelRef.current?.internalModel?.coreModel;
+    if (!coreModel) return;
+    try { coreModel.setParameterValueById("ParamMouthOpenY", Math.max(0, Math.min(1, value))); } catch (error) { console.warn("Live2D mouth parameter unavailable", error); }
+  }
+  function stopLipSync() {
+    if (lipSyncFrameRef.current !== null) cancelAnimationFrame(lipSyncFrameRef.current);
+    lipSyncFrameRef.current = null;
+    setMouthOpen(0);
+  }
+  function startLipSync(audio: HTMLAudioElement) {
+    const context = audioContextRef.current;
+    if (!context) return;
+    stopLipSync();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = .72;
+    const source = context.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(context.destination);
+    const samples = new Uint8Array(analyser.fftSize);
+    let smoothed = 0;
+    const update = () => {
+      if (audio.paused || audio.ended) { setMouthOpen(0); lipSyncFrameRef.current = null; return; }
+      analyser.getByteTimeDomainData(samples);
+      let sum = 0;
+      for (const sample of samples) sum += Math.abs(sample - 128);
+      const level = Math.min(1, (sum / samples.length / 128) * 3.4);
+      smoothed += (level - smoothed) * .34;
+      setMouthOpen(smoothed);
+      lipSyncFrameRef.current = requestAnimationFrame(update);
+    };
+    lipSyncFrameRef.current = requestAnimationFrame(update);
+  }
   async function speak(text: string) {
     if (muted) return;
     let objectUrl: string | null = null;
@@ -118,9 +154,10 @@ export default function Home() {
       objectUrl = URL.createObjectURL(await response.blob());
       const audio = new Audio(objectUrl);
       audio.setAttribute("playsinline", "true");
-      audio.onended = () => objectUrl && URL.revokeObjectURL(objectUrl);
-      audio.onerror = () => objectUrl && URL.revokeObjectURL(objectUrl);
+      audio.onended = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+      audio.onerror = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
       audioRef.current = audio;
+      startLipSync(audio);
       await audio.play();
     } catch (error) {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
