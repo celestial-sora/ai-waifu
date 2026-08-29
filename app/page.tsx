@@ -24,7 +24,7 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
 const greeting: Message = { from: "vivian", text: "สวัสดีค่ะ ฉันคือ Vivian วันนี้อยากให้ช่วยทำอะไรคะ?" };
-const APP_CODENAME = "ดวงดาว";
+const APP_CODENAME = "Jupiter";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
