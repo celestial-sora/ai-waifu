@@ -1,0 +1,36 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "vivian.moc3",
+		"Textures": [
+			"vivian.4096/texture_00.png",
+			"vivian.4096/texture_01.png",
+			"vivian.4096/texture_02.png",
+			"vivian.4096/texture_03.png",
+			"vivian.4096/texture_04.png",
+			"vivian.4096/texture_05.png",
+			"vivian.4096/texture_06.png",
+			"vivian.4096/texture_07.png",
+			"vivian.4096/texture_08.png",
+			"vivian.4096/texture_09.png",
+			"vivian.4096/texture_10.png"
+		],
+		"Physics": "vivian.physics3.json",
+		"DisplayInfo": "vivian.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}
