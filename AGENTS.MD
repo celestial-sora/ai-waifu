@@ -16,7 +16,7 @@
 - Tailwind CSS
 - Vercel Hobby
 - Gemini for chat and Google Search grounding
-- ElevenLabs for STT and TTS
+- ElevenLabs for STT; Fish Audio S2.1 Pro Free API for TTS
 - Supabase PostgreSQL for conversations, messages, and memories
 - Live2D Cubism 4 model with 4096px textures
 - Live2D expressions: shy, sad, flustered, side_eye, dark, umbrella_closed

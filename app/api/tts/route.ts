@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      model: process.env.FISH_AUDIO_MODEL ?? "s2-pro",
+      model: process.env.FISH_AUDIO_MODEL ?? "s2.1-pro-free",
     },
     body: JSON.stringify({
       text: cleanText,
