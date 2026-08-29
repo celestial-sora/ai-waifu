@@ -7,11 +7,18 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured" }, { status: 500 });
 
   const body = (await request.json()) as { messages?: ChatMessage[] };
-  const messages = body.messages ?? [];
-  const contents = messages.map((message) => ({
-    role: message.role === "assistant" ? "model" : "user",
-    parts: [{ text: message.content }],
-  }));
+  const messages = (body.messages ?? []).filter((message) => message.content?.trim());
+  // Gemini requires the conversation to begin with a user turn and alternate roles.
+  // The UI keeps Koharu's greeting locally, so discard leading assistant messages.
+  while (messages[0]?.role === "assistant") messages.shift();
+  const contents: { role: "user" | "model"; parts: [{ text: string }] }[] = [];
+  for (const message of messages) {
+    const role = message.role === "assistant" ? "model" : "user";
+    const previous = contents.at(-1);
+    if (previous?.role === role) previous.parts[0].text += `\n${message.content}`;
+    else contents.push({ role, parts: [{ text: message.content }] });
+  }
+  if (!contents.length) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความก่อนค่ะ" }, { status: 400 });
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL ?? "gemini-2.5-flash"}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
