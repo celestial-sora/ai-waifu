@@ -22,6 +22,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
     },
     body: JSON.stringify({
       model: modelName(),
+      models: [modelName(), process.env.OPENROUTER_FALLBACK_MODEL ?? "google/gemma-4-26b-a4b-it:free"],
       messages,
       temperature: options.json ? 0 : 0.8,
       max_tokens: options.json ? 240 : 700,
