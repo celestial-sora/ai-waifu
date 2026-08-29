@@ -3,8 +3,12 @@ import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Ai Waifu",
-  description: "A mobile-first AI companion experience.",
+  title: "Vivian",
+  description: "Vivian Personal Project — a mobile-first AI companion.",
+  icons: {
+    icon: [{ url: "/favicon.gif", type: "image/gif" }],
+    shortcut: ["/favicon.gif"],
+  },
 };
 
 export default function RootLayout({
