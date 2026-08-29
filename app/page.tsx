@@ -110,6 +110,16 @@ export default function Home() {
     if (!AudioContextClass) return;
     audioContextRef.current ??= new AudioContextClass();
     if (audioContextRef.current.state === "suspended") void audioContextRef.current.resume();
+    const audio = audioRef.current ?? new Audio();
+    audio.setAttribute("playsinline", "true");
+    audio.preload = "auto";
+    audioRef.current = audio;
+    audio.muted = true;
+    void audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.muted = false;
+    }).catch(() => { audio.muted = false; });
   }
   function setMouthOpen(value: number) {
     const coreModel = modelRef.current?.internalModel?.coreModel;
@@ -152,10 +162,13 @@ export default function Home() {
       unlockAudio();
       const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
       if (!response.ok) throw new Error("TTS failed");
+      const audio = audioRef.current ?? new Audio();
       audioRef.current?.pause();
+      if (audioRef.current?.src) audioRef.current.removeAttribute("src");
       objectUrl = URL.createObjectURL(await response.blob());
-      const audio = new Audio(objectUrl);
+      audio.src = objectUrl;
       audio.setAttribute("playsinline", "true");
+      audio.volume = 1;
       audio.onended = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
       audio.onerror = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
       audioRef.current = audio;
