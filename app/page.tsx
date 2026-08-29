@@ -187,7 +187,9 @@ export default function Home() {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    const expression = /เสียใจ|เศร้า|ขอโทษ|sad|sorry/i.test(combined) ? null
+    const expression = /แว่น|ใส่แว่น|ถอดแว่น|glasses|眼镜/i.test(combined) ? "glasses"
+      : /ตา|มอง|กระพริบ|หลับตา|สายตา|eyes|look|blink/i.test(combined) ? "eyes"
+      : /เสียใจ|เศร้า|ขอโทษ|sad|sorry/i.test(combined) ? "eyes"
       : /เขิน|ชม|น่ารัก|รัก|ชอบ|ขอบคุณ|กอด|cute|love|thank/i.test(combined) ? "playful"
       : /ตกใจ|วุ่นวาย|ไม่รู้|อะไรนะ|จริงเหรอ|wow|surprise/i.test(combined) ? "surprised"
       : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "cat_filter"
