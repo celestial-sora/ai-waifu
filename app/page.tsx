@@ -128,6 +128,10 @@ export default function Home() {
     if (!coreModel) return;
     try { coreModel.setParameterValueById("ParamMouthOpenY", Math.max(0, Math.min(1, value))); } catch (error) { console.warn("Live2D mouth parameter unavailable", error); }
   }
+  function resetReaction() {
+    const expressionManager = modelRef.current?.internalModel?.motionManager?.expressionManager;
+    try { expressionManager?.resetExpression(); } catch (error) { console.warn("Live2D default expression unavailable", error); }
+  }
   function stopLipSync() {
     if (lipSyncFrameRef.current !== null) cancelAnimationFrame(lipSyncFrameRef.current);
     lipSyncFrameRef.current = null;
@@ -184,6 +188,7 @@ export default function Home() {
       await audio.play();
     } catch (error) {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
+      resetReaction();
       console.error("TTS unavailable", error);
     }
   }
@@ -197,12 +202,14 @@ export default function Home() {
     try {
       const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })) }) });
       const data = await response.json();
-      const reply = data.text ?? "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ";
+      if (!response.ok || !data.text) throw new Error(data.error ?? "Chat request failed");
+      const reply = data.text;
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
       void playReaction(reply, text);
       void speak(reply);
       if (data.memories) setMemories(data.memories);
     } catch {
+      resetReaction();
       setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
     } finally { setSending(false); }
   }
@@ -225,6 +232,7 @@ export default function Home() {
       const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
       if (idleMotion?.length) await model.motion("Idle", 0, 3);
     } catch (error) {
+      resetReaction();
       console.warn("Live2D reaction unavailable; keeping neutral state", error);
     }
   }
@@ -253,6 +261,7 @@ export default function Home() {
       streamRef.current = stream;
       setRecording(true);
     } catch {
+      resetReaction();
       setMessages((current) => [...current, { from: "vivian", text: "ยังไม่ได้รับสิทธิ์ใช้ไมโครโฟนค่ะ" }]);
     }
   }
