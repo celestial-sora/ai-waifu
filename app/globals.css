@@ -1,26 +1,2 @@
 @import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+:root{--ink:#302a35;--muted:#8b8291;--pink:#ec8cab}*{box-sizing:border-box}body{margin:0;background:#f6f1f4;color:var(--ink);font-family:Arial,Helvetica,sans-serif}.waifu-shell{min-height:100svh;max-width:560px;margin:auto;padding:22px 18px 96px;background:linear-gradient(160deg,#fffaf8,#f8f1f7 65%,#eee9f6)}.topbar,.chat-heading,.composer,.bottom-nav{display:flex;align-items:center;justify-content:space-between}.brand{display:flex;gap:9px;align-items:center;letter-spacing:.18em;font-size:13px;font-weight:700}.brand-mark{color:var(--pink);font-size:23px}.status{color:var(--muted);font-size:11px}.status-dot{display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%;background:#78c596}.icon-button{border:0;background:transparent;color:#8e8490;font-size:18px}.stage-card{position:relative;height:410px;margin-top:18px;overflow:hidden;border:1px solid #fff;border-radius:28px;background:radial-gradient(circle at 50% 42%,#f9dce4,#f4dce9 28%,#e9e2f3 74%);box-shadow:0 16px 40px #b39cac2b}.model-stage{position:absolute;inset:0}.model-stage canvas{width:100%;height:100%;display:block}.glow{position:absolute;border-radius:50%;filter:blur(30px);opacity:.55}.glow-one{width:140px;height:140px;top:25px;left:-35px;background:#ffd9bf}.glow-two{width:180px;height:180px;right:-50px;bottom:-50px;background:#c9c2f2}.mood-pill{position:absolute;top:16px;left:16px;padding:8px 12px;border:1px solid #fff8;border-radius:30px;background:#fff8;backdrop-filter:blur(8px);color:#726875;font-size:11px}.mood-pill span{margin:0 4px;color:#c8a0b2}.stage-caption{position:absolute;bottom:16px;left:18px;display:flex;flex-direction:column;gap:3px}.stage-caption strong{font-size:19px}.stage-caption span{color:#897e8d;font-size:11px}.chat-panel{padding:25px 3px 0}.eyebrow{color:#b08da4;font-size:9px;letter-spacing:.16em}.chat-heading h1{margin:4px 0 0;font-size:23px}.live-badge{padding:5px 8px;border-radius:8px;color:#c96989;background:#f9dce6;font-size:9px;letter-spacing:.1em}.messages{display:flex;flex-direction:column;gap:9px;margin:20px 0 15px}.bubble-row{display:flex}.bubble-row.mine{justify-content:flex-end}.bubble{max-width:87%;padding:12px 15px;border-radius:5px 17px 17px 17px;background:#fff;box-shadow:0 4px 14px #b49eaf18;color:#655b68;font-size:13px;line-height:1.5}.mine .bubble{border-radius:17px 5px 17px 17px;background:#edd9e5}.composer{gap:8px;padding:8px;border:1px solid #fff;border-radius:17px;background:#fff9;box-shadow:0 6px 18px #b49eaf14}.composer input{min-width:0;flex:1;padding:9px;border:0;outline:0;background:transparent;color:var(--ink);font-size:13px}.mic-button,.send-button{width:34px;height:34px;border:0;border-radius:11px;color:#a78699;background:#f4e9f0}.send-button{color:white;background:var(--pink);font-size:20px}.bottom-nav{position:fixed;bottom:14px;left:50%;width:min(524px,calc(100% - 36px));transform:translateX(-50%);padding:10px 30px;border:1px solid #fff;border-radius:22px;background:#fff9;backdrop-filter:blur(16px);box-shadow:0 12px 30px #92798b24}.bottom-nav button{display:flex;flex-direction:column;gap:3px;align-items:center;border:0;background:transparent;color:#a69ba9;font-size:18px}.bottom-nav span{font-size:9px}.bottom-nav .active{color:#dc7799}
