@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as { messages?: ChatMessage[] };
   const messages = (body.messages ?? []).filter((message) => message.content?.trim());
   // Gemini requires the conversation to begin with a user turn and alternate roles.
-  // The UI keeps Koharu's greeting locally, so discard leading assistant messages.
+  // The UI keeps Vivian's greeting locally, so discard leading assistant messages.
   while (messages[0]?.role === "assistant") messages.shift();
   const contents: { role: "user" | "model"; parts: [{ text: string }] }[] = [];
   for (const message of messages) {
