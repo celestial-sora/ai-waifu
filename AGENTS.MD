@@ -18,7 +18,7 @@
 - Gemini for chat and Google Search grounding
 - ElevenLabs for STT; Fish Audio S2.1 Pro Free API for TTS
 - Supabase PostgreSQL for conversations, messages, and memories
-- Live2D model with 4096px textures (source asset is Cubism 5 compatible)
+- Live2D Witch model with 8192px source textures (explicitly approved for this model)
 - Live2D model path: /live2d/witch/witch.model3.json
 - Live2D expressions: cw, fz, h, hdj, ku, mz, sq, x, xx, yj, zs1, zs2
 - Live2D motion: Scene1 idle motion
@@ -31,7 +31,7 @@
 - Do not use emoji in UI or character responses.
 - Keep camera and GPS out of scope unless explicitly requested.
 - TTS and Live2D failures must not break text chat.
-- Use the active Witch model path and preserve 4096px textures for iPad stability.
+- Use the active Witch model path and preserve its approved 8192px textures.
 - Map chat context to Live2D expressions and motion with a neutral fallback.
 
 ## Memory and Search
