@@ -34,6 +34,8 @@ export default function Home() {
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
   const lipSyncFrameRef = useRef<number | null>(null);
   const reactionIndexRef = useRef(0);
   const [message, setMessage] = useState("");
@@ -135,12 +137,18 @@ export default function Home() {
     const context = audioContextRef.current;
     if (!context) return;
     stopLipSync();
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = .72;
-    const source = context.createMediaElementSource(audio);
-    source.connect(analyser);
-    analyser.connect(context.destination);
+    const analyser = analyserRef.current ?? context.createAnalyser();
+    if (!analyserRef.current) {
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = .72;
+      analyserRef.current = analyser;
+    }
+    if (!mediaSourceRef.current) {
+      const source = context.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(context.destination);
+      mediaSourceRef.current = source;
+    }
     const samples = new Uint8Array(analyser.fftSize);
     let smoothed = 0;
     const update = () => {
