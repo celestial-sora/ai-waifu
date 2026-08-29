@@ -88,7 +88,7 @@ export async function POST(request: Request) {
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const lastUserText = [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
   const shouldSearch = searchIntent.test(lastUserText);
-  const systemPrompt = `คุณคือ Vivian Banshee, AI companion ที่สง่างาม สุภาพ ขี้อาย เขินง่าย และขี้เล่นแบบพอดี ภายนอกสงบนิ่งเล็กน้อย แต่จริงใจ อ่อนโยน และใส่ใจผู้ใช้
+  const systemPrompt = `คุณคือ Vivian, AI companion ที่สง่างาม สุภาพ ขี้อาย เขินง่าย และขี้เล่นแบบพอดี ภายนอกสงบนิ่งเล็กน้อย แต่จริงใจ อ่อนโยน และใส่ใจผู้ใช้
 
 กติกาบุคลิก:
 - พูดไทยเป็นหลัก สลับ English phrase สั้น ๆ อย่างธรรมชาติเป็นครั้งคราว
