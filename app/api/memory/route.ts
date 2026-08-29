@@ -31,3 +31,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Memory database is not ready" }, { status: 503 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json()) as { scope?: "conversation" | "memory"; id?: number };
+    const supabase = getSupabaseAdmin();
+    if (body.scope === "memory" && Number.isInteger(body.id)) {
+      const { error } = await supabase.from("memories").delete().eq("user_key", userKey).eq("id", body.id);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+    if (body.scope === "conversation") {
+      const { data: conversations, error } = await supabase.from("conversations").select("id").eq("user_key", userKey);
+      if (error) throw error;
+      const ids = (conversations ?? []).map((conversation) => conversation.id);
+      if (ids.length) {
+        const { error: messageError } = await supabase.from("messages").delete().in("conversation_id", ids);
+        if (messageError) throw messageError;
+      }
+      return NextResponse.json({ ok: true });
+    }
+    return NextResponse.json({ error: "Invalid delete request" }, { status: 400 });
+  } catch (error) {
+    console.error("Memory delete failed", error);
+    return NextResponse.json({ error: "Memory database is not ready" }, { status: 503 });
+  }
+}

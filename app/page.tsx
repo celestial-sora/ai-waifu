@@ -1,28 +1,214 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 
-type IconName = "spark" | "settings" | "mic" | "send" | "home" | "heart" | "menu" | "volume";
-function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
-  const icons: Record<IconName, React.ReactNode> = {
-    spark: <><path d="m12 2 1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2Z"/><path d="m19 16 .6 2.4L22 19l-2.4.6L19 22l-.6-2.4L16 19l2.4-.6L19 16Z"/></>,
-    settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L8 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H6v-2.4h.8a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V5H15v.7a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1Z"/></>,
-    mic: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></>, send: <path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/>,
-    home: <path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z"/>, heart: <path d="M20.8 8.8c0 5.4-8.8 10.2-8.8 10.2S3.2 14.2 3.2 8.8A4.8 4.8 0 0 1 12 6.2a4.8 4.8 0 0 1 8.8 2.6Z"/>, menu: <><path d="M4 6h16M4 12h16M4 18h16"/></>, volume: <><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></>,
+type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "video" | "clip" | "message" | "close" | "memory" | "sound";
+
+function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    focus: <><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="3.4"/></>,
+    wardrobe: <><path d="M12 3a3 3 0 0 1 3 3c0 1.4-1.1 2.3-2.4 2.8L4 14.2A2 2 0 0 0 5.1 18h13.8a2 2 0 0 0 1.1-3.8l-8.6-5.4"/><path d="M9 18v2M15 18v2"/></>,
+    trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></>,
+    chevron: <path d="m5 9 7 7 7-7"/>,
+    mic: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></>,
+    video: <><rect x="3" y="6" width="12" height="12" rx="3"/><path d="m15 10 5-3v10l-5-3"/></>,
+    clip: <path d="m8.5 12.5 5.9-5.9a3.5 3.5 0 0 1 5 5l-7.8 7.8a5 5 0 0 1-7.1-7.1l7.3-7.3"/>,
+    message: <path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.5 8.5 0 0 1-3.6-.8L4 20l1.3-4A7.2 7.2 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/>,
+    close: <path d="m6 6 12 12M18 6 6 18"/>,
+    memory: <><path d="M20 12c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8 8 3.6 8 8Z"/><path d="M12 8v4l2.8 1.8"/></>,
+    sound: <><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/></>,
   };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icons[name]}</svg>;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
+type Message = { from: "me" | "vivian"; text: string };
+type Memory = { id: number; memory: string; category: string; importance: number };
+const greeting: Message = { from: "vivian", text: "สวัสดีค่ะ ฉันคือ Vivian วันนี้อยากให้ช่วยทำอะไรคะ?" };
+
 export default function Home() {
-  const canvasRef = useRef<HTMLCanvasElement>(null); const recorderRef = useRef<MediaRecorder | null>(null); const streamRef = useRef<MediaStream | null>(null); const audioRef = useRef<HTMLAudioElement | null>(null); const audioContextRef = useRef<AudioContext | null>(null);
-  const [modelState, setModelState] = useState("กำลังโหลด Vivian"); const [message, setMessage] = useState(""); const [recording, setRecording] = useState(false); const [muted, setMuted] = useState(false); const [settingsOpen, setSettingsOpen] = useState(false); const [chatOpen, setChatOpen] = useState(false); const [sttPreview, setSttPreview] = useState<string | null>(null); const [activeTab, setActiveTab] = useState("home");
-  const [messages, setMessages] = useState([{ from: "vivian", text: "สวัสดีค่ะ ฉันคือ Vivian วันนี้อยากให้ช่วยทำอะไรคะ?" }]);
-  useEffect(() => { const unlock = () => unlockAudio(); window.addEventListener("pointerdown", unlock, { once: true }); return () => window.removeEventListener("pointerdown", unlock); }, []);
-  useEffect(() => { fetch("/api/memory").then((response) => response.json()).then((data) => { if (data.messages?.length) setMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content }))); }).catch(() => {}); }, []);
-  useEffect(() => { let app: any; let disposed = false; (async () => { try { const PIXI = await import("pixi.js"); const { Live2DModel } = await import("pixi-live2d-display/cubism4"); (window as any).PIXI = PIXI; (Live2DModel as any).registerTicker(PIXI.Ticker); app = new PIXI.Application({ view: canvasRef.current!, resizeTo: canvasRef.current!.parentElement!, backgroundAlpha: 0, antialias: true }); const model = await Live2DModel.from("/live2d/vivian/vivian.model3.json"); if (disposed) return; model.anchor.set(.5, 1); model.x = app.screen.width / 2; model.y = app.screen.height * .99; model.scale.set(Math.min(app.screen.width / model.width, app.screen.height / model.height) * 1.05); app.stage.addChild(model); setModelState("Vivian พร้อมคุยแล้ว"); } catch (error) { console.error(error); setModelState("โหลดโมเดลไม่สำเร็จ"); } })(); return () => { disposed = true; app?.destroy(true, { children: true }); streamRef.current?.getTracks().forEach((track) => track.stop()); }; }, []);
-  function unlockAudio() { if (typeof window === "undefined") return; const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext; if (!AudioContextClass) return; audioContextRef.current ??= new AudioContextClass(); if (audioContextRef.current.state === "suspended") void audioContextRef.current.resume(); }
-  async function speak(text: string) { if (muted) return; let objectUrl: string | null = null; try { const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); if (!response.ok) throw new Error(`TTS ${response.status}`); audioRef.current?.pause(); objectUrl = URL.createObjectURL(await response.blob()); const audio = new Audio(objectUrl); audio.setAttribute("playsinline", "true"); audio.onended = () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }; audio.onerror = () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }; audioRef.current = audio; await audio.play(); } catch (error) { if (objectUrl) URL.revokeObjectURL(objectUrl); console.error("TTS failed, using browser voice", error); if (typeof window !== "undefined" && "speechSynthesis" in window) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.lang = "th-TH"; utterance.rate = 0.95; window.speechSynthesis.speak(utterance); } } }
-  async function sendMessage(overrideText?: string) { const text = (overrideText ?? message).trim(); if (!text) return; const next = [...messages, { from: "me", text }]; setMessages(next); setMessage(""); try { const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: next.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })) }) }); const data = await response.json(); const reply = data.text ?? `Gemini ยังไม่พร้อมค่ะ: ${data.error ?? "ตรวจสอบ API key หรือ model"}`; setMessages((current) => [...current, { from: "vivian", text: reply }]); void speak(reply); } catch { setMessages((current) => [...current, { from: "vivian", text: "เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]); } }
-  async function startRecording() { if (recording || recorderRef.current) return; try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const chunks: BlobPart[] = []; const recorder = new MediaRecorder(stream); recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data); recorder.onstop = async () => { const form = new FormData(); form.append("file", new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "koharu-recording.webm"); try { const response = await fetch("/api/stt", { method: "POST", body: form }); const data = await response.json(); if (data.text) { setSttPreview(data.text); setMessage(data.text); void sendMessage(data.text); window.setTimeout(() => setSttPreview(null), 5000); } } catch { setMessages((current) => [...current, { from: "vivian", text: "แปลงเสียงไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]); } finally { recorderRef.current = null; streamRef.current = null; } }; recorder.start(); recorderRef.current = recorder; streamRef.current = stream; setRecording(true); } catch { setMessages((current) => [...current, { from: "vivian", text: "ยังไม่ได้รับสิทธิ์ใช้ไมโครโฟนค่ะ" }]); } }
-  function stopRecording() { const recorder = recorderRef.current; if (!recorder || recorder.state === "inactive") return; recorder.stop(); streamRef.current?.getTracks().forEach((track) => track.stop()); setRecording(false); }
-  return <main className="fullscreen-shell"><section className="full-model"><div className="ambient ambient-a"/><div className="ambient ambient-b"/><div className="model-stage"><canvas ref={canvasRef}/></div><header className="overlay topbar"><div className="brand"><span className="brand-icon"><Icon name="spark" size={18}/></span><span>VIVIAN-CHAN</span></div><div className="model-status"><i/>{modelState}</div><button className="glass-icon" onClick={()=>setSettingsOpen(true)} aria-label="ตั้งค่า"><Icon name="settings"/></button></header><div className="overlay identity"><span className="eyebrow">YOUR AI COMPANION</span><strong>Vivian</strong><span>อยู่ตรงนี้เสมอ</span></div><div className="speech-bubble">{messages.filter((item) => item.from !== "me").slice(-1)[0]?.text}</div>{sttPreview && <div className="stt-preview">{sttPreview}</div>}<div className="overlay model-tools"><button className="round-glass" onClick={()=>setChatOpen(!chatOpen)} aria-label={chatOpen ? "ซ่อนแชต" : "เปิดแชต"}><Icon name="menu"/></button><button className="round-glass" onClick={()=>setMuted(!muted)} aria-label={muted ? "เปิดเสียง" : "ปิดเสียง"}><Icon name="volume"/></button><button className="round-glass" onClick={()=>setSettingsOpen(true)} aria-label="ตั้งค่าโมเดล"><Icon name="settings"/></button></div></section><section className={`chat-dock ${chatOpen ? "chat-open" : ""}`}><div className="chat-head"><div><span className="eyebrow">CONVERSATION</span><h1>คุยกับ Vivian</h1></div><span className="live-badge"><i/>LIVE</span></div><div className="messages">{messages.slice(-3).map((item,index)=><div key={index} className={`bubble-row ${item.from === "me" ? "mine" : ""}`}><div className="bubble">{item.text}</div></div>)}</div><div className="composer"><button className={`mic-button ${recording ? "recording" : ""}`} onPointerDown={startRecording} onPointerUp={stopRecording} onPointerCancel={stopRecording} onPointerLeave={(event)=>event.buttons > 0 && stopRecording()} onKeyDown={(event)=>event.key === " " && startRecording()} onKeyUp={(event)=>event.key === " " && stopRecording()} aria-label={recording ? "ปล่อยเพื่อส่งเสียง" : "กดค้างเพื่อพูด"}><Icon name="mic" size={19}/></button><input value={message} onChange={(event)=>setMessage(event.target.value)} onKeyDown={(event)=>event.key === "Enter" && sendMessage()} placeholder={recording ? "กำลังฟัง..." : "พิมพ์ข้อความถึง Vivian..."}/><button className="send-button" onClick={()=>sendMessage()} aria-label="ส่งข้อความ"><Icon name="send" size={18}/></button></div></section><nav className="bottom-nav"><button className={activeTab === "home" ? "active" : ""} onClick={()=>setActiveTab("home")}><Icon name="home"/><span>หน้าหลัก</span></button><button className={activeTab === "memory" ? "active" : ""} onClick={()=>setActiveTab("memory")}><Icon name="heart"/><span>ความทรงจำ</span></button><button className={activeTab === "menu" ? "active" : ""} onClick={()=>setSettingsOpen(true)}><Icon name="menu"/><span>เมนู</span></button></nav>{settingsOpen && <div className="settings-sheet"><div className="sheet-head"><div><span className="eyebrow">VIVIAN-CHAN</span><h2>ตั้งค่า</h2></div><button className="close-button" onClick={()=>setSettingsOpen(false)} aria-label="ปิด">×</button></div><button className="setting-row" onClick={()=>setMuted(!muted)}><span><Icon name="volume"/>เสียงตอบกลับ</span><strong>{muted ? "ปิด" : "เปิด"}</strong></button><button className="setting-row" onClick={()=>setMessages([{ from: "vivian", text: "ล้างบทสนทนาแล้วค่ะ เริ่มคุยกันใหม่ได้เลยนะคะ" }])}><span><Icon name="menu"/>ล้างบทสนทนา</span><strong>ล้าง</strong></button><p className="sheet-note">ระบบเสียงใช้ ElevenLabs Flash v2.5 เพื่อความเร็วและคุ้มค่า</p></div>}</main>;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState<Message[]>([greeting]);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [recording, setRecording] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sttPreview, setSttPreview] = useState<string | null>(null);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(true);
+  const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? greeting.text;
+
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    void loadMemory();
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []);
+
+  useEffect(() => {
+    let app: any;
+    let resizeModel = () => {};
+    let disposed = false;
+    void (async () => {
+      try {
+        const PIXI = await import("pixi.js");
+        const { Live2DModel } = await import("pixi-live2d-display/cubism4");
+        if (!canvasRef.current || disposed) return;
+        (window as any).PIXI = PIXI;
+        (Live2DModel as any).registerTicker(PIXI.Ticker);
+        app = new PIXI.Application({ view: canvasRef.current, resizeTo: canvasRef.current.parentElement!, backgroundAlpha: 0, antialias: true });
+        const model = await Live2DModel.from("/live2d/vivian/vivian.model3.json");
+        if (disposed) return;
+        const bounds = model.getLocalBounds();
+        resizeModel = () => {
+          const { width, height } = app.screen;
+          const scale = Math.min((width * (width > height ? .43 : .88)) / bounds.width, ((height - Math.min(124, height * .15)) * .88) / bounds.height);
+          model.scale.set(scale);
+          model.anchor.set(.5, 1);
+          model.x = width / 2;
+          model.y = height * .99;
+        };
+        resizeModel();
+        app.stage.addChild(model);
+        window.addEventListener("resize", resizeModel);
+        window.visualViewport?.addEventListener("resize", resizeModel);
+      } catch (error) {
+        console.error("Live2D failed to load", error);
+      }
+    })();
+    return () => {
+      disposed = true;
+      window.removeEventListener("resize", resizeModel);
+      window.visualViewport?.removeEventListener("resize", resizeModel);
+      app?.destroy(true, { children: true });
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  async function loadMemory() {
+    try {
+      const response = await fetch("/api/memory", { cache: "no-store" });
+      const data = await response.json();
+      if (Array.isArray(data.memories)) setMemories(data.memories);
+      if (data.messages?.length) setMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
+    } catch { /* Vivian stays usable while Supabase is unavailable. */ }
+  }
+  function unlockAudio() {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    audioContextRef.current ??= new AudioContextClass();
+    if (audioContextRef.current.state === "suspended") void audioContextRef.current.resume();
+  }
+  async function speak(text: string) {
+    if (muted) return;
+    let objectUrl: string | null = null;
+    try {
+      unlockAudio();
+      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+      if (!response.ok) throw new Error("TTS failed");
+      audioRef.current?.pause();
+      objectUrl = URL.createObjectURL(await response.blob());
+      const audio = new Audio(objectUrl);
+      audio.setAttribute("playsinline", "true");
+      audio.onended = () => objectUrl && URL.revokeObjectURL(objectUrl);
+      audio.onerror = () => objectUrl && URL.revokeObjectURL(objectUrl);
+      audioRef.current = audio;
+      await audio.play();
+    } catch (error) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      console.error("TTS unavailable", error);
+    }
+  }
+  async function sendMessage(overrideText?: string) {
+    const text = (overrideText ?? message).trim();
+    if (!text || sending) return;
+    const nextMessages = [...messages, { from: "me" as const, text }];
+    setMessages(nextMessages);
+    setMessage("");
+    setSending(true);
+    try {
+      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })) }) });
+      const data = await response.json();
+      const reply = data.text ?? "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ";
+      setMessages((current) => [...current, { from: "vivian", text: reply }]);
+      void speak(reply);
+      if (data.memories) setMemories(data.memories);
+    } catch {
+      setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
+    } finally { setSending(false); }
+  }
+  async function startRecording() {
+    if (recording || recorderRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks: BlobPart[] = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data);
+      recorder.onstop = async () => {
+        const form = new FormData();
+        form.append("file", new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "vivian-recording.webm");
+        try {
+          const response = await fetch("/api/stt", { method: "POST", body: form });
+          const data = await response.json();
+          if (data.text) {
+            setSttPreview(data.text);
+            void sendMessage(data.text);
+            window.setTimeout(() => setSttPreview(null), 5000);
+          }
+        } finally { recorderRef.current = null; streamRef.current = null; }
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+      streamRef.current = stream;
+      setRecording(true);
+    } catch {
+      setMessages((current) => [...current, { from: "vivian", text: "ยังไม่ได้รับสิทธิ์ใช้ไมโครโฟนค่ะ" }]);
+    }
+  }
+  function stopRecording() {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    recorder.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    setRecording(false);
+  }
+  async function clearConversation() {
+    await fetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "conversation" }) }).catch(() => undefined);
+    setMessages([{ from: "vivian", text: "เริ่มบทสนทนาใหม่แล้วค่ะ" }]);
+  }
+  async function deleteMemory(id: number) {
+    const response = await fetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "memory", id }) });
+    if (response.ok) setMemories((current) => current.filter((memory) => memory.id !== id));
+  }
+
+  return <main className="companion-shell">
+    <section className="companion-stage" aria-label="Vivian companion">
+      <canvas className="live2d-canvas" ref={canvasRef} />
+      <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
+      {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
+      <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
+      <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
+        <button type="button" onClick={() => window.dispatchEvent(new Event("resize"))} aria-label="จัด Vivian ให้อยู่กึ่งกลาง"><Icon name="focus"/></button>
+        <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="wardrobe"/></button>
+        <button type="button" onClick={() => void clearConversation()} aria-label="ล้างบทสนทนา"><Icon name="trash"/></button>
+        <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
+      </aside>
+      <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
+        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onPointerDown={() => void startRecording()} onPointerUp={stopRecording} onPointerCancel={stopRecording} onPointerLeave={(event) => event.buttons > 0 && stopRecording()} aria-label={recording ? "ปล่อยเพื่อส่ง" : "กดค้างเพื่อพูด"}><Icon name="mic"/></button>
+        <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
+        <button className="circle-control is-disabled" type="button" disabled aria-label="ไฟล์แนบจะมาในภายหลัง"><Icon name="clip"/></button>
+        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง..." : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
+        <button className="text-send" type="submit" disabled={!message.trim() || sending}><Icon name="message" size={23}/><span>{sending ? "..." : "Text"}</span></button>
+      </form>
+    </section>
+    {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
+      <div className="memory-sheet-head"><div><small>VIVIAN MEMORY</small><h1>ความทรงจำ</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
+      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" onClick={() => void deleteMemory(memory.id)} aria-label="ลบความทรงจำ"><Icon name="trash" size={17}/></button></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
+      <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
+    </section>}
+  </main>;
 }
