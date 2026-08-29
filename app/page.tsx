@@ -25,6 +25,7 @@ type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
 const greeting: Message = { from: "vivian", text: "สวัสดีค่ะ ฉันคือ Vivian วันนี้อยากให้ช่วยทำอะไรคะ?" };
 const APP_CODENAME = "Jupiter";
+const WITCH_EXPRESSIONS = ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"];
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,6 +35,7 @@ export default function Home() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const lipSyncFrameRef = useRef<number | null>(null);
+  const reactionIndexRef = useRef(0);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([greeting]);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -64,7 +66,7 @@ export default function Home() {
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
         app = new PIXI.Application({ view: canvasRef.current, resizeTo: canvasRef.current.parentElement!, backgroundAlpha: 0, antialias: true });
-        const model = await Live2DModel.from("/live2d/shiroko/shiroko.model3.json");
+        const model = await Live2DModel.from("/live2d/witch/witch.model3.json");
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
@@ -187,13 +189,16 @@ export default function Home() {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    const expression = /แว่น|ใส่แว่น|ถอดแว่น|glasses|眼镜/i.test(combined) ? "glasses"
-      : /ตา|มอง|กระพริบ|หลับตา|สายตา|eyes|look|blink/i.test(combined) ? "eyes"
-      : /เสียใจ|เศร้า|ขอโทษ|sad|sorry/i.test(combined) ? "eyes"
-      : /เขิน|ชม|น่ารัก|รัก|ชอบ|ขอบคุณ|กอด|cute|love|thank/i.test(combined) ? "playful"
-      : /ตกใจ|วุ่นวาย|ไม่รู้|อะไรนะ|จริงเหรอ|wow|surprise/i.test(combined) ? "surprised"
-      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "cat_filter"
-      : null;
+    const expression = /เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "sq"
+      : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "ku"
+      : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "fz"
+      : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "zs1"
+      : /รัก|ชอบ|กอด|love|like|hug/i.test(combined) ? "x"
+      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "cw"
+      : /จุ๊บ|จูบ|kiss/i.test(combined) ? "xx"
+      : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "yj"
+      : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "hdj"
+      : WITCH_EXPRESSIONS[reactionIndexRef.current++ % WITCH_EXPRESSIONS.length];
     try {
       if (expression) await model.expression(expression);
       const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
