@@ -15,8 +15,21 @@
 			"vivian.4096/texture_09.png",
 			"vivian.4096/texture_10.png"
 		],
-		"Physics": "vivian.physics3.json",
-		"DisplayInfo": "vivian.cdi3.json"
+    "Physics": "vivian.physics3.json",
+    "DisplayInfo": "vivian.cdi3.json",
+    "Expressions": [
+      { "Name": "umbrella_closed", "File": "伞关闭.exp3.json" },
+      { "Name": "sad", "File": "哭.exp3.json" },
+      { "Name": "shy", "File": "害羞.exp3.json" },
+      { "Name": "flustered", "File": "慌张.exp3.json" },
+      { "Name": "side_eye", "File": "白眼.exp3.json" },
+      { "Name": "dark", "File": "黑脸.exp3.json" }
+    ],
+    "Motions": {
+      "Idle": [
+        { "File": "Scene1.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 }
+      ]
+    }
 	},
 	"Groups": [
 		{
