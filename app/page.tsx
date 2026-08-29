@@ -64,7 +64,7 @@ export default function Home() {
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
         app = new PIXI.Application({ view: canvasRef.current, resizeTo: canvasRef.current.parentElement!, backgroundAlpha: 0, antialias: true });
-        const model = await Live2DModel.from("/live2d/vivian/vivian.model3.json");
+        const model = await Live2DModel.from("/live2d/shiroko/shiroko.model3.json");
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
@@ -187,14 +187,15 @@ export default function Home() {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    const expression = /เสียใจ|เศร้า|ขอโทษ|sad|sorry/i.test(combined) ? "sad"
-      : /เขิน|ชม|น่ารัก|รัก|ชอบ|ขอบคุณ|กอด|cute|love|thank/i.test(combined) ? "shy"
-      : /ตกใจ|วุ่นวาย|ไม่รู้|อะไรนะ|จริงเหรอ|wow|surprise/i.test(combined) ? "flustered"
-      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "side_eye"
+    const expression = /เสียใจ|เศร้า|ขอโทษ|sad|sorry/i.test(combined) ? null
+      : /เขิน|ชม|น่ารัก|รัก|ชอบ|ขอบคุณ|กอด|cute|love|thank/i.test(combined) ? "playful"
+      : /ตกใจ|วุ่นวาย|ไม่รู้|อะไรนะ|จริงเหรอ|wow|surprise/i.test(combined) ? "surprised"
+      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "cat_filter"
       : null;
     try {
       if (expression) await model.expression(expression);
-      await model.motion("Idle", 0, 3);
+      const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
+      if (idleMotion?.length) await model.motion("Idle", 0, 3);
     } catch (error) {
       console.warn("Live2D reaction unavailable; keeping neutral state", error);
     }
