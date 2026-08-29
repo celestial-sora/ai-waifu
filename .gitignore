@@ -36,6 +36,7 @@ yarn-error.log*
 
 # vercel
 .vercel
+public/live2d/yuino-4096-backup/
 
 # typescript
 *.tsbuildinfo

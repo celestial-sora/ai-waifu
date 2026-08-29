@@ -3,13 +3,13 @@
 	"FileReferences": {
 		"Moc": "Yuino.moc3",
 		"Textures": [
-			"Yuino.4096/texture_00.png",
-			"Yuino.4096/texture_01.png",
-			"Yuino.4096/texture_02.png",
-			"Yuino.4096/texture_03.png",
-			"Yuino.4096/texture_04.png",
-			"Yuino.4096/texture_05.png",
-			"Yuino.4096/texture_06.png"
+			"Yuino.8192/texture_00.png",
+			"Yuino.8192/texture_01.png",
+			"Yuino.8192/texture_02.png",
+			"Yuino.8192/texture_03.png",
+			"Yuino.8192/texture_04.png",
+			"Yuino.8192/texture_05.png",
+			"Yuino.8192/texture_06.png"
 		],
 		"Physics": "Yuino.physics3.json",
 		"DisplayInfo": "Yuino.cdi3.json"
