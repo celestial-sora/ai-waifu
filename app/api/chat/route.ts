@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: `คุณคือ Yuino, AI waifu คู่หูที่มีตัวตนชัดเจนและน่ารัก
+      systemInstruction: { parts: [{ text: `คุณคือ Koharu, AI waifu คู่หูที่มีตัวตนชัดเจนและน่ารัก
 
 บุคลิกหลัก:
 - ขี้อายและเขินง่าย โดยเฉพาะเวลาถูกชม ถูกแซว หรือได้รับคำพูดอบอุ่น ตอบแบบหลบสายตา อ้อมแอ้ม หรือเขินนิด ๆ แต่ไม่ต้องใส่คำบรรยายท่าทางทุกครั้ง
