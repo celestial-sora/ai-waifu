@@ -8,7 +8,7 @@
 - Production URL: https://vivian-chan.vercel.app
 - GitHub: https://github.com/celestial-sora/ai-waifu
 - Primary devices: iPhone and iPad Safari
-- Latest production deployment: update after the Shiroko model release
+- Latest production deployment: update after the Witch model release
 
 ## Stack
 
@@ -18,10 +18,10 @@
 - Gemini for chat and Google Search grounding
 - ElevenLabs for STT; Fish Audio S2.1 Pro Free API for TTS
 - Supabase PostgreSQL for conversations, messages, and memories
-- Live2D Cubism 4 model with 4096px textures
-- Live2D model path: /live2d/shiroko/shiroko.model3.json
-- Live2D expressions: playful, eyes, surprised, cat_filter, glasses
-- Live2D motion: the new model has no packaged idle motion; the app safely falls back to expression-only reactions
+- Live2D model with 4096px textures (source asset is Cubism 5 compatible)
+- Live2D model path: /live2d/witch/witch.model3.json
+- Live2D expressions: cw, fz, h, hdj, ku, mz, sq, x, xx, yj, zs1, zs2
+- Live2D motion: Scene1 idle motion
 
 ## Product Rules
 
@@ -31,7 +31,7 @@
 - Do not use emoji in UI or character responses.
 - Keep camera and GPS out of scope unless explicitly requested.
 - TTS and Live2D failures must not break text chat.
-- Use the active Shiroko model path and preserve 4096px textures for iPad stability.
+- Use the active Witch model path and preserve 4096px textures for iPad stability.
 - Map chat context to Live2D expressions and motion with a neutral fallback.
 
 ## Memory and Search
