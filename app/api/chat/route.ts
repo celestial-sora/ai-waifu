@@ -22,7 +22,6 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
     },
     body: JSON.stringify({
       model: modelName(),
-      models: [modelName(), process.env.OPENROUTER_FALLBACK_MODEL ?? "google/gemma-4-26b-a4b-it:free"],
       messages,
       temperature: options.json ? 0 : 0.8,
       max_tokens: options.json ? 240 : 700,
@@ -32,8 +31,8 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
   });
 }
 
-async function callGemini(apiKey: string, payload: Record<string, unknown>) {
-  return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL ?? "gemini-2.5-flash"}:generateContent`, {
+async function callGemini(apiKey: string, payload: Record<string, unknown>, model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash") {
+  return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(payload),
@@ -101,7 +100,8 @@ export async function POST(request: Request) {
 ${memoryContext}`;
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
-  const response = shouldSearch
+  let provider: "gemini" | "openrouter" = shouldSearch ? "gemini" : "openrouter";
+  let response = shouldSearch
     ? await callGemini(geminiApiKey!, {
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: contents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
@@ -109,15 +109,23 @@ ${memoryContext}`;
       generationConfig: { temperature: .8, maxOutputTokens: 700 },
     })
     : await callOpenRouter(apiKey, [{ role: "system", content: systemPrompt }, ...contents]);
-  if (!response.ok) return NextResponse.json({ error: shouldSearch ? "Gemini search request failed" : "OpenRouter request failed", detail: await response.text() }, { status: response.status });
+  if (!response.ok && !shouldSearch && geminiApiKey) {
+    provider = "gemini";
+    response = await callGemini(geminiApiKey, {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: contents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
+      generationConfig: { temperature: .8, maxOutputTokens: 700 },
+    }, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview");
+  }
+  if (!response.ok) return NextResponse.json({ error: provider === "gemini" ? "Gemini request failed" : "OpenRouter request failed", detail: await response.text() }, { status: response.status });
   const data = await response.json();
   const message = data.choices?.[0]?.message;
   const candidate = data.candidates?.[0];
-  const generatedText = (shouldSearch
+  const generatedText = (provider === "gemini"
     ? candidate?.content?.parts?.map((part: { text?: string }) => part.text ?? "").join("")
     : typeof message?.content === "string" ? message.content : "").trim();
-  const sources = (shouldSearch ? candidate?.groundingMetadata?.groundingChunks ?? [] : message?.annotations ?? [])
-    .map((item: { web?: { title?: string; uri?: string }; type?: string; url_citation?: { title?: string; url?: string } }) => shouldSearch ? item.web : item.type === "url_citation" ? { title: item.url_citation?.title, uri: item.url_citation?.url } : undefined)
+  const sources = (provider === "gemini" && shouldSearch ? candidate?.groundingMetadata?.groundingChunks ?? [] : message?.annotations ?? [])
+    .map((item: { web?: { title?: string; uri?: string }; type?: string; url_citation?: { title?: string; url?: string } }) => provider === "gemini" && shouldSearch ? item.web : item.type === "url_citation" ? { title: item.url_citation?.title, uri: item.url_citation?.url } : undefined)
     .filter((source: { title?: string; uri?: string } | undefined): source is { title: string; uri: string } => Boolean(source?.title && source.uri))
     .filter((source: { uri: string }, index: number, all: { uri: string }[]) => all.findIndex((item) => item.uri === source.uri) === index)
     .slice(0, 3);
