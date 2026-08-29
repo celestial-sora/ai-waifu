@@ -1,12 +1,35 @@
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  const key = process.env.ELEVENLABS_API_KEY;
-  if (!key) return NextResponse.json({ error: "ELEVENLABS_API_KEY is not configured" }, { status: 500 });
+  const apiKey = process.env.FISH_AUDIO_API_KEY;
+  const voiceId = process.env.FISH_AUDIO_VOICE_ID;
+  if (!apiKey) return NextResponse.json({ error: "FISH_AUDIO_API_KEY is not configured" }, { status: 500 });
+  if (!voiceId) return NextResponse.json({ error: "FISH_AUDIO_VOICE_ID is not configured" }, { status: 500 });
+
   const { text } = (await request.json()) as { text?: string };
-  if (!text?.trim()) return NextResponse.json({ error: "Text is required" }, { status: 400 });
-  const voice = process.env.ELEVENLABS_VOICE_ID ?? "21m00Tcm4TlvDq8ikWAM";
-  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, { method: "POST", headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/mpeg" }, body: JSON.stringify({ text, model_id: process.env.ELEVENLABS_TTS_MODEL ?? "eleven_flash_v2_5", language_code: "th" }) });
-  if (!response.ok) return NextResponse.json({ error: "ElevenLabs TTS request failed", detail: await response.text() }, { status: response.status });
+  const cleanText = text?.trim();
+  if (!cleanText || cleanText.length > 5000) return NextResponse.json({ error: "Text is required and must be under 5000 characters" }, { status: 400 });
+
+  const response = await fetch("https://api.fish.audio/v1/tts", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      model: process.env.FISH_AUDIO_MODEL ?? "s2-pro",
+    },
+    body: JSON.stringify({
+      text: cleanText,
+      reference_id: voiceId,
+      prosody: { speed: 0.95, volume: 0, normalize_loudness: true },
+      format: "mp3",
+      sample_rate: 44100,
+      mp3_bitrate: 128,
+      latency: "normal",
+      normalize: true,
+      chunk_length: 300,
+    }),
+  });
+
+  if (!response.ok) return NextResponse.json({ error: "Fish Audio TTS request failed", detail: await response.text() }, { status: response.status });
   return new NextResponse(await response.arrayBuffer(), { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" } });
 }
