@@ -28,6 +28,7 @@ const APP_CODENAME = "ดวงดาว";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const modelRef = useRef<any>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -64,6 +65,7 @@ export default function Home() {
         app = new PIXI.Application({ view: canvasRef.current, resizeTo: canvasRef.current.parentElement!, backgroundAlpha: 0, antialias: true });
         const model = await Live2DModel.from("/live2d/vivian/vivian.model3.json");
         if (disposed) return;
+        modelRef.current = model;
         const bounds = model.getLocalBounds();
         resizeModel = () => {
           const { width, height } = app.screen;
@@ -86,6 +88,7 @@ export default function Home() {
       window.removeEventListener("resize", resizeModel);
       window.visualViewport?.removeEventListener("resize", resizeModel);
       app?.destroy(true, { children: true });
+      modelRef.current = null;
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -136,11 +139,28 @@ export default function Home() {
       const data = await response.json();
       const reply = data.text ?? "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ";
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
+      void playReaction(reply, text);
       void speak(reply);
       if (data.memories) setMemories(data.memories);
     } catch {
       setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
     } finally { setSending(false); }
+  }
+  async function playReaction(reply: string, userText: string) {
+    const model = modelRef.current;
+    if (!model) return;
+    const combined = `${reply} ${userText}`;
+    const expression = /เสียใจ|เศร้า|ขอโทษ|sad|sorry/i.test(combined) ? "sad"
+      : /เขิน|ชม|น่ารัก|รัก|ชอบ|ขอบคุณ|กอด|cute|love|thank/i.test(combined) ? "shy"
+      : /ตกใจ|วุ่นวาย|ไม่รู้|อะไรนะ|จริงเหรอ|wow|surprise/i.test(combined) ? "flustered"
+      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "side_eye"
+      : null;
+    try {
+      if (expression) await model.expression(expression);
+      await model.motion("Idle", 0, 3);
+    } catch (error) {
+      console.warn("Live2D reaction unavailable; keeping neutral state", error);
+    }
   }
   async function startRecording() {
     if (recording || recorderRef.current) return;
