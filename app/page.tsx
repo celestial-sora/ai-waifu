@@ -87,6 +87,7 @@ export default function Home() {
   const sendingRef = useRef(false);
   const speakingRef = useRef(false);
   const recordingRef = useRef(false);
+  const micEnabledRef = useRef(true);
   const interactedRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
@@ -126,7 +127,7 @@ export default function Home() {
 
   useEffect(() => {
     void startRecording();
-    return () => stopRecording();
+    return () => { micEnabledRef.current = false; stopRecording(); };
   }, []);
 
   useEffect(() => {
@@ -528,7 +529,7 @@ export default function Home() {
           recorderRef.current = null;
           streamRef.current = null;
           // Resume listening after this utterance has been handed to STT.
-          window.setTimeout(() => { if (!recordingRef.current) void startRecording(); }, 250);
+          window.setTimeout(() => { if (micEnabledRef.current && !recordingRef.current) void startRecording(); }, 250);
         }
       };
       recorder.start();
@@ -590,8 +591,13 @@ export default function Home() {
     setRecording(false);
   }
   function toggleRecording() {
-    if (recordingRef.current || recorderRef.current) stopRecording();
-    else void startRecording();
+    if (micEnabledRef.current) {
+      micEnabledRef.current = false;
+      stopRecording();
+    } else {
+      micEnabledRef.current = true;
+      void startRecording();
+    }
   }
   async function clearConversation() {
     await fetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "conversation" }) }).catch(() => undefined);
