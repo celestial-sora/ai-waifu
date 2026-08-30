@@ -10,6 +10,7 @@ const modelName = () => process.env.OPENROUTER_MODEL ?? "google/gemma-4-31b-it:f
 const searchIntent = /(ค้นหา|search|หาให้หน่อย|ข่าว|ล่าสุด|วันนี้|ราคา|current|latest|look up|ออนไลน์|บนเว็บ|ในเน็ต)/i;
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
 const maxHistoryChars = 12000;
+const providerTimeoutMs = 25000;
 
 async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], options: { webSearch?: boolean; json?: boolean } = {}) {
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -20,6 +21,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
       "HTTP-Referer": "https://vivian-chan.vercel.app",
       "X-Title": "Vivian Personal Project",
     },
+    signal: AbortSignal.timeout(providerTimeoutMs),
     body: JSON.stringify({
       model: modelName(),
       messages,
@@ -35,6 +37,7 @@ async function callGemini(apiKey: string, payload: Record<string, unknown>, mode
   return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    signal: AbortSignal.timeout(providerTimeoutMs),
     body: JSON.stringify(payload),
   });
 }
@@ -102,21 +105,35 @@ ${memoryContext}`;
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
   let provider: "gemini" | "openrouter" = shouldSearch ? "gemini" : "openrouter";
-  let response = shouldSearch
-    ? await callGemini(geminiApiKey!, {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: contents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: .8, maxOutputTokens: 700 },
-    })
-    : await callOpenRouter(apiKey, [{ role: "system", content: systemPrompt }, ...contents]);
+  const geminiPayload = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: contents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
+    generationConfig: { temperature: .8, maxOutputTokens: 700 },
+  };
+  let response: Response;
+  try {
+    response = shouldSearch
+      ? await callGemini(geminiApiKey!, { ...geminiPayload, tools: [{ google_search: {} }] })
+      : await callOpenRouter(apiKey, [{ role: "system", content: systemPrompt }, ...contents]);
+  } catch (error) {
+    console.warn("Primary chat provider timed out or failed", error);
+    if (shouldSearch || !geminiApiKey) return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
+    provider = "gemini";
+    try {
+      response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview");
+    } catch (fallbackError) {
+      console.warn("Gemini fallback timed out or failed", fallbackError);
+      return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
+    }
+  }
   if (!response.ok && !shouldSearch && geminiApiKey) {
     provider = "gemini";
-    response = await callGemini(geminiApiKey, {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: contents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
-      generationConfig: { temperature: .8, maxOutputTokens: 700 },
-    }, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview");
+    try {
+      response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview");
+    } catch (error) {
+      console.warn("Gemini fallback timed out or failed", error);
+      return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
+    }
   }
   if (!response.ok) return NextResponse.json({ error: provider === "gemini" ? "Gemini request failed" : "OpenRouter request failed", detail: await response.text() }, { status: response.status });
   const data = await response.json();
