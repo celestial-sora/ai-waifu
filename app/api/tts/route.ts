@@ -49,8 +49,9 @@ export async function POST(request: Request) {
         mp3_bitrate: 64,
         latency: "balanced",
         normalize: true,
-        chunk_length: 120,
-        condition_on_previous_chunks: false,
+        // Keep continuity between generated chunks: disabling this can make
+        // longer Thai replies end after only their first phrase.
+        chunk_length: 200,
       }),
     });
   } catch (error) {
