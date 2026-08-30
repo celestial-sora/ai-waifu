@@ -12,6 +12,7 @@ export const maxDuration = 60;
 
 const userKey = "default";
 const modelName = () => process.env.OPENROUTER_MODEL ?? "google/gemma-4-31b-it:free";
+const groqModelName = () => process.env.GROQ_MODEL ?? "meta-llama/llama-4-scout-17b-16e-instruct";
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
 const recentTurnLimit = 12;
 const recentCharLimit = 4500;
@@ -46,6 +47,15 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
       temperature: options.json ? 0 : 0.8,
       ...(options.json ? { max_tokens: 280, response_format: { type: "json_object" } } : {}),
     }),
+  });
+}
+
+async function callGroq(apiKey: string, messages: OpenRouterMessage[]) {
+  return fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(providerTimeoutMs),
+    body: JSON.stringify({ model: groqModelName(), messages, temperature: .8 }),
   });
 }
 
@@ -139,7 +149,8 @@ ${memoryContext}${toolContext}`;
 
 export async function POST(request: Request) {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured" }, { status: 500 });
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!apiKey && !groqApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
 
   const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean };
   const idle = body.mode === "idle";
@@ -168,7 +179,7 @@ export async function POST(request: Request) {
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
-  let provider: "gemini" | "openrouter" = shouldSearch ? "gemini" : "openrouter";
+  let provider: "gemini" | "openrouter" | "groq" = shouldSearch ? "gemini" : apiKey ? "openrouter" : "groq";
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: promptContents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
@@ -178,19 +189,28 @@ export async function POST(request: Request) {
   try {
     response = shouldSearch
       ? await callGemini(geminiApiKey!, { ...geminiPayload, tools: [{ google_search: {} }] })
-      : await callOpenRouter(apiKey, [{ role: "system", content: systemPrompt }, ...promptContents]);
+      : apiKey
+        ? await callOpenRouter(apiKey, [{ role: "system", content: systemPrompt }, ...promptContents])
+        : await callGroq(groqApiKey!, [{ role: "system", content: systemPrompt }, ...promptContents]);
   } catch (error) {
     console.warn("Primary chat provider timed out or failed", error);
-    if (shouldSearch || !geminiApiKey) return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
-    provider = "gemini";
-    try {
-      response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview");
-    } catch (fallbackError) {
-      console.warn("Gemini fallback timed out or failed", fallbackError);
-      return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
-    }
+    if (shouldSearch) return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
+    if (groqApiKey && provider !== "groq") {
+      provider = "groq";
+      try { response = await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents]); }
+      catch (fallbackError) { console.warn("Groq fallback timed out or failed", fallbackError); throw fallbackError; }
+    } else if (geminiApiKey && provider !== "gemini") {
+      provider = "gemini";
+      try { response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview"); }
+      catch (fallbackError) { console.warn("Gemini fallback timed out or failed", fallbackError); return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 }); }
+    } else return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
   }
-  if (!response.ok && !shouldSearch && geminiApiKey) {
+  if (!response.ok && !shouldSearch && groqApiKey && provider !== "groq") {
+    provider = "groq";
+    try { response = await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents]); }
+    catch (error) { console.warn("Groq fallback timed out or failed", error); }
+  }
+  if (!response.ok && !shouldSearch && geminiApiKey && provider !== "gemini") {
     provider = "gemini";
     try {
       response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview");
@@ -199,7 +219,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
     }
   }
-  if (!response.ok) return NextResponse.json({ error: provider === "gemini" ? "Gemini request failed" : "OpenRouter request failed", detail: await response.text() }, { status: response.status });
+  if (!response.ok) return NextResponse.json({ error: `${provider} request failed`, detail: await response.text() }, { status: response.status });
   const data = await response.json();
   const message = data.choices?.[0]?.message;
   const candidate = data.candidates?.[0];
@@ -232,12 +252,12 @@ export async function POST(request: Request) {
         await withTimeout(supabase.from("messages").insert(rows), supabaseTimeoutMs, "message insert");
         await withTimeout(supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation.id), supabaseTimeoutMs, "conversation update");
       }
-      const newMemories = !idle && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
+      const newMemories = !idle && apiKey && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
       if (newMemories.length) {
         await withTimeout(supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString() })), { onConflict: "user_key,memory" }), supabaseTimeoutMs, "memory upsert");
       }
       if (!idle && older.length >= 4) {
-        nextState.conversationSummary = await compressTurns(apiKey, older, state.conversationSummary);
+        if (apiKey) nextState.conversationSummary = await compressTurns(apiKey, older, state.conversationSummary);
       }
       await saveCompanionState(userKey, nextState);
     } catch (error) { console.warn("Persistence unavailable", error); }
