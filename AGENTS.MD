@@ -4,7 +4,7 @@
 
 - Name: Vivian Personal Project
 - Character: Vivian
-- Codename: Jupiter
+- Codename: Stardust
 - Production URL: https://vivian-chan.vercel.app
 - GitHub: https://github.com/celestial-sora/ai-waifu
 - Primary devices: iPhone and iPad Safari
