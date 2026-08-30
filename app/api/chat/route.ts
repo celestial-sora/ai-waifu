@@ -41,7 +41,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
       model: modelName(),
       messages,
       temperature: options.json ? 0 : 0.8,
-      max_tokens: options.json ? 240 : 700,
+      max_tokens: options.json ? 240 : 320,
       ...(options.json ? { response_format: { type: "json_object" } } : {}),
       ...(options.webSearch ? { tools: [{ type: "openrouter:web_search", parameters: { max_results: 3 } }] } : {}),
     }),
@@ -123,7 +123,7 @@ ${memoryContext}`;
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: contents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
-    generationConfig: { temperature: .8, maxOutputTokens: 700 },
+    generationConfig: { temperature: .8, maxOutputTokens: 320 },
   };
   let response: Response;
   try {
