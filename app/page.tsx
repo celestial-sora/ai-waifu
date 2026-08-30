@@ -87,7 +87,7 @@ export default function Home() {
   const sendingRef = useRef(false);
   const speakingRef = useRef(false);
   const recordingRef = useRef(false);
-  const micEnabledRef = useRef(true);
+  const micEnabledRef = useRef(false);
   const interactedRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
@@ -123,11 +123,6 @@ export default function Home() {
       window.clearInterval(idleTimer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
-
-  useEffect(() => {
-    void startRecording();
-    return () => { micEnabledRef.current = false; stopRecording(); };
   }, []);
 
   useEffect(() => {
@@ -200,6 +195,11 @@ export default function Home() {
       stopLipSync();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
+  }, []);
+
+  useEffect(() => () => {
+    micEnabledRef.current = false;
+    stopRecording();
   }, []);
 
   async function loadMemory() {
@@ -621,10 +621,10 @@ export default function Home() {
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
-        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "ปิดไมโครโฟนและส่งเสียง" : "เปิดไมโครโฟน"}><Icon name="mic"/></button>
+        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Unmute microphone"}><Icon name="mic"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="ไฟล์แนบจะมาในภายหลัง"><Icon name="clip"/></button>
-        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์อีกครั้งเพื่อส่ง" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
+        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
         <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>
       </form>
     </section>
