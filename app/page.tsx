@@ -45,6 +45,7 @@ const AUDIO_UNLOCK_MS = 1200;
 const PLAYBACK_START_MS = 2500;
 const AUDIO_SYNC_SETTLE_MS = 140;
 const MIN_RECORDING_MS = 550;
+const MIN_SPEECH_MS = 320;
 const IDLE_AFTER_MS = 75_000;
 const IDLE_COOLDOWN_MS = 8 * 60 * 1000;
 const LAST_IDLE_KEY = "vivian-last-idle";
@@ -549,6 +550,7 @@ export default function Home() {
         voiceAnalyserRef.current = analyser;
         const samples = new Uint8Array(analyser.fftSize);
         let heardSpeech = false;
+        let speechStartedAt = 0;
         let quietSince = 0;
         const monitor = () => {
           if (!recordingRef.current || recorderRef.current !== recorder) return;
@@ -556,11 +558,15 @@ export default function Home() {
           let sum = 0;
           for (const sample of samples) { const delta = sample - 128; sum += delta * delta; }
           const rms = Math.sqrt(sum / samples.length) / 128;
-          if (rms > .045) { heardSpeech = true; quietSince = 0; }
+          if (rms > .075) {
+            speechStartedAt ||= Date.now();
+            if (Date.now() - speechStartedAt >= MIN_SPEECH_MS) heardSpeech = true;
+            quietSince = 0;
+          }
           else if (heardSpeech) {
             quietSince ||= Date.now();
             if (Date.now() - quietSince > 850) { stopRecording(); return; }
-          }
+          } else if (Date.now() - speechStartedAt > 500) speechStartedAt = 0;
           voiceMonitorRef.current = requestAnimationFrame(monitor);
         };
         voiceMonitorRef.current = requestAnimationFrame(monitor);
