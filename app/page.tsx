@@ -34,6 +34,7 @@ const TTS_TIMEOUT_MS = 17000;
 const STT_TIMEOUT_MS = 20000;
 const AUDIO_UNLOCK_MS = 1200;
 const PLAYBACK_START_MS = 2500;
+const MIN_RECORDING_MS = 550;
 
 function abortAfter(ms: number) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
@@ -55,6 +56,7 @@ export default function Home() {
   const modelRef = useRef<any>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const recordingStartedAtRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioUnlockPromiseRef = useRef<Promise<void> | null>(null);
@@ -319,26 +321,46 @@ export default function Home() {
   async function startRecording() {
     if (recording || recorderRef.current) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
       const chunks: BlobPart[] = [];
-      const recorder = new MediaRecorder(stream);
+      const preferredMimeTypes = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
+      const mimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 128000 });
       recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data);
       recorder.onstop = async () => {
+        const durationMs = Date.now() - recordingStartedAtRef.current;
+        const actualMimeType = recorder.mimeType || mimeType || "audio/webm";
+        const extension = actualMimeType.includes("mp4") ? "m4a" : "webm";
+        if (durationMs < MIN_RECORDING_MS || !chunks.length) {
+          setSttPreview("กดค้างแล้วพูดอีกนิดนะคะ");
+          window.setTimeout(() => setSttPreview(null), 2500);
+          recorderRef.current = null;
+          streamRef.current = null;
+          return;
+        }
         const form = new FormData();
-        form.append("file", new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "vivian-recording.webm");
+        form.append("file", new Blob(chunks, { type: actualMimeType }), `vivian-recording.${extension}`);
         try {
           const response = await fetch("/api/stt", { method: "POST", body: form, signal: abortAfter(STT_TIMEOUT_MS) });
-          const data = await response.json();
-          if (data.text) {
+          const data = await response.json() as { text?: string; error?: string };
+          if (!response.ok) throw new Error(data.error ?? "STT failed");
+          if (data.text?.trim()) {
             setSttPreview(data.text);
             void sendMessage(data.text);
             window.setTimeout(() => setSttPreview(null), 5000);
-          }
+          } else throw new Error("STT returned no speech");
+        } catch (error) {
+          console.warn("STT unavailable", error);
+          setSttPreview("ฟังไม่ชัด ลองพูดใหม่อีกครั้งนะคะ");
+          window.setTimeout(() => setSttPreview(null), 3000);
         } finally { recorderRef.current = null; streamRef.current = null; }
       };
       recorder.start();
       recorderRef.current = recorder;
       streamRef.current = stream;
+      recordingStartedAtRef.current = Date.now();
       setRecording(true);
     } catch {
       resetReaction();
