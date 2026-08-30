@@ -28,7 +28,9 @@ const APP_CODENAME = "Stardust";
 const WITCH_EXPRESSIONS = ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"];
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 const CHAT_TIMEOUT_MS = 35000;
-const TTS_TIMEOUT_MS = 12000;
+// The server aborts Fish at 14 seconds. Give the response a small transport
+// margin, then always release the sending state instead of leaving "Thinking".
+const TTS_TIMEOUT_MS = 17000;
 const STT_TIMEOUT_MS = 20000;
 const AUDIO_UNLOCK_MS = 1200;
 const PLAYBACK_START_MS = 2500;
@@ -235,7 +237,10 @@ export default function Home() {
     try {
       await withTimeout(unlockAudio(), AUDIO_UNLOCK_MS, undefined);
       const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abortAfter(TTS_TIMEOUT_MS), body: JSON.stringify({ text }) });
-      if (!response.ok) throw new Error("TTS failed");
+      if (!response.ok) {
+        const error = await response.json().catch(() => null) as { error?: string; code?: string } | null;
+        throw new Error(error?.code ?? error?.error ?? "TTS failed");
+      }
       const blob = await withTimeout(response.blob(), TTS_TIMEOUT_MS, null);
       if (!blob || blob.size === 0) throw new Error("TTS failed");
       const audio = audioRef.current ?? new Audio();
@@ -252,7 +257,7 @@ export default function Home() {
       const started = await withTimeout(audio.play().then(() => true), PLAYBACK_START_MS, false);
       if (!started) {
         stopLipSync();
-        console.warn("TTS playback did not start in time; showing text anyway");
+        throw new Error("TTS playback did not start");
       }
       return started;
     } catch (error) {
@@ -282,7 +287,8 @@ export default function Home() {
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
       void playReaction(reply, text);
       if (data.memories?.length) setMemories(data.memories.filter((item: Memory) => typeof item.id === "number"));
-    } catch {
+    } catch (error) {
+      console.error("Vivian response unavailable", error);
       resetReaction();
       setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
     } finally { setSending(false); }
