@@ -300,7 +300,13 @@ export default function Home() {
   function setMouthOpen(value: number) {
     const coreModel = modelRef.current?.internalModel?.coreModel;
     if (!coreModel) return;
-    try { coreModel.setParameterValueById("ParamMouthOpenY", Math.max(0, Math.min(1, value))); } catch (error) { console.warn("Live2D mouth parameter unavailable", error); }
+    const mouth = Math.max(0, Math.min(1, value));
+    try {
+      coreModel.setParameterValueById("ParamMouthOpenY", mouth);
+      // Some Cubism models expose mouth shape separately. It is optional, so
+      // keep this best-effort and preserve compatibility with older models.
+      try { coreModel.setParameterValueById("ParamMouthForm", (mouth - .5) * .18); } catch { /* optional parameter */ }
+    } catch (error) { console.warn("Live2D mouth parameter unavailable", error); }
   }
   function resetReaction() {
     const expressionManager = modelRef.current?.internalModel?.motionManager?.expressionManager;
@@ -319,9 +325,20 @@ export default function Home() {
     // playback in Dynamic Island while that routed output is silent. Native
     // playback is reliable; this keeps a lightweight visual mouth movement.
     stopLipSync();
+    let smoothed = 0;
+    let previousTime = audio.currentTime;
     const update = () => {
       if (audio.paused || audio.ended) { setMouthOpen(0); lipSyncFrameRef.current = null; return; }
-      setMouthOpen(.12 + Math.abs(Math.sin(audio.currentTime * 22)) * .28);
+      // iOS Safari must stay on native playback, so there is no safe analyser
+      // stream here. Use playback-time pulses with attack/release smoothing;
+      // this avoids the old harsh, constant jaw oscillation while keeping the
+      // mouth moving in sync with the spoken audio.
+      const delta = Math.max(0, audio.currentTime - previousTime);
+      previousTime = audio.currentTime;
+      const pulse = .08 + (Math.sin(audio.currentTime * 17) * .5 + .5) * .34 + (Math.sin(audio.currentTime * 31) * .5 + .5) * .12;
+      const target = delta > .12 ? 0 : Math.min(.62, pulse);
+      smoothed += (target - smoothed) * (target > smoothed ? .42 : .2);
+      setMouthOpen(smoothed);
       lipSyncFrameRef.current = requestAnimationFrame(update);
     };
     lipSyncFrameRef.current = requestAnimationFrame(update);
@@ -344,14 +361,21 @@ export default function Home() {
       mediaSourceRef.current = source;
     }
     const samples = new Uint8Array(analyser.fftSize);
+    const spectrum = new Uint8Array(analyser.frequencyBinCount);
     let smoothed = 0;
     const update = () => {
       if (audio.paused || audio.ended) { setMouthOpen(0); lipSyncFrameRef.current = null; return; }
       analyser.getByteTimeDomainData(samples);
-      let sum = 0;
-      for (const sample of samples) sum += Math.abs(sample - 128);
-      const level = Math.min(1, (sum / samples.length / 128) * 3.4);
-      smoothed += (level - smoothed) * .34;
+      analyser.getByteFrequencyData(spectrum);
+      let rms = 0;
+      for (const sample of samples) { const delta = (sample - 128) / 128; rms += delta * delta; }
+      rms = Math.sqrt(rms / samples.length);
+      let energy = 0;
+      for (let index = 1; index < spectrum.length; index += 1) energy += spectrum[index];
+      const spectralLevel = spectrum.length > 1 ? energy / ((spectrum.length - 1) * 255) : 0;
+      const level = Math.min(1, rms * 4.8 + spectralLevel * 1.8);
+      const target = Math.max(0, Math.min(.9, Math.pow(level, .72)));
+      smoothed += (target - smoothed) * (target > smoothed ? .5 : .18);
       setMouthOpen(smoothed);
       lipSyncFrameRef.current = requestAnimationFrame(update);
     };
@@ -397,13 +421,15 @@ export default function Home() {
         if (objectUrl) URL.revokeObjectURL(objectUrl);
       };
       audioRef.current = audio;
-      startLipSync(audio);
       const started = await withTimeout(audio.play().then(() => true), PLAYBACK_START_MS, false);
       if (speakId !== speakIdRef.current) return false;
       if (!started) {
         stopLipSync();
         throw new Error("TTS playback did not start");
       }
+      // Start the animation only after playback begins. Starting it before
+      // audio.play() lets the first frame see `paused` and permanently stop.
+      startLipSync(audio);
       await new Promise<void>((resolve) => window.setTimeout(resolve, AUDIO_SYNC_SETTLE_MS));
       return speakId === speakIdRef.current;
     } catch (error) {
