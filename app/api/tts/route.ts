@@ -5,17 +5,12 @@ export const maxDuration = 30;
 // Fish's free endpoint can queue. Keep the request small and bounded so a slow
 // provider can never leave the companion UI in its "thinking" state indefinitely.
 const upstreamTimeoutMs = 14_000;
-const maxSpeechChars = 420;
 
 function speechText(value: string) {
-  const withoutSources = value.split(/\n\s*แหล่งข้อมูล\s*:/i)[0]
+  return value.split(/\n\s*แหล่งข้อมูล\s*:/i)[0]
     .replace(/https?:\/\/\S+/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  if (withoutSources.length <= maxSpeechChars) return withoutSources;
-  const shortened = withoutSources.slice(0, maxSpeechChars);
-  const sentenceEnd = Math.max(shortened.lastIndexOf("ค่ะ"), shortened.lastIndexOf("ครับ"), shortened.lastIndexOf("."), shortened.lastIndexOf("?"), shortened.lastIndexOf("!"));
-  return (sentenceEnd > 180 ? shortened.slice(0, sentenceEnd + 1) : shortened).trim();
 }
 
 export async function POST(request: Request) {

@@ -203,7 +203,23 @@ export default function Home() {
     lipSyncFrameRef.current = null;
     setMouthOpen(0);
   }
+  function usesNativeAppleAudio() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function startNativeLipSync(audio: HTMLAudioElement) {
+    // Do not route an iOS media element through AudioContext. Safari can show
+    // playback in Dynamic Island while that routed output is silent. Native
+    // playback is reliable; this keeps a lightweight visual mouth movement.
+    stopLipSync();
+    const update = () => {
+      if (audio.paused || audio.ended) { setMouthOpen(0); lipSyncFrameRef.current = null; return; }
+      setMouthOpen(.12 + Math.abs(Math.sin(audio.currentTime * 22)) * .28);
+      lipSyncFrameRef.current = requestAnimationFrame(update);
+    };
+    lipSyncFrameRef.current = requestAnimationFrame(update);
+  }
   function startLipSync(audio: HTMLAudioElement) {
+    if (usesNativeAppleAudio()) { startNativeLipSync(audio); return; }
     const context = audioContextRef.current;
     if (!context) return;
     stopLipSync();
@@ -251,6 +267,8 @@ export default function Home() {
       objectUrl = URL.createObjectURL(blob);
       audio.src = objectUrl;
       audio.setAttribute("playsinline", "true");
+      audio.muted = false;
+      audio.defaultMuted = false;
       audio.volume = 1;
       audio.onended = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
       audio.onerror = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
