@@ -616,10 +616,12 @@ export default function Home() {
         <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>
       </form>
     </section>
-    {chatOpen && <section className="chat-sheet" role="dialog" aria-modal="true" aria-label="ประวัติแชตกับ Vivian">
-      <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
-      <div className="chat-history">{[...historyMessages, ...messages].map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><p>{item.text}</p></div>)}</div>
-    </section>}
+    {chatOpen && <div className="chat-backdrop" role="presentation" onClick={() => setChatOpen(false)}>
+      <section className="chat-sheet" role="dialog" aria-modal="true" aria-label="ประวัติแชตกับ Vivian" onClick={(event) => event.stopPropagation()}>
+        <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
+        <div className="chat-history">{[...historyMessages, ...messages].map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><p>{item.text}</p></div>)}</div>
+      </section>
+    </div>}
     {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
       <div className="memory-sheet-head"><div><small>VIVIAN MEMORY</small><h1>ความทรงจำ</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
       <div className="bond-panel" aria-label="ความสัมพันธ์กับ Vivian">
