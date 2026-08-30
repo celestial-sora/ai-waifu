@@ -59,6 +59,10 @@ export default function Home() {
   useEffect(() => {
     let app: any;
     let resizeModel = () => {};
+    let queueResize = () => {};
+    let handleOrientationChange = () => {};
+    let resizeFrame: number | undefined;
+    let resizeTimeout: number | undefined;
     let disposed = false;
     void (async () => {
       try {
@@ -67,31 +71,56 @@ export default function Home() {
         if (!canvasRef.current || disposed) return;
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
-        app = new PIXI.Application({ view: canvasRef.current, resizeTo: canvasRef.current.parentElement!, backgroundAlpha: 0, antialias: true });
+        app = new PIXI.Application({
+          view: canvasRef.current,
+          backgroundAlpha: 0,
+          antialias: true,
+          autoDensity: true,
+          resolution: Math.min(window.devicePixelRatio || 1, 2),
+        });
         const model = await Live2DModel.from("/live2d/witch/witch.model3.json");
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
         resizeModel = () => {
-          const { width, height } = app.screen;
+          const stage = canvasRef.current?.parentElement?.getBoundingClientRect();
+          if (!stage) return;
+          const width = Math.max(1, Math.round(stage.width));
+          const height = Math.max(1, Math.round(stage.height));
+          app.renderer.resolution = Math.min(window.devicePixelRatio || 1, 2);
+          app.renderer.resize(width, height);
           const scale = Math.min((width * (width > height ? .43 : .88)) / bounds.width, ((height - Math.min(124, height * .15)) * .88) / bounds.height);
           model.scale.set(scale);
           model.anchor.set(.5, 1);
           model.x = width / 2;
           model.y = height * .99;
         };
-        resizeModel();
         app.stage.addChild(model);
-        window.addEventListener("resize", resizeModel);
-        window.visualViewport?.addEventListener("resize", resizeModel);
+        queueResize = () => {
+          if (resizeFrame) cancelAnimationFrame(resizeFrame);
+          if (resizeTimeout) window.clearTimeout(resizeTimeout);
+          resizeFrame = requestAnimationFrame(() => requestAnimationFrame(resizeModel));
+          resizeTimeout = window.setTimeout(resizeModel, 240);
+        };
+        handleOrientationChange = () => {
+          setToolsOpen(true);
+          queueResize();
+        };
+        queueResize();
+        window.addEventListener("resize", queueResize);
+        window.addEventListener("orientationchange", handleOrientationChange);
+        window.visualViewport?.addEventListener("resize", queueResize);
       } catch (error) {
         console.error("Live2D failed to load", error);
       }
     })();
     return () => {
       disposed = true;
-      window.removeEventListener("resize", resizeModel);
-      window.visualViewport?.removeEventListener("resize", resizeModel);
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
+      if (resizeTimeout) window.clearTimeout(resizeTimeout);
+      window.removeEventListener("resize", queueResize);
+      window.removeEventListener("orientationchange", handleOrientationChange);
+      window.visualViewport?.removeEventListener("resize", queueResize);
       app?.destroy(true, { children: true });
       modelRef.current = null;
       stopLipSync();
