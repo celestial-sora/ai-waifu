@@ -483,7 +483,7 @@ export default function Home() {
         const actualMimeType = recorder.mimeType || mimeType || "audio/webm";
         const extension = actualMimeType.includes("mp4") ? "m4a" : "webm";
         if (durationMs < MIN_RECORDING_MS || !chunks.length) {
-          setSttPreview("กดค้างแล้วพูดอีกนิดนะคะ");
+          setSttPreview("ยังไม่มีเสียงที่ชัดพอค่ะ");
           window.setTimeout(() => setSttPreview(null), 2500);
           recorderRef.current = null;
           streamRef.current = null;
@@ -525,6 +525,10 @@ export default function Home() {
     recordingRef.current = false;
     setRecording(false);
   }
+  function toggleRecording() {
+    if (recordingRef.current || recorderRef.current) stopRecording();
+    else void startRecording();
+  }
   async function clearConversation() {
     await fetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "conversation" }) }).catch(() => undefined);
     setMessages([{ from: "vivian", text: "เริ่มบทสนทนาใหม่แล้วค่ะ" }]);
@@ -547,10 +551,10 @@ export default function Home() {
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
-        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onPointerDown={() => void startRecording()} onPointerUp={stopRecording} onPointerCancel={stopRecording} onPointerLeave={(event) => event.buttons > 0 && stopRecording()} aria-label={recording ? "ปล่อยเพื่อส่ง" : "กดค้างเพื่อพูด หรือพูดแทรก"}><Icon name="mic"/></button>
+        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "ปิดไมโครโฟนและส่งเสียง" : "เปิดไมโครโฟน"}><Icon name="mic"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="ไฟล์แนบจะมาในภายหลัง"><Icon name="clip"/></button>
-        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง..." : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
+        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์อีกครั้งเพื่อส่ง" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
         <button className="text-send" type="submit" disabled={!message.trim() || sending}><Icon name="message" size={23}/><span>{sending ? "..." : "Text"}</span></button>
       </form>
     </section>
