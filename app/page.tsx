@@ -196,8 +196,8 @@ export default function Home() {
     };
     lipSyncFrameRef.current = requestAnimationFrame(update);
   }
-  async function speak(text: string) {
-    if (muted) return;
+  async function speak(text: string): Promise<boolean> {
+    if (muted) return false;
     let objectUrl: string | null = null;
     try {
       unlockAudio();
@@ -215,10 +215,12 @@ export default function Home() {
       audioRef.current = audio;
       startLipSync(audio);
       await audio.play();
+      return true;
     } catch (error) {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       resetReaction();
       console.error("TTS unavailable", error);
+      return false;
     }
   }
   async function sendMessage(overrideText?: string) {
@@ -233,9 +235,10 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok || !data.text) throw new Error(data.error ?? "Chat request failed");
       const reply = data.text;
+      const audioStarted = await speak(reply);
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
       void playReaction(reply, text);
-      void speak(reply);
+      if (audioStarted) console.info("Vivian response synced with audio playback");
       if (data.memories) setMemories(data.memories);
     } catch {
       resetReaction();
