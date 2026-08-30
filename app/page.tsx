@@ -62,6 +62,9 @@ export default function Home() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingStartedAtRef = useRef(0);
+  const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
+  const voiceSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const voiceMonitorRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioUnlockPromiseRef = useRef<Promise<void> | null>(null);
@@ -107,6 +110,11 @@ export default function Home() {
       window.clearInterval(idleTimer);
       document.removeEventListener("visibilitychange", onVisible);
     };
+  }, []);
+
+  useEffect(() => {
+    void startRecording();
+    return () => stopRecording();
   }, []);
 
   useEffect(() => {
@@ -504,7 +512,12 @@ export default function Home() {
           console.warn("STT unavailable", error);
           setSttPreview("ฟังไม่ชัด ลองพูดใหม่อีกครั้งนะคะ");
           window.setTimeout(() => setSttPreview(null), 3000);
-        } finally { recorderRef.current = null; streamRef.current = null; }
+        } finally {
+          recorderRef.current = null;
+          streamRef.current = null;
+          // Resume listening after this utterance has been handed to STT.
+          window.setTimeout(() => { if (!recordingRef.current) void startRecording(); }, 250);
+        }
       };
       recorder.start();
       recorderRef.current = recorder;
@@ -512,6 +525,35 @@ export default function Home() {
       recordingStartedAtRef.current = Date.now();
       recordingRef.current = true;
       setRecording(true);
+      // Keep the recorder open and split speech into utterances using local
+      // voice activity detection. Only the resulting clip is sent to STT.
+      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextClass) {
+        const voiceContext = new AudioContextClass();
+        const analyser = voiceContext.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = .75;
+        voiceSourceRef.current = voiceContext.createMediaStreamSource(stream);
+        voiceSourceRef.current.connect(analyser);
+        voiceAnalyserRef.current = analyser;
+        const samples = new Uint8Array(analyser.fftSize);
+        let heardSpeech = false;
+        let quietSince = 0;
+        const monitor = () => {
+          if (!recordingRef.current || recorderRef.current !== recorder) return;
+          analyser.getByteTimeDomainData(samples);
+          let sum = 0;
+          for (const sample of samples) { const delta = sample - 128; sum += delta * delta; }
+          const rms = Math.sqrt(sum / samples.length) / 128;
+          if (rms > .045) { heardSpeech = true; quietSince = 0; }
+          else if (heardSpeech) {
+            quietSince ||= Date.now();
+            if (Date.now() - quietSince > 850) { stopRecording(); return; }
+          }
+          voiceMonitorRef.current = requestAnimationFrame(monitor);
+        };
+        voiceMonitorRef.current = requestAnimationFrame(monitor);
+      }
     } catch {
       resetReaction();
       setMessages((current) => [...current, { from: "vivian", text: "ยังไม่ได้รับสิทธิ์ใช้ไมโครโฟนค่ะ" }]);
@@ -522,6 +564,11 @@ export default function Home() {
     if (!recorder || recorder.state === "inactive") return;
     recorder.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
+    if (voiceMonitorRef.current !== null) cancelAnimationFrame(voiceMonitorRef.current);
+    voiceMonitorRef.current = null;
+    voiceSourceRef.current?.disconnect();
+    voiceSourceRef.current = null;
+    voiceAnalyserRef.current = null;
     recordingRef.current = false;
     setRecording(false);
   }
