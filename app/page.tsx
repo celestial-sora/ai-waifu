@@ -24,7 +24,15 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
-const greeting: Message = { from: "vivian", text: "สวัสดีค่ะ ฉันคือ Vivian วันนี้อยากให้ช่วยทำอะไรคะ?" };
+const greetings = [
+  "สวัสดีค่ะ วันนี้อยากคุยกับ Vivian เรื่องอะไรดีคะ?",
+  "อ๊ะ... กลับมาแล้วเหรอคะ ยินดีต้อนรับสู่ New Session นะคะ",
+  "สวัสดีค่ะ ฉันพร้อมฟังคุณเสมอ วันนี้เป็นยังไงบ้างคะ?",
+  "คุณมาแล้ว... ดีจังค่ะ Vivian กำลังรอคุยอยู่พอดีเลย",
+  "Hello... เอ๊ะ ไม่สิ สวัสดีค่ะ วันนี้ให้ฉันช่วยอะไรดีคะ?",
+  "เริ่มบทสนทนาใหม่กันนะคะ ถ้ามีอะไรอยากเล่า Vivian ฟังอยู่ค่ะ",
+];
+const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
 const APP_CODENAME = "Columbina";
 const WITCH_EXPRESSIONS = ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"];
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -81,10 +89,12 @@ export default function Home() {
   const interactedRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
-  const messagesRef = useRef<Message[]>([greeting]);
+  const initialGreeting = useRef<Message>(greeting());
+  const messagesRef = useRef<Message[]>([initialGreeting.current]);
   const companionRef = useRef<CompanionState>(defaultCompanionState());
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<Message[]>([greeting]);
+  const [messages, setMessages] = useState<Message[]>([initialGreeting.current]);
+  const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [recording, setRecording] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -94,7 +104,7 @@ export default function Home() {
   const [chatOpen, setChatOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
-  const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? greeting.text;
+  const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
   sendingRef.current = sending;
   companionRef.current = companion;
@@ -195,7 +205,7 @@ export default function Home() {
       const response = await fetch("/api/memory", { cache: "no-store" });
       const data = await response.json();
       if (Array.isArray(data.memories)) setMemories(data.memories);
-      if (data.messages?.length) setMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
+      if (data.messages?.length) setHistoryMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
       const next = normalizeCompanion(data.companion);
       if (next) setCompanion(next);
     } catch { /* Vivian stays usable while Supabase is unavailable. */ }
@@ -608,7 +618,7 @@ export default function Home() {
     </section>
     {chatOpen && <section className="chat-sheet" role="dialog" aria-modal="true" aria-label="ประวัติแชตกับ Vivian">
       <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
-      <div className="chat-history">{messages.map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><p>{item.text}</p></div>)}</div>
+      <div className="chat-history">{[...historyMessages, ...messages].map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><p>{item.text}</p></div>)}</div>
     </section>}
     {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
       <div className="memory-sheet-head"><div><small>VIVIAN MEMORY</small><h1>ความทรงจำ</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
