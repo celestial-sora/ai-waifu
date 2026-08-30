@@ -32,7 +32,6 @@ const TTS_TIMEOUT_MS = 12000;
 const STT_TIMEOUT_MS = 20000;
 const AUDIO_UNLOCK_MS = 1200;
 const PLAYBACK_START_MS = 2500;
-const SPEAK_WAIT_MS = 4000;
 
 function abortAfter(ms: number) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
@@ -275,11 +274,13 @@ export default function Home() {
       const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; memories?: Memory[] }>, 5000, null);
       if (!response.ok || !data?.text) throw new Error(data?.error ?? "Chat request failed");
       const reply = data.text;
-      const speakPromise = speak(reply);
-      const audioStarted = await withTimeout(speakPromise, SPEAK_WAIT_MS, false);
+      if (!muted) {
+        const audioStarted = await speak(reply);
+        if (!audioStarted) throw new Error("TTS playback did not start");
+        console.info("Vivian audio playback started");
+      }
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
       void playReaction(reply, text);
-      if (audioStarted) console.info("Vivian response synced with audio playback");
       if (data.memories?.length) setMemories(data.memories.filter((item: Memory) => typeof item.id === "number"));
     } catch {
       resetReaction();
