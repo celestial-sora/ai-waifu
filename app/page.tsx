@@ -587,20 +587,31 @@ export default function Home() {
         let heardSpeech = false;
         let speechStartedAt = 0;
         let quietSince = 0;
+        let noiseFloor = 0;
+        const noiseCalibrationEndsAt = Date.now() + 700;
         const monitor = () => {
           if (!recordingRef.current || recorderRef.current !== recorder) return;
           analyser.getByteTimeDomainData(samples);
           let sum = 0;
           for (const sample of samples) { const delta = sample - 128; sum += delta * delta; }
           const rms = Math.sqrt(sum / samples.length) / 128;
-          if (rms > .075) {
+          if (Date.now() < noiseCalibrationEndsAt) {
+            noiseFloor = noiseFloor ? noiseFloor * .88 + rms * .12 : rms;
+            voiceMonitorRef.current = requestAnimationFrame(monitor);
+            return;
+          }
+          // Adapt to fans, music and room noise. The floor is allowed to rise
+          // slowly, but a real voice must still clear a meaningful margin.
+          noiseFloor = noiseFloor * .995 + rms * .005;
+          const speechThreshold = Math.max(.065, Math.min(.18, noiseFloor * 2.8 + .018));
+          if (rms > speechThreshold) {
             speechStartedAt ||= Date.now();
-            if (Date.now() - speechStartedAt >= MIN_SPEECH_MS) heardSpeech = true;
+            if (Date.now() - speechStartedAt >= 380) heardSpeech = true;
             quietSince = 0;
           }
           else if (heardSpeech) {
             quietSince ||= Date.now();
-            if (Date.now() - quietSince > 850) { stopRecording(); return; }
+            if (Date.now() - quietSince > 900) { stopRecording(); return; }
           } else if (Date.now() - speechStartedAt > 500) speechStartedAt = 0;
           voiceMonitorRef.current = requestAnimationFrame(monitor);
         };
