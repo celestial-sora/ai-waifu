@@ -6,8 +6,8 @@ export const metadata: Metadata = {
   title: "Vivian",
   description: "Vivian Personal Project — a mobile-first AI companion.",
   icons: {
-    icon: [{ url: "/favicon.gif", type: "image/gif" }],
-    shortcut: ["/favicon.gif"],
+    icon: [{ url: "/favicon.png", type: "image/png" }],
+    shortcut: ["/favicon.png"],
   },
 };
 
