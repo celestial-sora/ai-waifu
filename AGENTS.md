@@ -269,7 +269,7 @@ This section is the current source of truth for continuing work. Read it before 
 
 - Product: Vivian Personal Project
 - Character: Vivian
-- Codename: Stardust
+- Codename: Columbina
 - Production URL: https://vivian-chan.vercel.app
 - Repository: https://github.com/celestial-sora/ai-waifu
 - Git branch: `main`
