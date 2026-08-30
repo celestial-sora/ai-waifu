@@ -34,6 +34,7 @@ const TTS_TIMEOUT_MS = 17000;
 const STT_TIMEOUT_MS = 20000;
 const AUDIO_UNLOCK_MS = 1200;
 const PLAYBACK_START_MS = 2500;
+const AUDIO_SYNC_SETTLE_MS = 140;
 const MIN_RECORDING_MS = 550;
 
 function abortAfter(ms: number) {
@@ -279,6 +280,10 @@ export default function Home() {
         stopLipSync();
         throw new Error("TTS playback did not start");
       }
+      // play() can resolve just before Safari sends the first audible frame.
+      // Release the assistant bubble after that short hand-off, keeping text
+      // and voice visually in sync without making the user wait noticeably.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, AUDIO_SYNC_SETTLE_MS));
       return started;
     } catch (error) {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
