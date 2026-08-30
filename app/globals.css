@@ -38,6 +38,7 @@ button { cursor: pointer; }
 .circle-control svg { transition: transform .18s cubic-bezier(.34,1.56,.64,1); }
 .circle-control:not(.is-disabled):hover { background: #38393f; }
 .circle-control.is-recording { background: #b13c56; box-shadow: 0 0 0 4px #e75c7944; }
+.circle-control.is-muted { color: #fff; background: #a93650; box-shadow: 0 0 0 3px #e75c7944; }
 .circle-control.is-disabled { opacity: .54; cursor: not-allowed; }
 .companion-input input { min-width: 0; flex: 1; border: 0; outline: none; color: #f2f0f1; background: transparent; font-size: clamp(16px, 1.6vw, 21px); }
 .companion-input input::placeholder { color: #86868d; }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 
-type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "video" | "clip" | "message" | "close" | "memory" | "sound";
+type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "close" | "memory" | "sound";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -12,6 +12,7 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></>,
     chevron: <path d="m5 9 7 7 7-7"/>,
     mic: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></>,
+    micOff: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6M4 4l16 16"/></>,
     video: <><rect x="3" y="6" width="12" height="12" rx="3"/><path d="m15 10 5-3v10l-5-3"/></>,
     clip: <path d="m8.5 12.5 5.9-5.9a3.5 3.5 0 0 1 5 5l-7.8 7.8a5 5 0 0 1-7.1-7.1l7.3-7.3"/>,
     message: <path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.5 8.5 0 0 1-3.6-.8L4 20l1.3-4A7.2 7.2 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/>,
@@ -628,7 +629,7 @@ export default function Home() {
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
-        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Unmute microphone"}><Icon name="mic"/></button>
+        <button className={`circle-control ${recording ? "is-recording" : "is-muted"}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Microphone muted, click to unmute"}><Icon name={recording ? "mic" : "micOff"}/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="ไฟล์แนบจะมาในภายหลัง"><Icon name="clip"/></button>
         <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
