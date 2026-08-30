@@ -13,6 +13,15 @@ function speechText(value: string) {
     .trim();
 }
 
+function emotionMarker(value: string) {
+  if (/โกรธ|โมโห|หงุดหงิด|วีน|angry|furious|mad/i.test(value)) return "[angry, emphatic tone]";
+  if (/เขิน|อาย|หน้าแดง|shy|embarrassed|flustered/i.test(value)) return "[shy, slightly flustered tone]";
+  if (/คิด|ขอคิด|เดี๋ยว|อืม|hmm|think|thinking/i.test(value)) return "[thoughtful, reflective tone]";
+  if (/เศร้า|เสียใจ|ร้องไห้|sad|sorry|cry/i.test(value)) return "[soft, sad tone]";
+  if (/ขำ|ตลก|เล่น|แกล้ง|ดีใจ|เยี่ยม|haha|fun|happy|playful/i.test(value)) return "[playful, cheerful tone]";
+  return "[warm, gentle tone]";
+}
+
 export async function POST(request: Request) {
   const startedAt = Date.now();
   const apiKey = process.env.FISH_AUDIO_API_KEY;
@@ -35,7 +44,9 @@ export async function POST(request: Request) {
       },
       signal: AbortSignal.timeout(upstreamTimeoutMs),
       body: JSON.stringify({
-        text: cleanText,
+        // S2 understands natural-language emotion markers in brackets. Keep
+        // this marker out of the visible chat and use it only for synthesis.
+        text: `${emotionMarker(cleanText)} ${cleanText}`,
         reference_id: voiceId,
         prosody: { speed: 0.95, volume: 0, normalize_loudness: true },
         format: "mp3",
