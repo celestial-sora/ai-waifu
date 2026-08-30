@@ -34,6 +34,8 @@ export default function Home() {
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const audioUnlockPromiseRef = useRef<Promise<void> | null>(null);
+  const audioPrimedRef = useRef(false);
   const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lipSyncFrameRef = useRef<number | null>(null);
@@ -136,21 +138,28 @@ export default function Home() {
       if (data.messages?.length) setMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
     } catch { /* Vivian stays usable while Supabase is unavailable. */ }
   }
-  function unlockAudio() {
+  function unlockAudio(): Promise<void> {
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!AudioContextClass) return Promise.resolve();
     audioContextRef.current ??= new AudioContextClass();
-    if (audioContextRef.current.state === "suspended") void audioContextRef.current.resume();
+    if (audioPrimedRef.current && audioContextRef.current.state !== "suspended") return Promise.resolve();
+    if (audioUnlockPromiseRef.current) return audioUnlockPromiseRef.current;
+    const context = audioContextRef.current;
+    if (context.state === "suspended") void context.resume();
     const audio = audioRef.current ?? new Audio();
     audio.setAttribute("playsinline", "true");
     audio.preload = "auto";
     audioRef.current = audio;
     audio.muted = true;
-    void audio.play().then(() => {
+    audioUnlockPromiseRef.current = audio.play().then(() => {
       audio.pause();
       audio.currentTime = 0;
+      audioPrimedRef.current = true;
+    }).catch(() => undefined).finally(() => {
       audio.muted = false;
-    }).catch(() => { audio.muted = false; });
+      audioUnlockPromiseRef.current = null;
+    });
+    return audioUnlockPromiseRef.current;
   }
   function setMouthOpen(value: number) {
     const coreModel = modelRef.current?.internalModel?.coreModel;
@@ -200,7 +209,7 @@ export default function Home() {
     if (muted) return false;
     let objectUrl: string | null = null;
     try {
-      unlockAudio();
+      await unlockAudio();
       const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
       if (!response.ok) throw new Error("TTS failed");
       const audio = audioRef.current ?? new Audio();
