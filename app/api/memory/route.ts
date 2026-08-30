@@ -10,7 +10,12 @@ export async function GET() {
     if (error) throw error;
     const { data: conversation } = await supabase.from("conversations").select("id").eq("user_key", userKey).limit(1).maybeSingle();
     const { data: messages } = conversation ? await supabase.from("messages").select("role,content").eq("conversation_id", conversation.id).order("created_at", { ascending: true }).limit(100) : { data: [] };
-    return NextResponse.json({ memories: data ?? [], messages: messages ?? [] });
+    let companion = null;
+    try {
+      const loaded = await supabase.from("companion_state").select("affinity,trust,familiarity,mood,mood_intensity,last_idle_at,last_interaction_at").eq("user_key", userKey).maybeSingle();
+      if (!loaded.error) companion = loaded.data;
+    } catch { /* Companion table may not exist yet. */ }
+    return NextResponse.json({ memories: data ?? [], messages: messages ?? [], companion });
   } catch (error) {
     console.error("Memory load failed", error);
     return NextResponse.json({ memories: [], error: "Memory database is not ready" }, { status: 503 });

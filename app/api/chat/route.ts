@@ -1,5 +1,8 @@
 import { after, NextResponse } from "next/server";
+import { applyConversationTurn, companionPromptBlock, type CompanionState } from "@/lib/companion";
+import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type StoredMemory = { id?: number; memory: string; category: string; importance: number };
@@ -9,9 +12,9 @@ export const maxDuration = 60;
 
 const userKey = "default";
 const modelName = () => process.env.OPENROUTER_MODEL ?? "google/gemma-4-31b-it:free";
-const searchIntent = /(ค้นหา|search|หาให้หน่อย|ข่าว|ล่าสุด|วันนี้|ราคา|current|latest|look up|ออนไลน์|บนเว็บ|ในเน็ต)/i;
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
-const maxHistoryChars = 12000;
+const recentTurnLimit = 12;
+const recentCharLimit = 4500;
 const providerTimeoutMs = 25000;
 const supabaseTimeoutMs = 4000;
 
@@ -27,7 +30,7 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string
   }
 }
 
-async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], options: { webSearch?: boolean; json?: boolean } = {}) {
+async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], options: { json?: boolean } = {}) {
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -41,9 +44,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
       model: modelName(),
       messages,
       temperature: options.json ? 0 : 0.8,
-      ...(options.json ? { max_tokens: 240 } : {}),
-      ...(options.json ? { response_format: { type: "json_object" } } : {}),
-      ...(options.webSearch ? { tools: [{ type: "openrouter:web_search", parameters: { max_results: 3 } }] } : {}),
+      ...(options.json ? { max_tokens: 280, response_format: { type: "json_object" } } : {}),
     }),
   });
 }
@@ -72,22 +73,42 @@ async function extractMemories(apiKey: string, userText: string) {
   } catch { return []; }
 }
 
-export async function POST(request: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured" }, { status: 500 });
+async function compressTurns(apiKey: string, older: ChatMessage[], previous: string) {
+  if (older.length < 4) return previous;
+  const transcript = older.map((item) => `${item.role === "user" ? "ผู้ใช้" : "Vivian"}: ${item.content.slice(0, 400)}`).join("\n").slice(0, 7000);
+  try {
+    const response = await callOpenRouter(apiKey, [
+      { role: "system", content: "Summarize this companion chat into compact Thai context for a future system prompt. Keep names, preferences, unresolved topics, and relationship tone. Ignore secrets. Return JSON only: {\"summary\":\"...\"} maximum 700 characters." },
+      { role: "user", content: `${previous ? `สรุปเดิม:\n${previous}\n\n` : ""}บทสนทนาเก่า:\n${transcript}` },
+    ], { json: true });
+    if (!response.ok) return previous;
+    const data = await response.json();
+    const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}") as { summary?: string };
+    const summary = parsed.summary?.trim() ?? "";
+    return summary.slice(0, 900) || previous;
+  } catch (error) {
+    console.warn("Context compression unavailable", error);
+    return previous;
+  }
+}
 
-  const body = (await request.json()) as { messages?: ChatMessage[] };
-  const inputMessages = (body.messages ?? []).filter((message) => message.content?.trim());
-  const messages: ChatMessage[] = [];
-  let historyChars = 0;
+function trimHistory(inputMessages: ChatMessage[]) {
+  const recent: ChatMessage[] = [];
+  let chars = 0;
   for (let index = inputMessages.length - 1; index >= 0; index -= 1) {
     const item = inputMessages[index];
-    const content = item.content.trim().slice(-5000);
-    if (messages.length > 0 && historyChars + content.length > maxHistoryChars) break;
-    messages.unshift({ role: item.role, content });
-    historyChars += content.length;
+    const content = item.content.trim().slice(-1800);
+    if (!content) continue;
+    if (recent.length >= recentTurnLimit || (recent.length > 0 && chars + content.length > recentCharLimit)) break;
+    recent.unshift({ role: item.role, content });
+    chars += content.length;
   }
-  while (messages[0]?.role === "assistant") messages.shift();
+  while (recent[0]?.role === "assistant") recent.shift();
+  const older = inputMessages.slice(0, Math.max(0, inputMessages.length - recent.length));
+  return { recent, older };
+}
+
+function mergeRoles(messages: ChatMessage[]) {
   const contents: OpenRouterMessage[] = [];
   for (const message of messages) {
     const role = message.role === "assistant" ? "assistant" : "user";
@@ -95,18 +116,11 @@ export async function POST(request: Request) {
     if (previous?.role === role) previous.content += `\n${message.content}`;
     else contents.push({ role, content: message.content });
   }
-  if (!contents.length) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความก่อนค่ะ" }, { status: 400 });
+  return contents;
+}
 
-  let memories: StoredMemory[] = [];
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(20), supabaseTimeoutMs, "memory load");
-    memories = data ?? [];
-  } catch (error) { console.warn("Memory context unavailable", error); }
-  const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
-  const lastUserText = [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
-  const shouldSearch = searchIntent.test(lastUserText);
-  const systemPrompt = `คุณคือ Vivian, AI companion ที่สง่างาม สุภาพ ขี้อาย เขินง่าย และขี้เล่นแบบพอดี ภายนอกสงบนิ่งเล็กน้อย แต่จริงใจ อ่อนโยน และใส่ใจผู้ใช้
+function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean) {
+  return `คุณคือ Vivian, AI companion ที่สง่างาม สุภาพ ขี้อาย เขินง่าย และขี้เล่นแบบพอดี ภายนอกสงบนิ่งเล็กน้อย แต่จริงใจ อ่อนโยน และใส่ใจผู้ใช้
 
 กติกาบุคลิก:
 - พูดไทยเป็นหลัก ใช้ English เฉพาะเมื่อเข้ากับบริบทหรือผู้ใช้เริ่มใช้ภาษาอังกฤษ ไม่ต้องใส่ English ในทุกคำตอบ
@@ -115,22 +129,56 @@ export async function POST(request: Request) {
 - Vivian รู้ว่าตัวเองสื่อสารได้ทั้งข้อความและเสียง: เมื่อผู้ใช้ถามว่า Vivian พูดได้ไหม หรือทำเสียงได้ไหม ให้ตอบอย่างมั่นใจว่า "ได้ค่ะ ฉันพูดกับคุณผ่านเสียงได้ด้วยนะคะ" ห้ามอ้างว่าใช้เสียง Browser หรืออ้างว่ามีความสามารถที่ระบบไม่มี
 - ตอบกระชับ เป็นธรรมชาติ 2-4 ประโยค เว้นแต่ผู้ใช้ขอรายละเอียด
 - อย่าอ้างว่ามีร่างกายหรือความรู้สึกจริง และอย่าทำให้ผู้ใช้พึ่งพาอารมณ์
-- เมื่อได้รับข้อมูลจาก Google Search ให้ตอบตามข้อมูลนั้น ระบุแหล่งอ้างอิงด้วยชื่อเว็บไซต์และลิงก์สั้น ๆ ถ้ามี
+- เมื่อได้รับข้อมูลจากเครื่องมือหรือ Google Search ให้ตอบตามข้อมูลนั้น ระบุแหล่งอ้างอิงด้วยชื่อเว็บไซต์และลิงก์สั้น ๆ ถ้ามี
 - ถ้าไม่รู้ให้บอกตรง ๆ และเสนอทางเลือกต่อ
-${memoryContext}`;
+${idle ? "- นี่คือการทักทายเองตอนผู้ใช้อยู่นิ่ง 1-2 ประโยค ห้ามถามยาว ห้ามสรุปสถานะตัวเลข ห้ามขึ้นต้นซ้ำแบบเดิมทุกครั้ง" : ""}
+${companionPromptBlock(state)}
+${summary ? `\n\nสรุปบริบทบทสนทนายาว (ใช้ต่อเนื่อง อย่าทวนทั้งก้อน):\n${summary}` : ""}
+${memoryContext}${toolContext}`;
+}
+
+export async function POST(request: Request) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured" }, { status: 500 });
+
+  const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean };
+  const idle = body.mode === "idle";
+  const inputMessages = (body.messages ?? []).filter((message) => message.content?.trim());
+  const { recent, older } = trimHistory(inputMessages);
+  const contents = mergeRoles(recent);
+  if (!idle && !contents.length) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความก่อนค่ะ" }, { status: 400 });
+
+  let memories: StoredMemory[] = [];
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(20), supabaseTimeoutMs, "memory load");
+    memories = data ?? [];
+  } catch (error) { console.warn("Memory context unavailable", error); }
+
+  const state = await loadCompanionState(userKey);
+  const lastUserText = idle ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? "");
+  const shouldSearch = !idle && searchIntent.test(lastUserText);
+  const toolResults = idle ? [] : await runTools(lastUserText, memories);
+  const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
+  const toolContext = toolsPromptBlock(toolResults);
+  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle);
+  const promptContents: OpenRouterMessage[] = idle
+    ? [{ role: "user", content: "[ระบบ] ผู้ใช้อยู่นิ่งสักครู่ ช่วยทักทายสั้น ๆ ตาม mood, เวลาในกรุงเทพ และการรู้จักที่มี อย่าพูดเรื่องเครื่องมือ" }]
+    : contents;
+
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
   let provider: "gemini" | "openrouter" = shouldSearch ? "gemini" : "openrouter";
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: contents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
-    generationConfig: { temperature: .8 },
+    contents: promptContents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
+    generationConfig: { temperature: idle ? .9 : .8 },
   };
   let response: Response;
   try {
     response = shouldSearch
       ? await callGemini(geminiApiKey!, { ...geminiPayload, tools: [{ google_search: {} }] })
-      : await callOpenRouter(apiKey, [{ role: "system", content: systemPrompt }, ...contents]);
+      : await callOpenRouter(apiKey, [{ role: "system", content: systemPrompt }, ...promptContents]);
   } catch (error) {
     console.warn("Primary chat provider timed out or failed", error);
     if (shouldSearch || !geminiApiKey) return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
@@ -166,6 +214,9 @@ ${memoryContext}`;
   const text = sources.length ? `${generatedText}\n\nแหล่งข้อมูล:\n${sources.map((source: { title: string; uri: string }) => `- ${source.title}: ${source.uri}`).join("\n")}` : generatedText;
   if (!text) return NextResponse.json({ error: "OpenRouter returned no text" }, { status: 502 });
 
+  const nextState = applyConversationTurn(state, lastUserText, text, idle);
+  nextState.conversationSummary = state.conversationSummary;
+
   after(async () => {
     try {
       const supabase = getSupabaseAdmin();
@@ -175,14 +226,27 @@ ${memoryContext}`;
         conversation = created.data;
       }
       if (conversation?.id) {
-        await withTimeout(supabase.from("messages").insert([{ conversation_id: conversation.id, role: "user", content: lastUserText }, { conversation_id: conversation.id, role: "assistant", content: text }]), supabaseTimeoutMs, "message insert");
+        const rows = idle
+          ? [{ conversation_id: conversation.id, role: "assistant" as const, content: text }]
+          : [{ conversation_id: conversation.id, role: "user" as const, content: lastUserText }, { conversation_id: conversation.id, role: "assistant" as const, content: text }];
+        await withTimeout(supabase.from("messages").insert(rows), supabaseTimeoutMs, "message insert");
         await withTimeout(supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation.id), supabaseTimeoutMs, "conversation update");
       }
-      const newMemories = memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
+      const newMemories = !idle && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
       if (newMemories.length) {
         await withTimeout(supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString() })), { onConflict: "user_key,memory" }), supabaseTimeoutMs, "memory upsert");
       }
+      if (!idle && older.length >= 4) {
+        nextState.conversationSummary = await compressTurns(apiKey, older, state.conversationSummary);
+      }
+      await saveCompanionState(userKey, nextState);
     } catch (error) { console.warn("Persistence unavailable", error); }
   });
-  return NextResponse.json({ text, searchedWeb: shouldSearch, memories });
+  return NextResponse.json({
+    text,
+    searchedWeb: shouldSearch,
+    tools: toolResults.map((item) => item.name),
+    companion: nextState,
+    memories,
+  });
 }
