@@ -11,8 +11,8 @@ export async function POST(request: Request) {
   const form = new FormData();
   form.append("file", file, file.name || "vivian-recording");
   form.append("model_id", "scribe_v2");
-  // The app is single-speaker Thai push-to-talk, not a mixed conversation.
-  form.append("language_code", "tha");
+  // Vivian conversations naturally mix Thai and English. Leave the language
+  // unspecified so Scribe v2 can detect and transcribe both in one clip.
   form.append("num_speakers", "1");
   form.append("tag_audio_events", "false");
   let response: Response;
