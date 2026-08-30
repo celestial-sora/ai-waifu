@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-type StoredMemory = { memory: string; category: string; importance: number };
+type StoredMemory = { id?: number; memory: string; category: string; importance: number };
 type OpenRouterMessage = { role: "system" | "user" | "assistant"; content: string };
+
+export const maxDuration = 60;
 
 const userKey = "default";
 const modelName = () => process.env.OPENROUTER_MODEL ?? "google/gemma-4-31b-it:free";
@@ -11,6 +13,19 @@ const searchIntent = /(ค้นหา|search|หาให้หน่อย|ข
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
 const maxHistoryChars = 12000;
 const providerTimeoutMs = 25000;
+const supabaseTimeoutMs = 4000;
+
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(promise),
+      new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], options: { webSearch?: boolean; json?: boolean } = {}) {
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -85,7 +100,7 @@ export async function POST(request: Request) {
   let memories: StoredMemory[] = [];
   try {
     const supabase = getSupabaseAdmin();
-    const { data } = await supabase.from("memories").select("memory,category,importance").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(20);
+    const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(20), supabaseTimeoutMs, "memory load");
     memories = data ?? [];
   } catch (error) { console.warn("Memory context unavailable", error); }
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
@@ -150,24 +165,23 @@ ${memoryContext}`;
   const text = sources.length ? `${generatedText}\n\nแหล่งข้อมูล:\n${sources.map((source: { title: string; uri: string }) => `- ${source.title}: ${source.uri}`).join("\n")}` : generatedText;
   if (!text) return NextResponse.json({ error: "OpenRouter returned no text" }, { status: 502 });
 
-  let updatedMemories: StoredMemory[] = memories;
-  try {
-    const supabase = getSupabaseAdmin();
-    let { data: conversation } = await supabase.from("conversations").select("id").eq("user_key", userKey).limit(1).maybeSingle();
-    if (!conversation) {
-      const created = await supabase.from("conversations").insert({ user_key: userKey, title: "Vivian conversation" }).select("id").single();
-      conversation = created.data;
-    }
-    if (conversation?.id) {
-      await supabase.from("messages").insert([{ conversation_id: conversation.id, role: "user", content: lastUserText }, { conversation_id: conversation.id, role: "assistant", content: text }]);
-      await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation.id);
-    }
-    const newMemories = memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
-    if (newMemories.length) {
-      await supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString() })), { onConflict: "user_key,memory" });
-    }
-    const { data: refreshed } = await supabase.from("memories").select("id,memory,category,importance,updated_at").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(30);
-    updatedMemories = refreshed ?? updatedMemories;
-  } catch (error) { console.warn("Persistence unavailable", error); }
-  return NextResponse.json({ text, searchedWeb: shouldSearch, memories: updatedMemories });
+  after(async () => {
+    try {
+      const supabase = getSupabaseAdmin();
+      let { data: conversation } = await withTimeout(supabase.from("conversations").select("id").eq("user_key", userKey).limit(1).maybeSingle(), supabaseTimeoutMs, "conversation load");
+      if (!conversation) {
+        const created = await withTimeout(supabase.from("conversations").insert({ user_key: userKey, title: "Vivian conversation" }).select("id").single(), supabaseTimeoutMs, "conversation create");
+        conversation = created.data;
+      }
+      if (conversation?.id) {
+        await withTimeout(supabase.from("messages").insert([{ conversation_id: conversation.id, role: "user", content: lastUserText }, { conversation_id: conversation.id, role: "assistant", content: text }]), supabaseTimeoutMs, "message insert");
+        await withTimeout(supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation.id), supabaseTimeoutMs, "conversation update");
+      }
+      const newMemories = memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
+      if (newMemories.length) {
+        await withTimeout(supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString() })), { onConflict: "user_key,memory" }), supabaseTimeoutMs, "memory upsert");
+      }
+    } catch (error) { console.warn("Persistence unavailable", error); }
+  });
+  return NextResponse.json({ text, searchedWeb: shouldSearch, memories });
 }

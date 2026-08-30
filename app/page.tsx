@@ -26,6 +26,28 @@ type Memory = { id: number; memory: string; category: string; importance: number
 const greeting: Message = { from: "vivian", text: "สวัสดีค่ะ ฉันคือ Vivian วันนี้อยากให้ช่วยทำอะไรคะ?" };
 const APP_CODENAME = "Stardust";
 const WITCH_EXPRESSIONS = ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"];
+const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+const CHAT_TIMEOUT_MS = 35000;
+const TTS_TIMEOUT_MS = 12000;
+const STT_TIMEOUT_MS = 20000;
+const AUDIO_UNLOCK_MS = 1200;
+const PLAYBACK_START_MS = 2500;
+const SPEAK_WAIT_MS = 4000;
+
+function abortAfter(ms: number) {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  window.setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T) {
+  let timer: number | undefined;
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => { timer = window.setTimeout(() => resolve(fallback), ms); }),
+  ]).finally(() => { if (timer) window.clearTimeout(timer); });
+}
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -143,22 +165,25 @@ export default function Home() {
     if (!AudioContextClass) return Promise.resolve();
     audioContextRef.current ??= new AudioContextClass();
     if (audioPrimedRef.current && audioContextRef.current.state !== "suspended") return Promise.resolve();
-    if (audioUnlockPromiseRef.current) return audioUnlockPromiseRef.current;
+    if (audioUnlockPromiseRef.current) return withTimeout(audioUnlockPromiseRef.current, AUDIO_UNLOCK_MS, undefined);
     const context = audioContextRef.current;
-    if (context.state === "suspended") void context.resume();
     const audio = audioRef.current ?? new Audio();
     audio.setAttribute("playsinline", "true");
     audio.preload = "auto";
-    audioRef.current = audio;
+    if (!audio.src) audio.src = SILENT_WAV;
     audio.muted = true;
-    audioUnlockPromiseRef.current = audio.play().then(() => {
-      audio.pause();
-      audio.currentTime = 0;
-      audioPrimedRef.current = true;
-    }).catch(() => undefined).finally(() => {
+    audioRef.current = audio;
+    const unlock = (async () => {
+      if (context.state === "suspended") await withTimeout(context.resume().then(() => undefined), 800, undefined);
+      try {
+        await withTimeout(audio.play().then(() => undefined), AUDIO_UNLOCK_MS, undefined);
+        audio.pause();
+        audio.currentTime = 0;
+      } catch { /* Safari may reject empty or delayed unlock; chat must still continue. */ }
       audio.muted = false;
-      audioUnlockPromiseRef.current = null;
-    });
+      audioPrimedRef.current = true;
+    })();
+    audioUnlockPromiseRef.current = unlock.finally(() => { audioUnlockPromiseRef.current = null; });
     return audioUnlockPromiseRef.current;
   }
   function setMouthOpen(value: number) {
@@ -209,13 +234,15 @@ export default function Home() {
     if (muted) return false;
     let objectUrl: string | null = null;
     try {
-      await unlockAudio();
-      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+      await withTimeout(unlockAudio(), AUDIO_UNLOCK_MS, undefined);
+      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abortAfter(TTS_TIMEOUT_MS), body: JSON.stringify({ text }) });
       if (!response.ok) throw new Error("TTS failed");
+      const blob = await withTimeout(response.blob(), TTS_TIMEOUT_MS, null);
+      if (!blob || blob.size === 0) throw new Error("TTS failed");
       const audio = audioRef.current ?? new Audio();
       audioRef.current?.pause();
       if (audioRef.current?.src) audioRef.current.removeAttribute("src");
-      objectUrl = URL.createObjectURL(await response.blob());
+      objectUrl = URL.createObjectURL(blob);
       audio.src = objectUrl;
       audio.setAttribute("playsinline", "true");
       audio.volume = 1;
@@ -223,8 +250,12 @@ export default function Home() {
       audio.onerror = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
       audioRef.current = audio;
       startLipSync(audio);
-      await audio.play();
-      return true;
+      const started = await withTimeout(audio.play().then(() => true), PLAYBACK_START_MS, false);
+      if (!started) {
+        stopLipSync();
+        console.warn("TTS playback did not start in time; showing text anyway");
+      }
+      return started;
     } catch (error) {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       resetReaction();
@@ -240,15 +271,16 @@ export default function Home() {
     setMessage("");
     setSending(true);
     try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout(35000), body: JSON.stringify({ messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })) }) });
-      const data = await response.json();
-      if (!response.ok || !data.text) throw new Error(data.error ?? "Chat request failed");
+      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abortAfter(CHAT_TIMEOUT_MS), body: JSON.stringify({ messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })) }) });
+      const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; memories?: Memory[] }>, 5000, null);
+      if (!response.ok || !data?.text) throw new Error(data?.error ?? "Chat request failed");
       const reply = data.text;
-      const audioStarted = await speak(reply);
+      const speakPromise = speak(reply);
+      const audioStarted = await withTimeout(speakPromise, SPEAK_WAIT_MS, false);
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
       void playReaction(reply, text);
       if (audioStarted) console.info("Vivian response synced with audio playback");
-      if (data.memories) setMemories(data.memories);
+      if (data.memories?.length) setMemories(data.memories.filter((item: Memory) => typeof item.id === "number"));
     } catch {
       resetReaction();
       setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
@@ -288,7 +320,7 @@ export default function Home() {
         const form = new FormData();
         form.append("file", new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "vivian-recording.webm");
         try {
-          const response = await fetch("/api/stt", { method: "POST", body: form });
+          const response = await fetch("/api/stt", { method: "POST", body: form, signal: abortAfter(STT_TIMEOUT_MS) });
           const data = await response.json();
           if (data.text) {
             setSttPreview(data.text);
