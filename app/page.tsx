@@ -83,6 +83,7 @@ export default function Home() {
   const lipSyncFrameRef = useRef<number | null>(null);
   const reactionIndexRef = useRef(0);
   const speakIdRef = useRef(0);
+  const greetingSpokenRef = useRef(false);
   const ttsAbortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
   const speakingRef = useRef(false);
@@ -112,7 +113,13 @@ export default function Home() {
   companionRef.current = companion;
 
   useEffect(() => {
-    const unlock = () => unlockAudio();
+    const unlock = () => {
+      void unlockAudio();
+      if (!greetingSpokenRef.current && !muted) {
+        greetingSpokenRef.current = true;
+        void speak(initialGreeting.current.text);
+      }
+    };
     window.addEventListener("pointerdown", unlock, { once: true });
     void loadMemory();
     const idleTimer = window.setInterval(() => { void maybeIdleGreeting(); }, 12000);
