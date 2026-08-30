@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 
 type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "video" | "clip" | "message" | "close" | "memory" | "sound";
 
@@ -36,6 +37,9 @@ const AUDIO_UNLOCK_MS = 1200;
 const PLAYBACK_START_MS = 2500;
 const AUDIO_SYNC_SETTLE_MS = 140;
 const MIN_RECORDING_MS = 550;
+const IDLE_AFTER_MS = 75_000;
+const IDLE_COOLDOWN_MS = 8 * 60 * 1000;
+const LAST_IDLE_KEY = "vivian-last-idle";
 
 function abortAfter(ms: number) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
@@ -66,6 +70,16 @@ export default function Home() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lipSyncFrameRef = useRef<number | null>(null);
   const reactionIndexRef = useRef(0);
+  const speakIdRef = useRef(0);
+  const ttsAbortRef = useRef<AbortController | null>(null);
+  const sendingRef = useRef(false);
+  const speakingRef = useRef(false);
+  const recordingRef = useRef(false);
+  const interactedRef = useRef(false);
+  const lastActivityRef = useRef(Date.now());
+  const idleBusyRef = useRef(false);
+  const messagesRef = useRef<Message[]>([greeting]);
+  const companionRef = useRef<CompanionState>(defaultCompanionState());
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([greeting]);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -75,13 +89,24 @@ export default function Home() {
   const [sttPreview, setSttPreview] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
+  const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? greeting.text;
+  messagesRef.current = messages;
+  sendingRef.current = sending;
+  companionRef.current = companion;
 
   useEffect(() => {
     const unlock = () => unlockAudio();
     window.addEventListener("pointerdown", unlock, { once: true });
     void loadMemory();
-    return () => window.removeEventListener("pointerdown", unlock);
+    const idleTimer = window.setInterval(() => { void maybeIdleGreeting(); }, 12000);
+    const onVisible = () => { lastActivityRef.current = Date.now(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.clearInterval(idleTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -162,7 +187,60 @@ export default function Home() {
       const data = await response.json();
       if (Array.isArray(data.memories)) setMemories(data.memories);
       if (data.messages?.length) setMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
+      const next = normalizeCompanion(data.companion);
+      if (next) setCompanion(next);
     } catch { /* Vivian stays usable while Supabase is unavailable. */ }
+  }
+  function normalizeCompanion(raw: unknown): CompanionState | null {
+    if (!raw || typeof raw !== "object") return null;
+    const item = raw as Record<string, unknown>;
+    const mood = String(item.mood ?? "calm");
+    return {
+      affinity: Number(item.affinity ?? 22),
+      trust: Number(item.trust ?? 18),
+      familiarity: Number(item.familiarity ?? 8),
+      mood: isMood(mood) ? mood : "calm",
+      moodIntensity: Number(item.moodIntensity ?? item.mood_intensity ?? 35),
+      conversationSummary: String(item.conversationSummary ?? item.conversation_summary ?? ""),
+      lastIdleAt: typeof item.lastIdleAt === "string" ? item.lastIdleAt : typeof item.last_idle_at === "string" ? item.last_idle_at : null,
+      lastInteractionAt: typeof item.lastInteractionAt === "string" ? item.lastInteractionAt : typeof item.last_interaction_at === "string" ? item.last_interaction_at : null,
+    };
+  }
+  function markActivity() {
+    lastActivityRef.current = Date.now();
+  }
+  function lastIdleAt() {
+    const fromState = companionRef.current.lastIdleAt ? Date.parse(companionRef.current.lastIdleAt) : 0;
+    const fromStore = Number(window.localStorage.getItem(LAST_IDLE_KEY) ?? 0);
+    return Math.max(fromState || 0, fromStore || 0);
+  }
+  async function maybeIdleGreeting() {
+    if (idleBusyRef.current || sendingRef.current || speakingRef.current || recordingRef.current) return;
+    if (!interactedRef.current || document.hidden) return;
+    if (Date.now() - lastActivityRef.current < IDLE_AFTER_MS) return;
+    if (Date.now() - lastIdleAt() < IDLE_COOLDOWN_MS) return;
+    idleBusyRef.current = true;
+    try {
+      await sendMessage("", { idle: true });
+      window.localStorage.setItem(LAST_IDLE_KEY, String(Date.now()));
+    } finally {
+      idleBusyRef.current = false;
+      markActivity();
+    }
+  }
+  function stopSpeech() {
+    speakIdRef.current += 1;
+    ttsAbortRef.current?.abort();
+    ttsAbortRef.current = null;
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+    speakingRef.current = false;
+    stopLipSync();
+    resetReaction();
   }
   function unlockAudio(): Promise<void> {
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -252,15 +330,23 @@ export default function Home() {
   }
   async function speak(text: string): Promise<boolean> {
     if (muted) return false;
+    const speakId = ++speakIdRef.current;
+    const abort = new AbortController();
+    ttsAbortRef.current = abort;
+    speakingRef.current = true;
+    const timeout = window.setTimeout(() => abort.abort(), TTS_TIMEOUT_MS);
     let objectUrl: string | null = null;
     try {
       await withTimeout(unlockAudio(), AUDIO_UNLOCK_MS, undefined);
-      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abortAfter(TTS_TIMEOUT_MS), body: JSON.stringify({ text }) });
+      if (speakId !== speakIdRef.current) return false;
+      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text }) });
+      if (speakId !== speakIdRef.current) return false;
       if (!response.ok) {
         const error = await response.json().catch(() => null) as { error?: string; code?: string } | null;
         throw new Error(error?.code ?? error?.error ?? "TTS failed");
       }
       const blob = await withTimeout(response.blob(), TTS_TIMEOUT_MS, null);
+      if (speakId !== speakIdRef.current) return false;
       if (!blob || blob.size === 0) throw new Error("TTS failed");
       const audio = audioRef.current ?? new Audio();
       audioRef.current?.pause();
@@ -271,54 +357,91 @@ export default function Home() {
       audio.muted = false;
       audio.defaultMuted = false;
       audio.volume = 1;
-      audio.onended = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-      audio.onerror = () => { stopLipSync(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+      audio.onended = () => {
+        if (speakId === speakIdRef.current) speakingRef.current = false;
+        stopLipSync();
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
+      audio.onerror = () => {
+        if (speakId === speakIdRef.current) speakingRef.current = false;
+        stopLipSync();
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
       audioRef.current = audio;
       startLipSync(audio);
       const started = await withTimeout(audio.play().then(() => true), PLAYBACK_START_MS, false);
+      if (speakId !== speakIdRef.current) return false;
       if (!started) {
         stopLipSync();
         throw new Error("TTS playback did not start");
       }
-      // play() can resolve just before Safari sends the first audible frame.
-      // Release the assistant bubble after that short hand-off, keeping text
-      // and voice visually in sync without making the user wait noticeably.
       await new Promise<void>((resolve) => window.setTimeout(resolve, AUDIO_SYNC_SETTLE_MS));
-      return started;
+      return speakId === speakIdRef.current;
     } catch (error) {
+      if (speakId === speakIdRef.current) {
+        speakingRef.current = false;
+        if ((error as { name?: string }).name !== "AbortError") {
+          resetReaction();
+          console.error("TTS unavailable", error);
+        }
+      }
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      resetReaction();
-      console.error("TTS unavailable", error);
       return false;
+    } finally {
+      window.clearTimeout(timeout);
+      if (ttsAbortRef.current === abort) ttsAbortRef.current = null;
     }
   }
-  async function sendMessage(overrideText?: string) {
+  async function sendMessage(overrideText?: string, options: { idle?: boolean } = {}) {
+    const idle = Boolean(options.idle);
     const text = (overrideText ?? message).trim();
-    if (!text || sending) return;
-    const nextMessages = [...messages, { from: "me" as const, text }];
-    setMessages(nextMessages);
-    setMessage("");
+    if (sendingRef.current) return;
+    if (!idle && !text) return;
+    if (speakingRef.current) stopSpeech();
+    markActivity();
+    if (!idle) interactedRef.current = true;
+    const nextMessages = idle ? messagesRef.current : [...messagesRef.current, { from: "me" as const, text }];
+    if (!idle) {
+      setMessages(nextMessages);
+      setMessage("");
+    }
     setSending(true);
+    sendingRef.current = true;
     try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abortAfter(CHAT_TIMEOUT_MS), body: JSON.stringify({ messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })) }) });
-      const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; memories?: Memory[] }>, 5000, null);
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abortAfter(CHAT_TIMEOUT_MS),
+        body: JSON.stringify({
+          mode: idle ? "idle" : "chat",
+          messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
+        }),
+      });
+      const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; memories?: Memory[]; companion?: CompanionState }>, 5000, null);
       if (!response.ok || !data?.text) throw new Error(data?.error ?? "Chat request failed");
       const reply = data.text;
-      if (!muted) {
-        const audioStarted = await speak(reply);
-        if (!audioStarted) throw new Error("TTS playback did not start");
-        console.info("Vivian audio playback started");
-      }
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
-      void playReaction(reply, text);
+      const nextCompanion = normalizeCompanion(data.companion);
+      if (nextCompanion) setCompanion(nextCompanion);
       if (data.memories?.length) setMemories(data.memories.filter((item: Memory) => typeof item.id === "number"));
+      setSending(false);
+      sendingRef.current = false;
+      if (!muted) void speak(reply);
+      void playReaction(reply, text, idle);
     } catch (error) {
       console.error("Vivian response unavailable", error);
       resetReaction();
-      setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
-    } finally { setSending(false); }
+      if (!idle) setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
+    } finally {
+      setSending(false);
+      sendingRef.current = false;
+    }
   }
-  async function playReaction(reply: string, userText: string) {
+  function moodExpression(mood: Mood) {
+    const map: Record<Mood, string> = { calm: "h", warm: "yj", playful: "cw", shy: "zs1", tired: "hdj", melancholy: "sq" };
+    return map[mood];
+  }
+  async function playReaction(reply: string, userText: string, idle = false) {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
@@ -331,7 +454,8 @@ export default function Home() {
       : /จุ๊บ|จูบ|kiss/i.test(combined) ? "xx"
       : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "yj"
       : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "hdj"
-      : WITCH_EXPRESSIONS[reactionIndexRef.current++ % WITCH_EXPRESSIONS.length];
+      : idle ? moodExpression(companionRef.current.mood)
+      : moodExpression(companionRef.current.mood) || WITCH_EXPRESSIONS[reactionIndexRef.current++ % WITCH_EXPRESSIONS.length];
     try {
       if (expression) await model.expression(expression);
       const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
@@ -343,6 +467,8 @@ export default function Home() {
   }
   async function startRecording() {
     if (recording || recorderRef.current) return;
+    if (speakingRef.current) stopSpeech();
+    markActivity();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -384,6 +510,7 @@ export default function Home() {
       recorderRef.current = recorder;
       streamRef.current = stream;
       recordingStartedAtRef.current = Date.now();
+      recordingRef.current = true;
       setRecording(true);
     } catch {
       resetReaction();
@@ -395,6 +522,7 @@ export default function Home() {
     if (!recorder || recorder.state === "inactive") return;
     recorder.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingRef.current = false;
     setRecording(false);
   }
   async function clearConversation() {
@@ -419,7 +547,7 @@ export default function Home() {
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
-        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onPointerDown={() => void startRecording()} onPointerUp={stopRecording} onPointerCancel={stopRecording} onPointerLeave={(event) => event.buttons > 0 && stopRecording()} aria-label={recording ? "ปล่อยเพื่อส่ง" : "กดค้างเพื่อพูด"}><Icon name="mic"/></button>
+        <button className={`circle-control ${recording ? "is-recording" : ""}`} type="button" onPointerDown={() => void startRecording()} onPointerUp={stopRecording} onPointerCancel={stopRecording} onPointerLeave={(event) => event.buttons > 0 && stopRecording()} aria-label={recording ? "ปล่อยเพื่อส่ง" : "กดค้างเพื่อพูด หรือพูดแทรก"}><Icon name="mic"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="ไฟล์แนบจะมาในภายหลัง"><Icon name="clip"/></button>
         <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง..." : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
@@ -428,6 +556,12 @@ export default function Home() {
     </section>
     {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
       <div className="memory-sheet-head"><div><small>VIVIAN MEMORY</small><h1>ความทรงจำ</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
+      <div className="bond-panel" aria-label="ความสัมพันธ์กับ Vivian">
+        <p><strong>อารมณ์พื้นฐาน</strong>{moodLabel(companion.mood)}</p>
+        {[["ความสนิท", companion.affinity], ["ความไว้ใจ", companion.trust], ["ความคุ้นเคย", companion.familiarity]].map(([label, value]) => (
+          <div key={String(label)}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><em>{value}</em></div>
+        ))}
+      </div>
       <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" onClick={() => void deleteMemory(memory.id)} aria-label="ลบความทรงจำ"><Icon name="trash" size={17}/></button></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}
