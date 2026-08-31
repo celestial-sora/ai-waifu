@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
+import { isModelKey, MODEL_CONFIG, type ModelKey, isPersonalityKey, type PersonalityKey } from "@/lib/models";
 
 type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "close" | "memory" | "sound";
 
@@ -25,12 +26,6 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
-type ModelKey = "薇薇安" | "魔女" | "Miss";
-const MODEL_CONFIG: Record<ModelKey, { reading: string; path: string; mobilePath: string; expressions: string[]; background: string }> = {
-  "薇薇安": { reading: "Wēi wēi ān", path: "/live2d/薇薇安/薇薇安.model3.json", mobilePath: "/live2d/薇薇安-mobile/薇薇安.model3.json", expressions: ["哭", "黑脸", "慌张", "害羞", "白眼", "伞关闭"], background: "vivian-bg" },
-  "魔女": { reading: "Majo", path: "/live2d/魔女/魔女.model3.json", mobilePath: "/live2d/魔女-mobile/魔女.model3.json", expressions: ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"], background: "witch-bg" },
-  "Miss": { reading: "Miss", path: "/live2d/Miss/Miss.model3.json", mobilePath: "/live2d/Miss-mobile/Miss.model3.json", expressions: ["#", "M ###", "M ##", "M QAQ", "M lianhong", "M love", "M miyan", "M nu", "M wenhao ", "M xingxing", "M xingxing2", "S chabei", "S shouji", "T faxing", "X shetou"], background: "witch-bg" },
-};
 const greetings = [
   "สวัสดีค่ะ วันนี้อยากคุยกับ Vivian เรื่องอะไรดีคะ?",
   "อ๊ะ... กลับมาแล้วเหรอคะ ยินดีต้อนรับสู่ New Session นะคะ",
@@ -116,12 +111,22 @@ export default function Home() {
   const [chatOpen, setChatOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState<ModelKey>("薇薇安");
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [personality, setPersonality] = useState<PersonalityKey>("custom");
+  const [characterName, setCharacterName] = useState("Vivian");
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
   sendingRef.current = sending;
   companionRef.current = companion;
+
+  useEffect(() => {
+    const storedModel = window.localStorage.getItem("vivian-model");
+    const storedPersonality = window.localStorage.getItem("vivian-personality");
+    const storedCharacterName = window.localStorage.getItem("vivian-character-name");
+    if (isModelKey(storedModel)) setSelectedModel(storedModel);
+    if (isPersonalityKey(storedPersonality)) setPersonality(storedPersonality);
+    if (storedCharacterName?.trim()) setCharacterName(storedCharacterName);
+  }, []);
 
   useEffect(() => {
     const unlock = () => {
@@ -506,6 +511,8 @@ export default function Home() {
           mode: idle ? "idle" : "chat",
           messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
           character: selectedModel,
+          personality,
+          characterName,
         }),
       });
       const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; memories?: Memory[]; companion?: CompanionState }>, 5000, null);
@@ -721,15 +728,11 @@ export default function Home() {
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
       <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => window.dispatchEvent(new Event("resize"))} aria-label="จัด Vivian ให้อยู่กึ่งกลาง"><Icon name="focus"/></button>
-        <button type="button" onClick={() => setModelMenuOpen((current) => !current)} aria-label="เปลี่ยนโมเดล" aria-expanded={modelMenuOpen}><Icon name="wardrobe"/></button>
+        <button type="button" onClick={() => { window.location.href = "/settings"; }} aria-label="เปิดหน้าตั้งค่าโมเดลและตัวละคร"><Icon name="wardrobe"/></button>
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="memory"/></button>
         <button type="button" onClick={() => void clearConversation()} aria-label="ล้างบทสนทนา"><Icon name="trash"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
-      {modelMenuOpen && <div className="model-menu" role="dialog" aria-label="เลือกโมเดล">
-        <small>MODEL</small>
-        {(Object.keys(MODEL_CONFIG) as ModelKey[]).map((key) => <button key={key} type="button" className={selectedModel === key ? "is-selected" : ""} onClick={() => { setSelectedModel(key); setModelMenuOpen(false); }}><strong>{key}</strong><span>({MODEL_CONFIG[key].reading})</span></button>)}
-      </div>}
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
         <button className={`circle-control ${recording ? "is-recording" : "is-muted"}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Microphone muted, click to unmute"}><Icon name={recording ? "mic" : "micOff"}/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
