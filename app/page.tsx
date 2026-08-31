@@ -633,8 +633,18 @@ export default function Home() {
         } finally {
           recorderRef.current = null;
           streamRef.current = null;
-          // Resume listening after this utterance has been handed to STT.
-          window.setTimeout(() => { if (micEnabledRef.current && !recordingRef.current) void startRecording(); }, 250);
+          // Do not restart the mic while Vivian is speaking. startRecording
+          // intentionally stops active speech for a manual barge-in, so an
+          // automatic STT restart must wait until the current TTS is ended.
+          const resumeListening = () => {
+            if (!micEnabledRef.current || recordingRef.current) return;
+            if (speakingRef.current || sendingRef.current) {
+              window.setTimeout(resumeListening, 250);
+              return;
+            }
+            void startRecording();
+          };
+          window.setTimeout(resumeListening, 250);
         }
       };
       recorder.start();
