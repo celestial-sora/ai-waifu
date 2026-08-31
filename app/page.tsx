@@ -164,7 +164,6 @@ export default function Home() {
         const PIXI = await import("pixi.js");
         const { Live2DModel } = await import("pixi-live2d-display/cubism4");
         if (!canvasRef.current || disposed) return;
-        const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
         app = pixiAppRef.current;
@@ -172,13 +171,11 @@ export default function Home() {
           app = new PIXI.Application({
             view: canvasRef.current,
             backgroundAlpha: 0,
-            antialias: !isAppleMobile,
+            antialias: true,
             autoDensity: true,
-            resolution: isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2),
+            resolution: Math.min(window.devicePixelRatio || 1, 2),
           });
-          // Keep iPad/iPhone responsive and avoid WebKit GPU pressure while
-          // preserving the full-quality renderer on desktop WebGL.
-          app.ticker.maxFPS = isAppleMobile ? 30 : 60;
+          app.ticker.maxFPS = 60;
           pixiAppRef.current = app;
         }
         const previousModel = modelRef.current;
@@ -188,7 +185,7 @@ export default function Home() {
           modelRef.current = null;
         }
         const modelConfig = MODEL_CONFIG[selectedModel];
-        const model = await Live2DModel.from(isAppleMobile ? modelConfig.mobilePath : modelConfig.path);
+        const model = await Live2DModel.from(modelConfig.path);
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
@@ -197,7 +194,7 @@ export default function Home() {
           if (!stage) return;
           const width = Math.max(1, Math.round(stage.width));
           const height = Math.max(1, Math.round(stage.height));
-          app.renderer.resolution = isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+          app.renderer.resolution = Math.min(window.devicePixelRatio || 1, 2);
           app.renderer.resize(width, height);
           const scale = Math.min((width * (width > height ? .43 : .88)) / bounds.width, ((height - Math.min(124, height * .15)) * .88) / bounds.height);
           model.scale.set(scale);
