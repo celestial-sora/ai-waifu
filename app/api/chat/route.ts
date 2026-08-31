@@ -131,7 +131,7 @@ function mergeRoles(messages: ChatMessage[]) {
   return contents;
 }
 
-function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey) {
+function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string) {
   const characterStyle: Record<CharacterKey, string> = {
     "薇薇安": "บุคลิกหลัก: สง่างาม สุภาพ ขี้อาย เขินง่าย ขี้เล่นแบบพอดี อ่อนโยนและใส่ใจผู้ใช้",
     "魔女": "บุคลิกหลัก: ลึกลับ มั่นใจ พูดหยอกแบบมีเสน่ห์ มีความ dramatic เล็กน้อย แต่ยังอบอุ่นและเคารพผู้ใช้",
@@ -139,6 +139,9 @@ function personalityPrompt(state: CompanionState, memoryContext: string, toolCon
   };
   return `คุณคือ Vivian, VTuber เสมือนจริงของ Sorachan และเป็น AI companion ที่มีบุคลิกเฉพาะของตัวละครที่ผู้ใช้เลือก
 ${characterStyle[character]}
+
+โทนบุคลิกที่ผู้ใช้เลือก: ${personality === "shy" ? "ขี้อายและเขินง่าย" : personality === "playful" ? "ขี้เล่นและสดใส" : personality === "elegant" ? "สง่างามและสุภาพ" : "ใช้บุคลิกเฉพาะของตัวละครเป็นหลัก"}
+ชื่อที่ใช้เรียกใน session นี้: ${characterName}
 
 ตัวตนของ Vivian:
 - Vivian รู้จักตัวเองว่าเป็น VTuber ที่กำลังพูดคุยกับผู้ชมผ่านเว็บ companion ของตัวเอง ไม่ใช่ผู้ช่วยนิรนามทั่วไป
@@ -167,8 +170,10 @@ export async function POST(request: Request) {
   const groqApiKey = process.env.GROQ_API_KEY;
   if (!apiKey && !groqApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
 
-  const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean; character?: string };
+  const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean; character?: string; personality?: string; characterName?: string };
   const character: CharacterKey = body.character === "魔女" || body.character === "Miss" ? body.character : "薇薇安";
+  const personality = body.personality === "shy" || body.personality === "playful" || body.personality === "elegant" ? body.personality : "custom";
+  const characterName = typeof body.characterName === "string" && body.characterName.trim() ? body.characterName.trim().slice(0, 40) : "Vivian";
   const idle = body.mode === "idle";
   const inputMessages = (body.messages ?? []).filter((message) => message.content?.trim());
   const { recent, older } = trimHistory(inputMessages);
@@ -188,7 +193,7 @@ export async function POST(request: Request) {
   const toolResults = idle ? [] : await runTools(lastUserText, memories);
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const toolContext = toolsPromptBlock(toolResults);
-  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character);
+  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName);
   const promptContents: OpenRouterMessage[] = idle
     ? [{ role: "user", content: "[ระบบ] ผู้ใช้อยู่นิ่งสักครู่ ช่วยทักทายสั้น ๆ ตาม mood, เวลาในกรุงเทพ และการรู้จักที่มี อย่าพูดเรื่องเครื่องมือ" }]
     : contents;
