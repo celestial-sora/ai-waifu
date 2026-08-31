@@ -25,10 +25,11 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
-type ModelKey = "薇薇安" | "魔女";
+type ModelKey = "薇薇安" | "魔女" | "Miss";
 const MODEL_CONFIG: Record<ModelKey, { reading: string; path: string; mobilePath: string; expressions: string[]; background: string }> = {
   "薇薇安": { reading: "Wēi wēi ān", path: "/live2d/薇薇安/薇薇安.model3.json", mobilePath: "/live2d/薇薇安-mobile/薇薇安.model3.json", expressions: ["哭", "黑脸", "慌张", "害羞", "白眼", "伞关闭"], background: "vivian-bg" },
   "魔女": { reading: "Majo", path: "/live2d/魔女/魔女.model3.json", mobilePath: "/live2d/魔女-mobile/魔女.model3.json", expressions: ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"], background: "witch-bg" },
+  "Miss": { reading: "Miss", path: "/live2d/Miss/Miss.model3.json", mobilePath: "/live2d/Miss-mobile/Miss.model3.json", expressions: ["#", "M ###", "M ##", "M QAQ", "M lianhong", "M love", "M miyan", "M nu", "M wenhao ", "M xingxing", "M xingxing2", "S chabei", "S shouji", "T faxing", "X shetou"], background: "witch-bg" },
 };
 const greetings = [
   "สวัสดีค่ะ วันนี้อยากคุยกับ Vivian เรื่องอะไรดีคะ?",
