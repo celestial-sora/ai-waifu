@@ -537,26 +537,38 @@ export default function Home() {
     }
   }
   function moodExpression(mood: Mood) {
-    const map: Record<Mood, string> = { calm: "M miyan", warm: "M love", playful: "M xingxing", shy: "M QAQ", tired: "M wenhao ", melancholy: "M nu" };
+    const map: Record<Mood, string> = { calm: "#", warm: "M lianhong", playful: "M xingxing2", shy: "M love", tired: "S chabei", melancholy: "M QAQ" };
     return map[mood];
+  }
+  function situationExpression(text: string, mood: Mood, idle: boolean) {
+    // Miss has 15 authored expressions. Match them to the conversation
+    // context deterministically so every expression has a meaningful use.
+    const rules: Array<[string, RegExp]> = [
+      ["X shetou", /จุ๊บ|จูบ|แกล้ง|หยอก|ล้อเล่น|ทะเล้น|kiss|tease|tongue/i],
+      ["S shouji", /โทรศัพท์|โทรหา|สายโทร|ข้อความ|แจ้งเตือน|notification|phone|call|message|text/i],
+      ["S chabei", /ชา|กาแฟ|ดื่ม|จิบ|พัก|เหนื่อย|ง่วง|tea|coffee|drink|rest|tired|sleepy/i],
+      ["T faxing", /ผม|ทรงผม|แต่งตัว|แต่งหน้า|สวย|ดูดี|แฟชั่น|hair|hairstyle|makeup|beautiful|pretty|style/i],
+      ["M QAQ", /เศร้า|เสียใจ|ร้องไห้|เหงา|ขอโทษ|sad|sorry|cry|lonely/i],
+      ["M nu", /โกรธ|โมโห|หงุดหงิด|รำคาญ|ไม่พอใจ|angry|mad|annoyed|upset/i],
+      ["M wenhao ", /ตกใจ|ว้าว|จริงเหรอ|หา|ไม่น่าเชื่อ|surprise|wow|really|shocked/i],
+      ["M ##", /อะไรนะ|ห๊ะ|เอ๊ะ|งง|ไม่เข้าใจ|ทำไม|what|huh|confused|don't understand|why/i],
+      ["M love", /เขิน|อาย|น่ารัก|ชม|หน้าแดง|cute|shy|blush|compliment/i],
+      ["M lianhong", /รัก|ชอบ|คิดถึง|กอด|ห่วง|love|like|miss you|hug|care/i],
+      ["M xingxing2", /ขำ|ตลก|หัวเราะ|มุก|ฮา|haha|lol|funny|joke|laugh/i],
+      ["M xingxing", /ดีใจ|ตื่นเต้น|เยี่ยม|สุดยอด|ฉลอง|ดาว|happy|excited|great|awesome|celebrate|star/i],
+      ["M ###", /ตา|มอง|กระพริบ|หลับตา|ดูนี่|eyes|look|blink|watch/i],
+      ["M miyan", /ยิ้ม|สวัสดี|ทักทาย|ขอบคุณ|สุขสันต์|happy|smile|hello|greeting|thank/i],
+    ];
+    const matched = rules.find(([, pattern]) => pattern.test(text))?.[0];
+    if (matched) return matched;
+    if (idle && mood === "tired") return "S chabei";
+    return moodExpression(mood);
   }
   async function playReaction(reply: string, userText: string, idle = false) {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    // Keep reactions deterministic so Miss does not jump between unrelated
-    // expressions on every response.
-    const fallbackExpression = moodExpression(companionRef.current.mood);
-    const expression = /เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "M QAQ"
-          : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "M nu"
-          : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "M wenhao "
-          : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "M love"
-          : /รัก|ชอบ|กอด|love|like|hug/i.test(combined) ? "M lianhong"
-          : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "M xingxing"
-          : /จุ๊บ|จูบ|kiss/i.test(combined) ? "X shetou"
-          : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "M miyan"
-          : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "M ###"
-          : fallbackExpression;
+    const expression = situationExpression(combined, companionRef.current.mood, idle);
     try {
       const supportedExpressions = MODEL_CONFIG[selectedModel].expressions;
       if (expression && supportedExpressions.includes(expression)) await model.expression(expression);
