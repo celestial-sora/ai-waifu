@@ -25,11 +25,10 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
-type ModelKey = "薇薇安" | "魔女" | "神宫白子";
+type ModelKey = "薇薇安" | "魔女";
 const MODEL_CONFIG: Record<ModelKey, { reading: string; path: string; mobilePath: string; expressions: string[]; background: string }> = {
   "薇薇安": { reading: "Wēi wēi ān", path: "/live2d/薇薇安/薇薇安.model3.json", mobilePath: "/live2d/薇薇安-mobile/薇薇安.model3.json", expressions: ["哭", "黑脸", "慌张", "害羞", "白眼", "伞关闭"], background: "vivian-bg" },
   "魔女": { reading: "Majo", path: "/live2d/魔女/魔女.model3.json", mobilePath: "/live2d/魔女-mobile/魔女.model3.json", expressions: ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"], background: "witch-bg" },
-  "神宫白子": { reading: "Shén gōng bái zǐ", path: "/live2d/神宫白子/面饼0.model3.json", mobilePath: "/live2d/神宫白子-mobile/面饼0.model3.json", expressions: ["呆猫", "呆猫眼珠摇晃", "围裙", "拍照", "拿笔", "点一下", "猫咪滤镜", "眼镜"], background: "shiroko-bg" },
 };
 const greetings = [
   "สวัสดีค่ะ วันนี้อยากคุยกับ Vivian เรื่องอะไรดีคะ?",
@@ -530,9 +529,7 @@ export default function Home() {
   function moodExpression(mood: Mood) {
     const map: Record<Mood, string> = selectedModel === "薇薇安"
       ? { calm: "伞关闭", warm: "害羞", playful: "白眼", shy: "害羞", tired: "哭", melancholy: "哭" }
-      : selectedModel === "神宫白子"
-        ? { calm: "呆猫", warm: "围裙", playful: "猫咪滤镜", shy: "拍照", tired: "呆猫眼珠摇晃", melancholy: "呆猫" }
-        : { calm: "h", warm: "yj", playful: "cw", shy: "zs1", tired: "hdj", melancholy: "sq" };
+      : { calm: "h", warm: "yj", playful: "cw", shy: "zs1", tired: "hdj", melancholy: "sq" };
     return map[mood];
   }
   async function playReaction(reply: string, userText: string, idle = false) {
@@ -547,12 +544,6 @@ export default function Home() {
         : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "害羞"
         : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "白眼"
         : fallbackExpression)
-      : selectedModel === "神宫白子"
-        ? (/เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "呆猫"
-          : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "拍照"
-          : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "猫咪滤镜"
-          : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "围裙"
-          : fallbackExpression)
       : (/เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "sq"
         : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "ku"
         : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "fz"
