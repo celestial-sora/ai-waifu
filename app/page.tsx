@@ -533,7 +533,9 @@ export default function Home() {
   function moodExpression(mood: Mood) {
     const map: Record<Mood, string> = selectedModel === "薇薇安"
       ? { calm: "伞关闭", warm: "害羞", playful: "白眼", shy: "害羞", tired: "哭", melancholy: "哭" }
-      : { calm: "h", warm: "yj", playful: "cw", shy: "zs1", tired: "hdj", melancholy: "sq" };
+      : selectedModel === "Miss"
+        ? { calm: "M miyan", warm: "M love", playful: "M xingxing", shy: "M QAQ", tired: "M wenhao ", melancholy: "M nu" }
+        : { calm: "h", warm: "yj", playful: "cw", shy: "zs1", tired: "hdj", melancholy: "sq" };
     return map[mood];
   }
   async function playReaction(reply: string, userText: string, idle = false) {
@@ -548,7 +550,18 @@ export default function Home() {
         : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "害羞"
         : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "白眼"
         : fallbackExpression)
-      : (/เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "sq"
+      : selectedModel === "Miss"
+        ? (/เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "M QAQ"
+          : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "M nu"
+          : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "M wenhao "
+          : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "M love"
+          : /รัก|ชอบ|กอด|love|like|hug/i.test(combined) ? "M lianhong"
+          : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "M xingxing"
+          : /จุ๊บ|จูบ|kiss/i.test(combined) ? "X shetou"
+          : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "M miyan"
+          : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "M ###"
+          : fallbackExpression)
+        : (/เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "sq"
         : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "ku"
         : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "fz"
         : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "zs1"
