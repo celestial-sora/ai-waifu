@@ -30,6 +30,18 @@ export function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+/** Let persistent moods cool down between conversations instead of staying forever. */
+export function decayCompanionState(state: CompanionState, now = Date.now()): CompanionState {
+  const last = state.lastInteractionAt ? Date.parse(state.lastInteractionAt) : now;
+  if (!Number.isFinite(last) || last >= now) return state;
+  const elapsedHours = (now - last) / 3_600_000;
+  const steps = Math.floor(elapsedHours / 2);
+  if (steps < 1) return state;
+  const intensity = clampScore(state.moodIntensity - steps * 8);
+  const mood = intensity <= 18 ? "calm" : state.mood;
+  return { ...state, mood, moodIntensity: intensity };
+}
+
 export function isMood(value: string): value is Mood {
   return MOODS.includes(value as Mood);
 }

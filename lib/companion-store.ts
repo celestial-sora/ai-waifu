@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { type CompanionState, defaultCompanionState, isMood, clampScore } from "@/lib/companion";
+import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, clampScore } from "@/lib/companion";
 
 type Row = {
   affinity: number;
@@ -31,7 +31,7 @@ export async function loadCompanionState(userKey: string): Promise<CompanionStat
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.from("companion_state").select("affinity,trust,familiarity,mood,mood_intensity,conversation_summary,last_idle_at,last_interaction_at").eq("user_key", userKey).maybeSingle();
     if (error || !data) return fallback;
-    return fromRow(data as Row);
+    return decayCompanionState(fromRow(data as Row));
   } catch (error) {
     console.warn("Companion state unavailable", error);
     return fallback;
