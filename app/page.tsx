@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
+import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 
 type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "close" | "memory" | "sound";
@@ -265,7 +265,7 @@ export default function Home() {
     if (!raw || typeof raw !== "object") return null;
     const item = raw as Record<string, unknown>;
     const mood = String(item.mood ?? "calm");
-    return {
+    return decayCompanionState({
       affinity: Number(item.affinity ?? 22),
       trust: Number(item.trust ?? 18),
       familiarity: Number(item.familiarity ?? 8),
@@ -274,7 +274,7 @@ export default function Home() {
       conversationSummary: String(item.conversationSummary ?? item.conversation_summary ?? ""),
       lastIdleAt: typeof item.lastIdleAt === "string" ? item.lastIdleAt : typeof item.last_idle_at === "string" ? item.last_idle_at : null,
       lastInteractionAt: typeof item.lastInteractionAt === "string" ? item.lastInteractionAt : typeof item.last_interaction_at === "string" ? item.last_interaction_at : null,
-    };
+    });
   }
   function markActivity() {
     lastActivityRef.current = Date.now();
@@ -536,11 +536,11 @@ export default function Home() {
       sendingRef.current = false;
     }
   }
-  function moodExpression(mood: Mood) {
-    const map: Record<Mood, string> = { calm: "#", warm: "M lianhong", playful: "M xingxing2", shy: "M love", tired: "S chabei", melancholy: "M QAQ" };
+  function moodExpression(mood: Mood, intensity: number) {
+    const map: Record<Mood, string> = { calm: "#", warm: intensity >= 70 ? "M lianhong" : "M miyan", playful: intensity >= 70 ? "M xingxing" : "M xingxing2", shy: "M love", tired: "S chabei", melancholy: "M QAQ" };
     return map[mood];
   }
-  function situationExpression(text: string, mood: Mood, idle: boolean) {
+  function situationExpression(text: string, mood: Mood, intensity: number, idle: boolean) {
     // Miss has 15 authored expressions. Match them to the conversation
     // context deterministically so every expression has a meaningful use.
     const rules: Array<[string, RegExp]> = [
@@ -562,19 +562,30 @@ export default function Home() {
     const matched = rules.find(([, pattern]) => pattern.test(text))?.[0];
     if (matched) return matched;
     if (idle && mood === "tired") return "S chabei";
-    return moodExpression(mood);
+    return moodExpression(mood, intensity);
   }
   async function playReaction(reply: string, userText: string, idle = false) {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    const expression = situationExpression(combined, companionRef.current.mood, idle);
+    const { mood, moodIntensity: intensity } = companionRef.current;
+    const expression = situationExpression(combined, mood, intensity, idle);
     try {
       const supportedExpressions = MODEL_CONFIG[selectedModel].expressions;
       if (expression && supportedExpressions.includes(expression)) await model.expression(expression);
       else resetReaction();
-      const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
-      if (idleMotion?.length) await model.motion("Idle", 0, 3);
+      const definitions = model.internalModel?.motionManager?.definitions ?? {};
+      // Miss currently ships without named motion groups. When a model adds
+      // them, use the contextual pair; otherwise keep its stable Idle motion.
+      const motionByExpression: Record<string, string[]> = {
+        "M love": ["Shy", "Idle"], "M QAQ": ["Sad", "Idle"], "M nu": ["Angry", "Idle"],
+        "M wenhao ": ["Surprise", "Idle"], "M ##": ["Thinking", "Idle"], "M xingxing": ["Excited", "Idle"],
+        "M xingxing2": ["Laugh", "Idle"], "S chabei": ["Tea", "Idle"], "S shouji": ["Phone", "Idle"],
+        "T faxing": ["Hair", "Idle"], "X shetou": ["Tease", "Idle"], "M ###": ["Look", "Idle"],
+        "M miyan": ["Happy", "Idle"], "M lianhong": ["Warm", "Idle"], "#": ["Idle"],
+      };
+      const motionName = motionByExpression[expression]?.find((name) => definitions[name]?.length);
+      if (motionName) await model.motion(motionName, 0, intensity >= 70 ? 3 : 2);
     } catch (error) {
       resetReaction();
       console.warn("Live2D reaction unavailable; keeping neutral state", error);
