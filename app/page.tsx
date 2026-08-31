@@ -35,7 +35,7 @@ const greetings = [
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
 const APP_CODENAME = "Columbina";
-const WITCH_EXPRESSIONS = ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"];
+const MISS_EXPRESSIONS = ["love", "QAQ", "nu", "lianhong", "miyan", "xingxing", "xingxing2", "chabei", "shouji", "faxing", "shetou"];
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 const CHAT_TIMEOUT_MS = 35000;
 // The server aborts Fish at 14 seconds. Give the response a small transport
@@ -155,7 +155,7 @@ export default function Home() {
           autoDensity: true,
           resolution: Math.min(window.devicePixelRatio || 1, 2),
         });
-        const model = await Live2DModel.from("/live2d/witch/witch.model3.json");
+        const model = await Live2DModel.from("/live2d/miss/Miss.model3.json");
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
@@ -495,24 +495,24 @@ export default function Home() {
     }
   }
   function moodExpression(mood: Mood) {
-    const map: Record<Mood, string> = { calm: "h", warm: "yj", playful: "cw", shy: "zs1", tired: "hdj", melancholy: "sq" };
+    const map: Record<Mood, string> = { calm: "miyan", warm: "lianhong", playful: "xingxing2", shy: "miyan", tired: "QAQ", melancholy: "QAQ" };
     return map[mood];
   }
   async function playReaction(reply: string, userText: string, idle = false) {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    const expression = /เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "sq"
-      : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "ku"
-      : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "fz"
-      : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "zs1"
-      : /รัก|ชอบ|กอด|love|like|hug/i.test(combined) ? "x"
-      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "cw"
-      : /จุ๊บ|จูบ|kiss/i.test(combined) ? "xx"
-      : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "yj"
-      : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "hdj"
+    const expression = /เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "QAQ"
+      : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "nu"
+      : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "xingxing"
+      : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "miyan"
+      : /รัก|ชอบ|กอด|love|like|hug/i.test(combined) ? "love"
+      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "xingxing2"
+      : /จุ๊บ|จูบ|kiss/i.test(combined) ? "shetou"
+      : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "lianhong"
+      : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "shouji"
       : idle ? moodExpression(companionRef.current.mood)
-      : moodExpression(companionRef.current.mood) || WITCH_EXPRESSIONS[reactionIndexRef.current++ % WITCH_EXPRESSIONS.length];
+      : MISS_EXPRESSIONS[reactionIndexRef.current++ % MISS_EXPRESSIONS.length];
     try {
       if (expression) await model.expression(expression);
       const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
