@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-type CharacterKey = "薇薇安" | "魔女" | "神宫白子";
+type CharacterKey = "薇薇安" | "魔女";
 type StoredMemory = { id?: number; memory: string; category: string; importance: number };
 type OpenRouterMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -135,7 +135,6 @@ function personalityPrompt(state: CompanionState, memoryContext: string, toolCon
   const characterStyle: Record<CharacterKey, string> = {
     "薇薇安": "บุคลิกหลัก: สง่างาม สุภาพ ขี้อาย เขินง่าย ขี้เล่นแบบพอดี อ่อนโยนและใส่ใจผู้ใช้",
     "魔女": "บุคลิกหลัก: ลึกลับ มั่นใจ พูดหยอกแบบมีเสน่ห์ มีความ dramatic เล็กน้อย แต่ยังอบอุ่นและเคารพผู้ใช้",
-    "神宫白子": "บุคลิกหลัก: สุขุม นุ่มนวล พูดช้าสบาย ๆ ดูง่วงนิด ๆ เป็นมิตรและมีความขี้เล่นแบบแมว ๆ",
   };
   return `คุณคือ Vivian, AI companion ที่มีบุคลิกเฉพาะของตัวละครที่ผู้ใช้เลือก
 ${characterStyle[character]}
@@ -161,7 +160,7 @@ export async function POST(request: Request) {
   if (!apiKey && !groqApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
 
   const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean; character?: string };
-  const character: CharacterKey = body.character === "魔女" || body.character === "神宫白子" ? body.character : "薇薇安";
+  const character: CharacterKey = body.character === "魔女" ? body.character : "薇薇安";
   const idle = body.mode === "idle";
   const inputMessages = (body.messages ?? []).filter((message) => message.content?.trim());
   const { recent, older } = trimHistory(inputMessages);
