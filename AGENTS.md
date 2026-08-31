@@ -79,6 +79,10 @@ import { Container } from "pixi-live2d-display";
 
 ## 🛠️ Common Development Tasks
 
+### Deployment Workflow
+- After every completed code change, run a production deployment with `vercel --prod`.
+- Confirm the deployment reaches `READY` and the production alias is `https://vivian-chan.vercel.app`.
+
 ### Adding a New API Route
 1. Create file at `app/api/[feature]/route.ts`
 2. Export `POST`, `GET`, `DELETE` functions as needed
