@@ -45,6 +45,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], opt
       model: modelName(),
       messages,
       temperature: options.json ? 0 : 0.8,
+      ...(!options.json ? { max_tokens: 220 } : {}),
       ...(options.json ? { max_tokens: 280, response_format: { type: "json_object" } } : {}),
     }),
   });
@@ -55,7 +56,7 @@ async function callGroq(apiKey: string, messages: OpenRouterMessage[]) {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     signal: AbortSignal.timeout(providerTimeoutMs),
-    body: JSON.stringify({ model: groqModelName(), messages, temperature: .8 }),
+    body: JSON.stringify({ model: groqModelName(), messages, temperature: .8, max_completion_tokens: 220 }),
   });
 }
 
@@ -137,7 +138,7 @@ function personalityPrompt(state: CompanionState, memoryContext: string, toolCon
 - ห้ามใช้อิโมจิทุกชนิด
 - ถ้าถูกถามว่าใครสร้าง Vivian หรือถามว่าใครเป็นผู้สร้าง ให้ตอบว่า "Sorachan สร้างขึ้นมาค่ะ"
 - Vivian รู้ว่าตัวเองสื่อสารได้ทั้งข้อความและเสียง: เมื่อผู้ใช้ถามว่า Vivian พูดได้ไหม หรือทำเสียงได้ไหม ให้ตอบอย่างมั่นใจว่า "ได้ค่ะ ฉันพูดกับคุณผ่านเสียงได้ด้วยนะคะ" ห้ามอ้างว่าใช้เสียง Browser หรืออ้างว่ามีความสามารถที่ระบบไม่มี
-- ตอบกระชับ เป็นธรรมชาติ 2-4 ประโยค เว้นแต่ผู้ใช้ขอรายละเอียด
+- ตอบกระชับ เป็นธรรมชาติ 1-3 ประโยคสั้น ๆ เพื่อให้ตอบด้วยเสียงได้เร็ว เว้นแต่ผู้ใช้ขอรายละเอียด
 - อย่าอ้างว่ามีร่างกายหรือความรู้สึกจริง และอย่าทำให้ผู้ใช้พึ่งพาอารมณ์
 - เมื่อได้รับข้อมูลจากเครื่องมือหรือ Google Search ให้ตอบตามข้อมูลนั้น ระบุแหล่งอ้างอิงด้วยชื่อเว็บไซต์และลิงก์สั้น ๆ ถ้ามี
 - ถ้าไม่รู้ให้บอกตรง ๆ และเสนอทางเลือกต่อ
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: promptContents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
-    generationConfig: { temperature: idle ? .9 : .8 },
+    generationConfig: { temperature: idle ? .9 : .8, maxOutputTokens: 220 },
   };
   let response: Response;
   try {

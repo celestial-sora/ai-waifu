@@ -475,13 +475,15 @@ export default function Home() {
       const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; memories?: Memory[]; companion?: CompanionState }>, 5000, null);
       if (!response.ok || !data?.text) throw new Error(data?.error ?? "Chat request failed");
       const reply = data.text;
+      // Do not reveal the reply bubble before Fish Audio has started. This
+      // keeps the visible text and spoken response arriving together.
+      if (!muted) await speak(reply);
       setMessages((current) => [...current, { from: "vivian", text: reply }]);
       const nextCompanion = normalizeCompanion(data.companion);
       if (nextCompanion) setCompanion(nextCompanion);
       if (data.memories?.length) setMemories(data.memories.filter((item: Memory) => typeof item.id === "number"));
       setSending(false);
       sendingRef.current = false;
-      if (!muted) void speak(reply);
       void playReaction(reply, text, idle);
     } catch (error) {
       console.error("Vivian response unavailable", error);
