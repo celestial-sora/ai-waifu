@@ -70,6 +70,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pixiAppRef = useRef<any>(null);
   const modelRef = useRef<any>(null);
+  const modelLoadIdRef = useRef(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingStartedAtRef = useRef(0);
@@ -154,6 +155,7 @@ export default function Home() {
     let resizeFrame: number | undefined;
     let resizeTimeout: number | undefined;
     let disposed = false;
+    const loadId = ++modelLoadIdRef.current;
     void (async () => {
       try {
         const PIXI = await import("pixi.js");
@@ -183,7 +185,10 @@ export default function Home() {
         }
         const modelConfig = MODEL_CONFIG[selectedModel];
         const model = await Live2DModel.from(isAppleMobile ? modelConfig.mobilePath : modelConfig.path);
-        if (disposed) return;
+        if (disposed || loadId !== modelLoadIdRef.current) {
+          model.destroy({ children: true, texture: true, baseTexture: true });
+          return;
+        }
         modelRef.current = model;
         const bounds = model.getLocalBounds();
         resizeModel = () => {
@@ -223,6 +228,7 @@ export default function Home() {
     })();
     return () => {
       disposed = true;
+      modelLoadIdRef.current += 1;
       if (resizeFrame) cancelAnimationFrame(resizeFrame);
       if (resizeTimeout) window.clearTimeout(resizeTimeout);
       window.removeEventListener("resize", queueResize);
