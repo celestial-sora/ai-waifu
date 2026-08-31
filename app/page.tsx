@@ -179,7 +179,6 @@ export default function Home() {
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
-        console.info("Live2D model loaded", selectedModel, bounds.width, bounds.height);
         resizeModel = () => {
           const stage = canvasRef.current?.parentElement?.getBoundingClientRect();
           if (!stage) return;
@@ -189,7 +188,10 @@ export default function Home() {
           app.renderer.resize(width, height);
           const scale = Math.min((width * (width > height ? .43 : .88)) / bounds.width, ((height - Math.min(124, height * .15)) * .88) / bounds.height);
           model.scale.set(scale);
-          model.anchor.set(.5, 1);
+          // Models from different artists use different local origins. Pivot
+          // from their measured bounds so none of them can land off-canvas.
+          model.anchor.set(0, 0);
+          model.pivot.set(bounds.x + bounds.width / 2, bounds.y + bounds.height);
           model.x = width / 2;
           model.y = height * .99;
         };
