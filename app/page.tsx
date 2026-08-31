@@ -187,7 +187,7 @@ export default function Home() {
           modelRef.current = null;
         }
         const modelConfig = MODEL_CONFIG[selectedModel];
-        const model = await Live2DModel.from(modelConfig.path);
+        const model = await Live2DModel.from(isAppleMobile ? modelConfig.mobilePath : modelConfig.path);
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
