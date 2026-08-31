@@ -163,16 +163,19 @@ export default function Home() {
           app = new PIXI.Application({
             view: canvasRef.current,
             backgroundAlpha: 0,
-            antialias: true,
+            antialias: !isAppleMobile,
             autoDensity: true,
-            resolution: Math.min(window.devicePixelRatio || 1, 2),
+            resolution: isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2),
           });
+          // Keep iPad/iPhone responsive and avoid WebKit GPU pressure while
+          // preserving the full-quality renderer on desktop WebGL.
+          app.ticker.maxFPS = isAppleMobile ? 30 : 60;
           pixiAppRef.current = app;
         }
         const previousModel = modelRef.current;
         if (previousModel) {
           app.stage.removeChild(previousModel);
-          previousModel.destroy({ children: true });
+          previousModel.destroy({ children: true, texture: true, baseTexture: true });
           modelRef.current = null;
         }
         const modelConfig = MODEL_CONFIG[selectedModel];
@@ -185,7 +188,7 @@ export default function Home() {
           if (!stage) return;
           const width = Math.max(1, Math.round(stage.width));
           const height = Math.max(1, Math.round(stage.height));
-          app.renderer.resolution = Math.min(window.devicePixelRatio || 1, 2);
+          app.renderer.resolution = isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
           app.renderer.resize(width, height);
           const scale = Math.min((width * (width > height ? .43 : .88)) / bounds.width, ((height - Math.min(124, height * .15)) * .88) / bounds.height);
           model.scale.set(scale);
@@ -225,7 +228,7 @@ export default function Home() {
       const currentModel = modelRef.current;
       if (currentModel && app) {
         app.stage.removeChild(currentModel);
-        currentModel.destroy({ children: true });
+        currentModel.destroy({ children: true, texture: true, baseTexture: true });
       }
       modelRef.current = null;
     };
