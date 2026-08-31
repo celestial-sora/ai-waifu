@@ -1,0 +1,44 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "Miss.moc3",
+		"Textures": [
+			"Miss.4096/texture_00.png",
+			"Miss.4096/texture_01.png"
+		],
+		"Physics": "Miss.physics3.json",
+		"DisplayInfo": "Miss.cdi3.json",
+		"Expressions": [
+			{ "Name": "#", "File": "expressions/#.exp3.json" },
+			{ "Name": "M ###", "File": "expressions/M ###.exp3.json" },
+			{ "Name": "M ##", "File": "expressions/M ##.exp3.json" },
+			{ "Name": "M QAQ", "File": "expressions/M QAQ.exp3.json" },
+			{ "Name": "M lianhong", "File": "expressions/M lianhong.exp3.json" },
+			{ "Name": "M love", "File": "expressions/M love.exp3.json" },
+			{ "Name": "M miyan", "File": "expressions/M miyan.exp3.json" },
+			{ "Name": "M nu", "File": "expressions/M nu.exp3.json" },
+			{ "Name": "M wenhao ", "File": "expressions/M wenhao .exp3.json" },
+			{ "Name": "M xingxing", "File": "expressions/M xingxing.exp3.json" },
+			{ "Name": "M xingxing2", "File": "expressions/M xingxing2.exp3.json" },
+			{ "Name": "S chabei", "File": "expressions/S chabei.exp3.json" },
+			{ "Name": "S shouji", "File": "expressions/S shouji.exp3.json" },
+			{ "Name": "T faxing", "File": "expressions/T faxing.exp3.json" },
+			{ "Name": "X shetou", "File": "expressions/X shetou.exp3.json" }
+		]
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}
