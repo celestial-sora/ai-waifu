@@ -25,6 +25,11 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
+type ModelKey = "薇薇安" | "魔女";
+const MODEL_CONFIG: Record<ModelKey, { reading: string; path: string; expressions: string[]; background: string }> = {
+  "薇薇安": { reading: "Wēi wēi ān", path: "/live2d/薇薇安/薇薇安.model3.json", expressions: ["哭", "黑脸", "慌张", "害羞", "白眼", "伞关闭"], background: "vivian-bg" },
+  "魔女": { reading: "Majo", path: "/live2d/魔女/魔女.model3.json", expressions: ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"], background: "witch-bg" },
+};
 const greetings = [
   "สวัสดีค่ะ วันนี้อยากคุยกับ Vivian เรื่องอะไรดีคะ?",
   "อ๊ะ... กลับมาแล้วเหรอคะ ยินดีต้อนรับสู่ New Session นะคะ",
@@ -35,7 +40,6 @@ const greetings = [
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
 const APP_CODENAME = "Columbina";
-const MISS_EXPRESSIONS = ["love", "QAQ", "nu", "lianhong", "miyan", "xingxing", "xingxing2", "chabei", "shouji", "faxing", "shetou"];
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 const CHAT_TIMEOUT_MS = 35000;
 // The server aborts Fish at 14 seconds. Give the response a small transport
@@ -107,6 +111,8 @@ export default function Home() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
+  const [selectedModel, setSelectedModel] = useState<ModelKey>("薇薇安");
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
@@ -155,7 +161,7 @@ export default function Home() {
           autoDensity: true,
           resolution: Math.min(window.devicePixelRatio || 1, 2),
         });
-        const model = await Live2DModel.from("/live2d/miss/Miss.model3.json");
+        const model = await Live2DModel.from(MODEL_CONFIG[selectedModel].path);
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
@@ -203,7 +209,7 @@ export default function Home() {
       stopLipSync();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
-  }, []);
+  }, [selectedModel]);
 
   useEffect(() => () => {
     micEnabledRef.current = false;
@@ -495,24 +501,33 @@ export default function Home() {
     }
   }
   function moodExpression(mood: Mood) {
-    const map: Record<Mood, string> = { calm: "miyan", warm: "lianhong", playful: "xingxing2", shy: "miyan", tired: "QAQ", melancholy: "QAQ" };
+    const map: Record<Mood, string> = selectedModel === "薇薇安"
+      ? { calm: "伞关闭", warm: "害羞", playful: "白眼", shy: "害羞", tired: "哭", melancholy: "哭" }
+      : { calm: "h", warm: "yj", playful: "cw", shy: "zs1", tired: "hdj", melancholy: "sq" };
     return map[mood];
   }
   async function playReaction(reply: string, userText: string, idle = false) {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    const expression = /เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "QAQ"
-      : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "nu"
-      : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "xingxing"
-      : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "miyan"
-      : /รัก|ชอบ|กอด|love|like|hug/i.test(combined) ? "love"
-      : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "xingxing2"
-      : /จุ๊บ|จูบ|kiss/i.test(combined) ? "shetou"
-      : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "lianhong"
-      : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "shouji"
-      : idle ? moodExpression(companionRef.current.mood)
-      : MISS_EXPRESSIONS[reactionIndexRef.current++ % MISS_EXPRESSIONS.length];
+    const fallbackExpression = idle ? moodExpression(companionRef.current.mood) : MODEL_CONFIG[selectedModel].expressions[reactionIndexRef.current++ % MODEL_CONFIG[selectedModel].expressions.length];
+    const expression = selectedModel === "薇薇安"
+      ? (/เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "哭"
+        : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "黑脸"
+        : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "慌张"
+        : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "害羞"
+        : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "白眼"
+        : fallbackExpression)
+      : (/เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "sq"
+        : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "ku"
+        : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "fz"
+        : /เขิน|อาย|น่ารัก|ชม|cute|shy/i.test(combined) ? "zs1"
+        : /รัก|ชอบ|กอด|love|like|hug/i.test(combined) ? "x"
+        : /ขำ|ตลก|เล่น|แกล้ง|มุก|haha|fun/i.test(combined) ? "cw"
+        : /จุ๊บ|จูบ|kiss/i.test(combined) ? "xx"
+        : /ยิ้ม|ดีใจ|เยี่ยม|happy|great/i.test(combined) ? "yj"
+        : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "hdj"
+        : fallbackExpression);
     try {
       if (expression) await model.expression(expression);
       const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
@@ -656,17 +671,22 @@ export default function Home() {
   }
 
   return <main className="companion-shell">
-    <section className="companion-stage" aria-label="Vivian companion">
+    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background}`} aria-label="Vivian companion">
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
       <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => window.dispatchEvent(new Event("resize"))} aria-label="จัด Vivian ให้อยู่กึ่งกลาง"><Icon name="focus"/></button>
+        <button type="button" onClick={() => setModelMenuOpen((current) => !current)} aria-label="เปลี่ยนโมเดล" aria-expanded={modelMenuOpen}><Icon name="wardrobe"/></button>
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="memory"/></button>
         <button type="button" onClick={() => void clearConversation()} aria-label="ล้างบทสนทนา"><Icon name="trash"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
+      {modelMenuOpen && <div className="model-menu" role="dialog" aria-label="เลือกโมเดล">
+        <small>MODEL</small>
+        {(Object.keys(MODEL_CONFIG) as ModelKey[]).map((key) => <button key={key} type="button" className={selectedModel === key ? "is-selected" : ""} onClick={() => { setSelectedModel(key); setModelMenuOpen(false); }}><strong>{key}</strong><span>({MODEL_CONFIG[key].reading})</span></button>)}
+      </div>}
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
         <button className={`circle-control ${recording ? "is-recording" : "is-muted"}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Microphone muted, click to unmute"}><Icon name={recording ? "mic" : "micOff"}/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
