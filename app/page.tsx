@@ -545,7 +545,9 @@ export default function Home() {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
-    const fallbackExpression = idle ? moodExpression(companionRef.current.mood) : MODEL_CONFIG[selectedModel].expressions[reactionIndexRef.current++ % MODEL_CONFIG[selectedModel].expressions.length];
+    // Keep reactions deterministic so Miss does not jump between unrelated
+    // expressions on every response.
+    const fallbackExpression = moodExpression(companionRef.current.mood);
     const expression = /เศร้า|เสียใจ|ร้องไห้|ขอโทษ|sad|sorry|cry/i.test(combined) ? "M QAQ"
           : /โกรธ|โมโห|หงุดหงิด|angry|mad/i.test(combined) ? "M nu"
           : /ตกใจ|ว้าว|จริงเหรอ|surprise|wow/i.test(combined) ? "M wenhao "
@@ -557,7 +559,9 @@ export default function Home() {
           : /ตา|มอง|กระพริบ|หลับตา|eyes|look|blink/i.test(combined) ? "M ###"
           : fallbackExpression;
     try {
-      if (expression) await model.expression(expression);
+      const supportedExpressions = MODEL_CONFIG[selectedModel].expressions;
+      if (expression && supportedExpressions.includes(expression)) await model.expression(expression);
+      else resetReaction();
       const idleMotion = model.internalModel?.motionManager?.definitions?.Idle;
       if (idleMotion?.length) await model.motion("Idle", 0, 3);
     } catch (error) {
