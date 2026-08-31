@@ -113,6 +113,7 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<ModelKey>("薇薇安");
   const [personality, setPersonality] = useState<PersonalityKey>("custom");
   const [characterName, setCharacterName] = useState("Vivian");
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
@@ -126,6 +127,7 @@ export default function Home() {
     if (isModelKey(storedModel)) setSelectedModel(storedModel);
     if (isPersonalityKey(storedPersonality)) setPersonality(storedPersonality);
     if (storedCharacterName?.trim()) setCharacterName(storedCharacterName);
+    setPreferencesReady(true);
   }, []);
 
   useEffect(() => {
@@ -149,6 +151,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!preferencesReady) return;
     let app: any;
     let resizeModel = () => {};
     let queueResize = () => {};
@@ -238,7 +241,7 @@ export default function Home() {
       }
       modelRef.current = null;
     };
-  }, [selectedModel]);
+  }, [preferencesReady, selectedModel]);
 
   useEffect(() => () => {
     pixiAppRef.current?.destroy(true, { children: true });
