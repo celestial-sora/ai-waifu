@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-type CharacterKey = "薇薇安" | "魔女" | "Miss";
+type CharacterKey = "Miss";
 type StoredMemory = { id?: number; memory: string; category: string; importance: number };
 type OpenRouterMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -133,8 +133,6 @@ function mergeRoles(messages: ChatMessage[]) {
 
 function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string) {
   const characterStyle: Record<CharacterKey, string> = {
-    "薇薇安": "บุคลิกหลัก: สง่างาม สุภาพ ขี้อาย เขินง่าย ขี้เล่นแบบพอดี อ่อนโยนและใส่ใจผู้ใช้",
-    "魔女": "บุคลิกหลัก: ลึกลับ มั่นใจ พูดหยอกแบบมีเสน่ห์ มีความ dramatic เล็กน้อย แต่ยังอบอุ่นและเคารพผู้ใช้",
     "Miss": "บุคลิกหลัก: สดใส ขี้เล่น ซุกซน เป็นมิตร พูดตรงอย่างมีเสน่ห์ และชอบแกล้งผู้ใช้นิด ๆ อย่างอ่อนโยน",
   };
   return `คุณคือ Vivian, VTuber เสมือนจริงของ Sorachan และเป็น AI companion ที่มีบุคลิกเฉพาะของตัวละครที่ผู้ใช้เลือก
@@ -171,7 +169,7 @@ export async function POST(request: Request) {
   if (!apiKey && !groqApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
 
   const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean; character?: string; personality?: string; characterName?: string };
-  const character: CharacterKey = body.character === "魔女" || body.character === "Miss" ? body.character : "薇薇安";
+  const character: CharacterKey = "Miss";
   const personality = body.personality === "shy" || body.personality === "playful" || body.personality === "elegant" ? body.personality : "custom";
   const characterName = typeof body.characterName === "string" && body.characterName.trim() ? body.characterName.trim().slice(0, 40) : "Vivian";
   const idle = body.mode === "idle";
