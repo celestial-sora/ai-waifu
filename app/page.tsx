@@ -179,6 +179,7 @@ export default function Home() {
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
+        console.info("Live2D model loaded", selectedModel, { width: bounds.width, height: bounds.height });
         resizeModel = () => {
           const stage = canvasRef.current?.parentElement?.getBoundingClientRect();
           if (!stage) return;
