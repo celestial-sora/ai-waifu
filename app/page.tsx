@@ -184,7 +184,7 @@ export default function Home() {
           modelRef.current = null;
         }
         const modelConfig = MODEL_CONFIG[selectedModel];
-        const model = await Live2DModel.from(isAppleMobile ? modelConfig.mobilePath : modelConfig.path);
+        const model = await Live2DModel.from(modelConfig.path);
         if (disposed || loadId !== modelLoadIdRef.current) {
           model.destroy({ children: true, texture: true, baseTexture: true });
           return;
