@@ -84,7 +84,6 @@ export default function Home() {
   const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lipSyncFrameRef = useRef<number | null>(null);
-  const reactionIndexRef = useRef(0);
   const speakIdRef = useRef(0);
   const greetingSpokenRef = useRef(false);
   const ttsAbortRef = useRef<AbortController | null>(null);
