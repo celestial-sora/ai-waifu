@@ -26,10 +26,10 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
 type ModelKey = "薇薇安" | "魔女" | "神宫白子";
-const MODEL_CONFIG: Record<ModelKey, { reading: string; path: string; expressions: string[]; background: string }> = {
-  "薇薇安": { reading: "Wēi wēi ān", path: "/live2d/薇薇安/薇薇安.model3.json", expressions: ["哭", "黑脸", "慌张", "害羞", "白眼", "伞关闭"], background: "vivian-bg" },
-  "魔女": { reading: "Majo", path: "/live2d/魔女/魔女.model3.json", expressions: ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"], background: "witch-bg" },
-  "神宫白子": { reading: "Shén gōng bái zǐ", path: "/live2d/神宫白子/面饼0.model3.json", expressions: ["呆猫", "呆猫眼珠摇晃", "围裙", "拍照", "拿笔", "点一下", "猫咪滤镜", "眼镜"], background: "shiroko-bg" },
+const MODEL_CONFIG: Record<ModelKey, { reading: string; path: string; mobilePath: string; expressions: string[]; background: string }> = {
+  "薇薇安": { reading: "Wēi wēi ān", path: "/live2d/薇薇安/薇薇安.model3.json", mobilePath: "/live2d/薇薇安-mobile/薇薇安.model3.json", expressions: ["哭", "黑脸", "慌张", "害羞", "白眼", "伞关闭"], background: "vivian-bg" },
+  "魔女": { reading: "Majo", path: "/live2d/魔女/魔女.model3.json", mobilePath: "/live2d/魔女-mobile/魔女.model3.json", expressions: ["cw", "fz", "h", "hdj", "ku", "mz", "sq", "x", "xx", "yj", "zs1", "zs2"], background: "witch-bg" },
+  "神宫白子": { reading: "Shén gōng bái zǐ", path: "/live2d/神宫白子/面饼0.model3.json", mobilePath: "/live2d/神宫白子-mobile/面饼0.model3.json", expressions: ["呆猫", "呆猫眼珠摇晃", "围裙", "拍照", "拿笔", "点一下", "猫咪滤镜", "眼镜"], background: "shiroko-bg" },
 };
 const greetings = [
   "สวัสดีค่ะ วันนี้อยากคุยกับ Vivian เรื่องอะไรดีคะ?",
@@ -156,6 +156,7 @@ export default function Home() {
         const PIXI = await import("pixi.js");
         const { Live2DModel } = await import("pixi-live2d-display/cubism4");
         if (!canvasRef.current || disposed) return;
+        const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
         app = pixiAppRef.current;
@@ -175,7 +176,8 @@ export default function Home() {
           previousModel.destroy({ children: true });
           modelRef.current = null;
         }
-        const model = await Live2DModel.from(MODEL_CONFIG[selectedModel].path);
+        const modelConfig = MODEL_CONFIG[selectedModel];
+        const model = await Live2DModel.from(isAppleMobile ? modelConfig.mobilePath : modelConfig.path);
         if (disposed) return;
         modelRef.current = model;
         const bounds = model.getLocalBounds();
