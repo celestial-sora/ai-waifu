@@ -73,6 +73,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T) {
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pixiAppRef = useRef<any>(null);
   const modelRef = useRef<any>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -98,7 +99,9 @@ export default function Home() {
   const interactedRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
-  const initialGreeting = useRef<Message>(greeting());
+  // Keep the first server/client render identical; rotate greetings after the
+  // session is hydrated instead of letting Math.random() cause a mismatch.
+  const initialGreeting = useRef<Message>({ from: "vivian", text: greetings[0] });
   const messagesRef = useRef<Message[]>([initialGreeting.current]);
   const companionRef = useRef<CompanionState>(defaultCompanionState());
   const [message, setMessage] = useState("");
@@ -155,13 +158,23 @@ export default function Home() {
         if (!canvasRef.current || disposed) return;
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
-        app = new PIXI.Application({
-          view: canvasRef.current,
-          backgroundAlpha: 0,
-          antialias: true,
-          autoDensity: true,
-          resolution: Math.min(window.devicePixelRatio || 1, 2),
-        });
+        app = pixiAppRef.current;
+        if (!app) {
+          app = new PIXI.Application({
+            view: canvasRef.current,
+            backgroundAlpha: 0,
+            antialias: true,
+            autoDensity: true,
+            resolution: Math.min(window.devicePixelRatio || 1, 2),
+          });
+          pixiAppRef.current = app;
+        }
+        const previousModel = modelRef.current;
+        if (previousModel) {
+          app.stage.removeChild(previousModel);
+          previousModel.destroy({ children: true });
+          modelRef.current = null;
+        }
         const model = await Live2DModel.from(MODEL_CONFIG[selectedModel].path);
         if (disposed) return;
         modelRef.current = model;
@@ -205,12 +218,19 @@ export default function Home() {
       window.removeEventListener("resize", queueResize);
       window.removeEventListener("orientationchange", handleOrientationChange);
       window.visualViewport?.removeEventListener("resize", queueResize);
-      app?.destroy(true, { children: true });
+      const currentModel = modelRef.current;
+      if (currentModel && app) {
+        app.stage.removeChild(currentModel);
+        currentModel.destroy({ children: true });
+      }
       modelRef.current = null;
-      stopLipSync();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, [selectedModel]);
+
+  useEffect(() => () => {
+    pixiAppRef.current?.destroy(true, { children: true });
+    pixiAppRef.current = null;
+  }, []);
 
   useEffect(() => () => {
     micEnabledRef.current = false;
