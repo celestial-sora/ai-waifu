@@ -164,6 +164,7 @@ export default function Home() {
         const PIXI = await import("pixi.js");
         const { Live2DModel } = await import("pixi-live2d-display/cubism4");
         if (!canvasRef.current || disposed) return;
+        const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
         app = pixiAppRef.current;
@@ -171,11 +172,12 @@ export default function Home() {
           app = new PIXI.Application({
             view: canvasRef.current,
             backgroundAlpha: 0,
-            antialias: true,
+            antialias: !isAppleMobile,
             autoDensity: true,
-            resolution: Math.min(window.devicePixelRatio || 1, 2),
+            resolution: isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2),
+            powerPreference: isAppleMobile ? "low-power" : "high-performance",
           });
-          app.ticker.maxFPS = 60;
+          app.ticker.maxFPS = isAppleMobile ? 30 : 60;
           pixiAppRef.current = app;
         }
         const previousModel = modelRef.current;
@@ -194,7 +196,7 @@ export default function Home() {
           if (!stage) return;
           const width = Math.max(1, Math.round(stage.width));
           const height = Math.max(1, Math.round(stage.height));
-          app.renderer.resolution = Math.min(window.devicePixelRatio || 1, 2);
+          app.renderer.resolution = isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
           app.renderer.resize(width, height);
           const scale = Math.min((width * (width > height ? .43 : .88)) / bounds.width, ((height - Math.min(124, height * .15)) * .88) / bounds.height);
           model.scale.set(scale);
