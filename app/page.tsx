@@ -160,6 +160,10 @@ export default function Home() {
         const { Live2DModel } = await import("pixi-live2d-display/cubism4");
         if (!canvasRef.current || disposed) return;
         const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        // Keep the 4096 textures intact, but render the canvas above CSS
+        // resolution on iPad/iPhone so the model is not visibly soft. The
+        // 1.5 cap is a deliberate memory/performance guard for Safari.
+        const appleResolution = Math.min(Math.max(window.devicePixelRatio || 1, 1), 1.5);
         (window as any).PIXI = PIXI;
         (Live2DModel as any).registerTicker(PIXI.Ticker);
         app = pixiAppRef.current;
@@ -169,7 +173,7 @@ export default function Home() {
             backgroundAlpha: 0,
             antialias: !isAppleMobile,
             autoDensity: true,
-            resolution: isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2),
+            resolution: isAppleMobile ? appleResolution : Math.min(window.devicePixelRatio || 1, 2),
             powerPreference: isAppleMobile ? "low-power" : "high-performance",
           });
           app.ticker.maxFPS = isAppleMobile ? 30 : 60;
@@ -194,7 +198,7 @@ export default function Home() {
           if (!stage) return;
           const width = Math.max(1, Math.round(stage.width));
           const height = Math.max(1, Math.round(stage.height));
-          app.renderer.resolution = isAppleMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+          app.renderer.resolution = isAppleMobile ? appleResolution : Math.min(window.devicePixelRatio || 1, 2);
           app.renderer.resize(width, height);
           const scale = Math.min((width * (width > height ? .43 : .88)) / bounds.width, ((height - Math.min(124, height * .15)) * .88) / bounds.height);
           model.scale.set(scale);
