@@ -515,6 +515,11 @@ export default function Home() {
     const text = (overrideText ?? message).trim();
     if (sendingRef.current) return;
     if (!idle && !text) return;
+    if (!idle && await handleExpressionCommand(text)) {
+      setMessage("");
+      markActivity();
+      return;
+    }
     if (speakingRef.current) stopSpeech();
     markActivity();
     if (!idle) interactedRef.current = true;
@@ -593,6 +598,38 @@ export default function Home() {
       "M wenhao ": "surprised", "S chabei": "tired", "M ##": "thinking",
     };
     return scenes[expression] ?? fallback;
+  }
+  async function handleExpressionCommand(text: string) {
+    const match = text.match(/^\/(?:expression|exp)(?:\s+(.+))?$/i);
+    if (!match) return false;
+    const argument = match[1]?.trim() ?? "";
+    const expressions = MODEL_CONFIG[selectedModel].expressions;
+    if (argument.toLowerCase() === "list") {
+      setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: `Expression ที่ใช้ได้: ${expressions.join(", ")}` }]);
+      return true;
+    }
+    if (!argument || argument.toLowerCase() === "default" || argument.toLowerCase() === "reset") {
+      resetReaction();
+      setSceneMood(companionRef.current.mood);
+      setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: "กลับไปใช้ expression default แล้วค่ะ" }]);
+      return true;
+    }
+    const expression = expressions.find((item) => item.trim().toLowerCase() === argument.toLowerCase());
+    if (!expression) {
+      setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: "ไม่พบ expression นี้ค่ะ ลองใช้ /expression list เพื่อดูรายการ" }]);
+      return true;
+    }
+    try {
+      if (!modelRef.current) throw new Error("Live2D model is not ready");
+      await modelRef.current.expression(expression);
+      setSceneMood(sceneForExpression(expression, companionRef.current.mood));
+      setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: `เปลี่ยนเป็น expression ${expression.trim()} แล้วค่ะ` }]);
+    } catch (error) {
+      console.warn("Manual Live2D expression unavailable", error);
+      resetReaction();
+      setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: "ยังเปลี่ยน expression ไม่ได้ค่ะ โมเดลกำลังโหลดอยู่" }]);
+    }
+    return true;
   }
   async function playReaction(reply: string, userText: string, idle = false) {
     const model = modelRef.current;
