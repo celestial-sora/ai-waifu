@@ -20,6 +20,19 @@ Production: ไม่มีเว็บให้ลองเล่นหรอ�
 - Expression-to-motion pairing รองรับ motion group หากโมเดลมี และ fallback เป็น Idle หากไม่มี
 - Web search ใช้ Gemini พร้อม Google Search grounding
 
+## Manual expression commands
+
+สามารถควบคุม expression ของโมเดล Miss จากช่องแชตได้โดยตรง คำสั่งเหล่านี้ทำงานใน browser และไม่ส่งข้อความไปยัง LLM:
+
+```text
+/expression list
+/expression M love
+/expression M wenhao
+/expression default
+```
+
+ใช้ `/exp` แทน `/expression` ได้ และไม่จำเป็นต้องพิมพ์ช่องว่างท้ายชื่อ expression เช่น `M wenhao` ระบบจะจับคู่ให้เอง
+
 ## Expression mapping
 
 ระบบใช้ข้อความล่าสุดและ mood ประกอบการเลือก expression:
