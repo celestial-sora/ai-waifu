@@ -88,7 +88,7 @@ import { Container } from "pixi-live2d-display";
 2. Export `POST`, `GET`, `DELETE` functions as needed
 3. Use Supabase admin client from `lib/supabase-admin.ts` for DB access
 4. Always handle missing environment variables gracefully (return error object with status, don't throw)
-5. Add route description to [CODEX.md](CODEX.md)
+5. Add the route description to [README.md](README.md) when it affects public setup or behavior
 
 ### Updating Chat Intelligence
 **Location:** `app/api/chat/route.ts`
@@ -244,7 +244,6 @@ model.setExpression(null);
 | `app/globals.css` | Styling | Medium |
 | `lib/supabase-admin.ts` | Database client | Low |
 | `public/live2d/` | Live2D assets | Low |
-| `CODEX.md` | Handoff documentation | Medium |
 | `package.json` | Dependencies | Low |
 
 ---
@@ -327,7 +326,7 @@ This section is the current source of truth for continuing work. Read it before 
 ### Safe continuation workflow
 
 1. Read this handoff and inspect the current files before editing.
-2. Preserve unrelated user edits; current known user-edited files may be dirty: `AGENTS.md`, `CLAUDE.md`, and `CODEX.md`.
+2. Preserve unrelated user edits; keep the canonical `AGENTS.md` as the only agent handoff file.
 3. Run `npx tsc --noEmit` and `git diff --check` after meaningful changes.
 4. Test the affected route/UI locally where possible.
 5. Commit only intentional source changes with a descriptive message.
@@ -362,9 +361,8 @@ This section is the current source of truth for continuing work. Read it before 
 
 Refer to:
 1. [README.md](README.md) — Quick start + feature overview
-2. [CODEX.md](CODEX.md) — Deep technical handoff
-3. Browser console — Runtime errors
-4. Vercel logs — Deployment/server-side issues
+2. Browser console — Runtime errors
+3. Vercel logs — Deployment/server-side issues
 
 ---
 
