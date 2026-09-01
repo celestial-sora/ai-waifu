@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
+  const quota = rateLimit(request, "stt", 12);
+  if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) return NextResponse.json({ error: "ELEVENLABS_API_KEY is not configured" }, { status: 500 });
   const incoming = await request.formData(); const file = incoming.get("file");

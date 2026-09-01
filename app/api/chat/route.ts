@@ -3,6 +3,7 @@ import { applyConversationTurn, companionPromptBlock, type CompanionState } from
 import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
+import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type CharacterKey = "Miss";
@@ -164,6 +165,8 @@ ${memoryContext}${toolContext}`;
 }
 
 export async function POST(request: Request) {
+  const quota = rateLimit(request, "chat", 20);
+  if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const apiKey = process.env.OPENROUTER_API_KEY;
   const groqApiKey = process.env.GROQ_API_KEY;
   if (!apiKey && !groqApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
@@ -181,8 +184,14 @@ export async function POST(request: Request) {
   let memories: StoredMemory[] = [];
   try {
     const supabase = getSupabaseAdmin();
-    const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(20), supabaseTimeoutMs, "memory load");
-    memories = data ?? [];
+    const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance,updated_at,last_used_at,use_count").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(30), supabaseTimeoutMs, "memory load");
+    memories = (data ?? []).sort((a, b) => {
+      const score = (item: typeof a) => {
+        const ageDays = Math.max(0, (Date.now() - new Date(item.last_used_at ?? item.updated_at ?? Date.now()).getTime()) / 86_400_000);
+        return Number(item.importance ?? 3) * (1 / (1 + ageDays / 45)) + Math.min(1, Number(item.use_count ?? 0) / 10);
+      };
+      return score(b) - score(a);
+    });
   } catch (error) { console.warn("Memory context unavailable", error); }
 
   const state = await loadCompanionState(userKey);
@@ -273,7 +282,11 @@ export async function POST(request: Request) {
       }
       const newMemories = !idle && apiKey && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
       if (newMemories.length) {
-        await withTimeout(supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString() })), { onConflict: "user_key,memory" }), supabaseTimeoutMs, "memory upsert");
+        await withTimeout(supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString(), last_used_at: new Date().toISOString() })), { onConflict: "user_key,memory" }), supabaseTimeoutMs, "memory upsert");
+      }
+      if (!idle && memories.length) {
+        const used = memories.slice(0, 8).map((item) => item.id).filter((id): id is number => typeof id === "number");
+        if (used.length) await withTimeout(supabase.from("memories").update({ last_used_at: new Date().toISOString() }).eq("user_key", userKey).in("id", used), supabaseTimeoutMs, "memory usage update");
       }
       if (!idle && older.length >= 4) {
         if (apiKey) nextState.conversationSummary = await compressTurns(apiKey, older, state.conversationSummary);

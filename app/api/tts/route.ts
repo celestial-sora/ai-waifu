@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 export const maxDuration = 30;
 
@@ -23,13 +24,15 @@ function emotionMarker(value: string) {
 }
 
 export async function POST(request: Request) {
+  const quota = rateLimit(request, "tts", 30);
+  if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const startedAt = Date.now();
   const apiKey = process.env.FISH_AUDIO_API_KEY;
   const voiceId = process.env.FISH_AUDIO_VOICE_ID;
   if (!apiKey) return NextResponse.json({ error: "FISH_AUDIO_API_KEY is not configured" }, { status: 500 });
   if (!voiceId) return NextResponse.json({ error: "FISH_AUDIO_VOICE_ID is not configured" }, { status: 500 });
 
-  const { text } = (await request.json()) as { text?: string };
+  const { text, speed, pitch } = (await request.json()) as { text?: string; speed?: number; pitch?: number };
   const cleanText = text ? speechText(text) : "";
   if (!cleanText || cleanText.length > 5000) return NextResponse.json({ error: "Text is required and must be under 5000 characters" }, { status: 400 });
 
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
         // this marker out of the visible chat and use it only for synthesis.
         text: `${emotionMarker(cleanText)} ${cleanText}`,
         reference_id: voiceId,
-        prosody: { speed: 0.95, volume: 0, normalize_loudness: true },
+        prosody: { speed: Math.min(1.2, Math.max(0.75, speed ?? 0.95)), pitch: Math.min(1.2, Math.max(0.8, pitch ?? 1)), volume: 0, normalize_loudness: true },
         format: "mp3",
         // Balanced retains quality while prioritising the first playable audio.
         sample_rate: 32000,
