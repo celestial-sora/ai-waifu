@@ -2,7 +2,7 @@
 
 เว็บ AI companion แบบ Live2D สำหรับ Vivian โดยเน้นการใช้งานบน iPhone และ iPad
 
-Production: [vivian-chan.vercel.app](https://vivian-chan.vercel.app)
+Production: ไม่มีเว็บให้ลองเล่นหรอก baka 
 
 ## Current features
 
