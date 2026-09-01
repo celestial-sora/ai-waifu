@@ -131,7 +131,10 @@ export default function Home() {
   companionRef.current = companion;
 
   useEffect(() => {
-    const storedModel = window.localStorage.getItem("vivian-model");
+    // Bump the preference key so users who previously had Miss selected
+    // receive the new Vivian model instead of being silently stuck on the
+    // old cached selection.
+    const storedModel = window.localStorage.getItem("vivian-model-v2");
     if (isModelKey(storedModel)) setSelectedModel(storedModel);
     const storedSpeed = Number(window.localStorage.getItem("vivian-speech-speed-v2"));
     const storedPitch = Number(window.localStorage.getItem("vivian-speech-pitch"));
