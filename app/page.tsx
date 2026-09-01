@@ -117,7 +117,7 @@ export default function Home() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
-  const [selectedModel, setSelectedModel] = useState<ModelKey>("Vivian");
+  const [selectedModel, setSelectedModel] = useState<ModelKey>("Princess");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [sceneMood, setSceneMood] = useState<SceneMood>("calm");
