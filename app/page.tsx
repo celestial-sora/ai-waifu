@@ -121,7 +121,7 @@ export default function Home() {
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [sceneMood, setSceneMood] = useState<SceneMood>("calm");
-  const [speechSpeed, setSpeechSpeed] = useState(0.95);
+  const [speechSpeed, setSpeechSpeed] = useState(1.05);
   const [speechPitch, setSpeechPitch] = useState(1);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
@@ -133,7 +133,7 @@ export default function Home() {
   useEffect(() => {
     const storedModel = window.localStorage.getItem("vivian-model");
     if (isModelKey(storedModel)) setSelectedModel(storedModel);
-    const storedSpeed = Number(window.localStorage.getItem("vivian-speech-speed"));
+    const storedSpeed = Number(window.localStorage.getItem("vivian-speech-speed-v2"));
     const storedPitch = Number(window.localStorage.getItem("vivian-speech-pitch"));
     if (Number.isFinite(storedSpeed)) setSpeechSpeed(Math.min(1.2, Math.max(.75, storedSpeed)));
     if (Number.isFinite(storedPitch)) setSpeechPitch(Math.min(1.2, Math.max(.8, storedPitch)));
@@ -862,7 +862,7 @@ export default function Home() {
         ))}
       </div>
       <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" onClick={() => void deleteMemory(memory.id)} aria-label="ลบความทรงจำ"><Icon name="trash" size={17}/></button></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
-      <div className="voice-settings"><strong>ตั้งค่าเสียง</strong><label>ความเร็ว <input type="range" min=".75" max="1.2" step=".05" value={speechSpeed} onChange={(event) => { const value = Number(event.target.value); setSpeechSpeed(value); window.localStorage.setItem("vivian-speech-speed", String(value)); }} /></label><label>โทนเสียง <input type="range" min=".8" max="1.2" step=".05" value={speechPitch} onChange={(event) => { const value = Number(event.target.value); setSpeechPitch(value); window.localStorage.setItem("vivian-speech-pitch", String(value)); }} /></label></div>
+      <div className="voice-settings"><strong>ตั้งค่าเสียง</strong><label>ความเร็ว <input type="range" min=".75" max="1.2" step=".05" value={speechSpeed} onChange={(event) => { const value = Number(event.target.value); setSpeechSpeed(value); window.localStorage.setItem("vivian-speech-speed-v2", String(value)); }} /></label><label>โทนเสียง <input type="range" min=".8" max="1.2" step=".05" value={speechPitch} onChange={(event) => { const value = Number(event.target.value); setSpeechPitch(value); window.localStorage.setItem("vivian-speech-pitch", String(value)); }} /></label></div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}
   </main>;
