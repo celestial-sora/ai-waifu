@@ -121,6 +121,10 @@ export default function Home() {
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [sceneMood, setSceneMood] = useState<SceneMood>("calm");
+  const [speechSpeed, setSpeechSpeed] = useState(0.95);
+  const [speechPitch, setSpeechPitch] = useState(1);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
   sendingRef.current = sending;
@@ -129,6 +133,18 @@ export default function Home() {
   useEffect(() => {
     const storedModel = window.localStorage.getItem("vivian-model");
     if (isModelKey(storedModel)) setSelectedModel(storedModel);
+    const storedSpeed = Number(window.localStorage.getItem("vivian-speech-speed"));
+    const storedPitch = Number(window.localStorage.getItem("vivian-speech-pitch"));
+    if (Number.isFinite(storedSpeed)) setSpeechSpeed(Math.min(1.2, Math.max(.75, storedSpeed)));
+    if (Number.isFinite(storedPitch)) setSpeechPitch(Math.min(1.2, Math.max(.8, storedPitch)));
+    const today = new Date().toISOString().slice(0, 10);
+    const lastCheckIn = window.localStorage.getItem("vivian-checkin-date");
+    const previousStreak = Number(window.localStorage.getItem("vivian-streak") ?? 0);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const nextStreak = lastCheckIn === today ? previousStreak : lastCheckIn === yesterday ? previousStreak + 1 : 1;
+    if (lastCheckIn !== today) window.localStorage.setItem("vivian-checkin-date", today);
+    window.localStorage.setItem("vivian-streak", String(nextStreak));
+    setStreak(nextStreak);
     setPreferencesReady(true);
   }, []);
 
@@ -455,7 +471,7 @@ export default function Home() {
     try {
       await withTimeout(unlockAudio(), AUDIO_UNLOCK_MS, undefined);
       if (speakId !== speakIdRef.current) return false;
-      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text }) });
+      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text, speed: speechSpeed, pitch: speechPitch }) });
       if (speakId !== speakIdRef.current) return false;
       if (!response.ok) {
         const error = await response.json().catch(() => null) as { error?: string; code?: string } | null;
@@ -541,9 +557,10 @@ export default function Home() {
           character: selectedModel,
         }),
       });
-      const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; memories?: Memory[]; companion?: CompanionState }>, 5000, null);
-      if (!response.ok || !data?.text) throw new Error(data?.error ?? "Chat request failed");
+      const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; code?: string; memories?: Memory[]; companion?: CompanionState }>, 5000, null);
+      if (!response.ok || !data?.text) throw new Error(data?.code ?? data?.error ?? "Chat request failed");
       const reply = data.text;
+      setErrorNotice(null);
       // Do not reveal the reply bubble before Fish Audio has started. This
       // keeps the visible text and spoken response arriving together.
       if (!muted) await speak(reply);
@@ -557,7 +574,11 @@ export default function Home() {
     } catch (error) {
       console.error("Vivian response unavailable", error);
       resetReaction();
-      if (!idle) setMessages((current) => [...current, { from: "vivian", text: "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ" }]);
+      if (!idle) {
+        const message = error instanceof Error && error.message.includes("RATE_LIMITED") ? "ส่งถี่เกินไปค่ะ รอสักครู่นะคะ" : "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ";
+        setErrorNotice(message);
+        setMessages((current) => [...current, { from: "vivian", text: message }]);
+      }
     } finally {
       setSending(false);
       sendingRef.current = false;
@@ -803,12 +824,13 @@ export default function Home() {
   }
 
   return <main className="companion-shell">
-    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background}`} aria-label="Vivian companion">
+    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
       <div className="scene-background" key={sceneMood} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
+      {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
       <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => window.dispatchEvent(new Event("resize"))} aria-label="จัด Vivian ให้อยู่กึ่งกลาง"><Icon name="focus"/></button>
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="memory"/></button>
@@ -833,12 +855,14 @@ export default function Home() {
     {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
       <div className="memory-sheet-head"><div><small>VIVIAN MEMORY</small><h1>ความทรงจำ</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
       <div className="bond-panel" aria-label="ความสัมพันธ์กับ Vivian">
+        <p><strong>Daily check-in</strong> ติดต่อกัน {streak} วัน</p>
         <p><strong>อารมณ์พื้นฐาน</strong>{moodLabel(companion.mood)}</p>
         {[["ความสนิท", companion.affinity], ["ความไว้ใจ", companion.trust], ["ความคุ้นเคย", companion.familiarity]].map(([label, value]) => (
           <div key={String(label)}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><em>{value}</em></div>
         ))}
       </div>
       <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" onClick={() => void deleteMemory(memory.id)} aria-label="ลบความทรงจำ"><Icon name="trash" size={17}/></button></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
+      <div className="voice-settings"><strong>ตั้งค่าเสียง</strong><label>ความเร็ว <input type="range" min=".75" max="1.2" step=".05" value={speechSpeed} onChange={(event) => { const value = Number(event.target.value); setSpeechSpeed(value); window.localStorage.setItem("vivian-speech-speed", String(value)); }} /></label><label>โทนเสียง <input type="range" min=".8" max="1.2" step=".05" value={speechPitch} onChange={(event) => { const value = Number(event.target.value); setSpeechPitch(value); window.localStorage.setItem("vivian-speech-pitch", String(value)); }} /></label></div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}
   </main>;
