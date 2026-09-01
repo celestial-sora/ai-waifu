@@ -14,15 +14,6 @@ function speechText(value: string) {
     .trim();
 }
 
-function emotionMarker(value: string) {
-  if (/โกรธ|โมโห|หงุดหงิด|วีน|angry|furious|mad/i.test(value)) return "[angry, emphatic tone]";
-  if (/เขิน|อาย|หน้าแดง|shy|embarrassed|flustered/i.test(value)) return "[shy, slightly flustered tone]";
-  if (/คิด|ขอคิด|เดี๋ยว|อืม|hmm|think|thinking/i.test(value)) return "[thoughtful, reflective tone]";
-  if (/เศร้า|เสียใจ|ร้องไห้|sad|sorry|cry/i.test(value)) return "[soft, sad tone]";
-  if (/ขำ|ตลก|เล่น|แกล้ง|ดีใจ|เยี่ยม|haha|fun|happy|playful/i.test(value)) return "[playful, cheerful tone]";
-  return "[warm, gentle tone]";
-}
-
 export async function POST(request: Request) {
   const quota = rateLimit(request, "tts", 30);
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
@@ -47,20 +38,19 @@ export async function POST(request: Request) {
       },
       signal: AbortSignal.timeout(upstreamTimeoutMs),
       body: JSON.stringify({
-        // S2 understands natural-language emotion markers in brackets. Keep
-        // this marker out of the visible chat and use it only for synthesis.
-        text: `${emotionMarker(cleanText)} ${cleanText}`,
+        // Keep the original voice delivery natural; the reference voice and
+        // punctuation already carry Vivian's conversational expression.
+        text: cleanText,
         reference_id: voiceId,
-        prosody: { speed: Math.min(1.2, Math.max(0.75, speed ?? 0.95)), pitch: Math.min(1.2, Math.max(0.8, pitch ?? 1)), volume: 0, normalize_loudness: true },
+        prosody: { speed: Math.min(1.2, Math.max(0.75, speed ?? 0.95)), volume: 0, normalize_loudness: true },
         format: "mp3",
-        // Balanced retains quality while prioritising the first playable audio.
-        sample_rate: 32000,
-        mp3_bitrate: 64,
-        latency: "balanced",
+        sample_rate: 44100,
+        mp3_bitrate: 128,
+        latency: "normal",
         normalize: true,
         // Keep continuity between generated chunks: disabling this can make
         // longer Thai replies end after only their first phrase.
-        chunk_length: 200,
+        chunk_length: 300,
       }),
     });
   } catch (error) {
