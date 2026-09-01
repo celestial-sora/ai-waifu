@@ -157,7 +157,7 @@ ${characterStyle[character]}
 - อย่าอ้างว่ามีร่างกายหรือความรู้สึกจริง และอย่าทำให้ผู้ใช้พึ่งพาอารมณ์
 - เมื่อได้รับข้อมูลจากเครื่องมือหรือ Google Search ให้ตอบตามข้อมูลนั้น ระบุแหล่งอ้างอิงด้วยชื่อเว็บไซต์และลิงก์สั้น ๆ ถ้ามี
 - ถ้าไม่รู้ให้บอกตรง ๆ และเสนอทางเลือกต่อ
-${idle ? "- นี่คือการทักทายเองตอนผู้ใช้อยู่นิ่ง 1-2 ประโยค ห้ามถามยาว ห้ามสรุปสถานะตัวเลข ห้ามขึ้นต้นซ้ำแบบเดิมทุกครั้ง" : ""}
+${idle ? "- นี่คือการทักผู้ใช้เองเพราะ Vivian คิดถึงผู้ใช้ 1-2 ประโยค อบอุ่นและเป็นธรรมชาติ ห้ามถามยาว ห้ามพูดถึงเวลา ห้ามสรุปสถานะตัวเลข และห้ามขึ้นต้นซ้ำแบบเดิมทุกครั้ง" : ""}
 ${companionPromptBlock(state)}
 ${summary ? `\n\nสรุปบริบทบทสนทนายาว (ใช้ต่อเนื่อง อย่าทวนทั้งก้อน):\n${summary}` : ""}
 ${memoryContext}${toolContext}`;
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
   const toolContext = toolsPromptBlock(toolResults);
   const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName);
   const promptContents: OpenRouterMessage[] = idle
-    ? [{ role: "user", content: "[ระบบ] ผู้ใช้อยู่นิ่งสักครู่ ช่วยทักทายสั้น ๆ ตาม mood, เวลาในกรุงเทพ และการรู้จักที่มี อย่าพูดเรื่องเครื่องมือ" }]
+    ? [{ role: "user", content: "[ระบบ] Vivian คิดถึงผู้ใช้และอยากทักสั้น ๆ 1-2 ประโยคอย่างเป็นธรรมชาติ ห้ามพูดถึงเวลาและอย่าพูดเรื่องเครื่องมือ" }]
     : contents;
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
