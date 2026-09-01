@@ -46,11 +46,6 @@ export function isMood(value: string): value is Mood {
   return MOODS.includes(value as Mood);
 }
 
-export function bangkokHour(now = new Date()) {
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", hour: "numeric", hour12: false }).format(now));
-  return Number.isFinite(hour) ? hour : now.getHours();
-}
-
 function count(text: string, pattern: RegExp) {
   return pattern.test(text) ? 1 : 0;
 }
@@ -62,8 +57,6 @@ export function applyConversationTurn(state: CompanionState, userText: string, r
   const personal = count(userText, /ฉันชื่อ|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|จำไว้|จำว่า|เรียกฉัน|my name|call me|remember|I live|I work/i);
   const sad = count(combined, /เศร้า|เหงา|เหนื่อย|ร้องไห้|เสียใจ|tired|lonely|sad/i);
   const playful = count(combined, /ขำ|ตลก|แกล้ง|มุก|เล่น|haha|lol|fun/i);
-  const hour = bangkokHour();
-
   let affinity = state.affinity + (idle ? 0 : 1) + positive * 3 - negative * 4;
   let trust = state.trust + personal * 4 - negative * 3;
   let familiarity = state.familiarity + (idle ? 0 : 1) + personal;
@@ -75,7 +68,6 @@ export function applyConversationTurn(state: CompanionState, userText: string, r
   else if (playful && affinity >= 35) { mood = "playful"; moodIntensity = Math.min(100, moodIntensity + 7); }
   else if (positive) { mood = "warm"; moodIntensity = Math.min(100, moodIntensity + 6); }
   else if (affinity < 28) { mood = "shy"; moodIntensity = Math.max(25, moodIntensity - 2); }
-  else if (hour >= 23 || hour < 6) { mood = "tired"; moodIntensity = Math.max(20, moodIntensity - 1); }
   else {
     moodIntensity = Math.max(18, moodIntensity - 2);
     if (moodIntensity <= 22) mood = affinity >= 55 ? "warm" : "calm";
