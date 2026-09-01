@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 
-type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "close" | "memory" | "sound";
+type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -17,6 +17,7 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
     video: <><rect x="3" y="6" width="12" height="12" rx="3"/><path d="m15 10 5-3v10l-5-3"/></>,
     clip: <path d="m8.5 12.5 5.9-5.9a3.5 3.5 0 0 1 5 5l-7.8 7.8a5 5 0 0 1-7.1-7.1l7.3-7.3"/>,
     message: <path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.5 8.5 0 0 1-3.6-.8L4 20l1.3-4A7.2 7.2 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/>,
+    send: <><path d="m4 4 16 8-16 8 3.2-8L4 4Z"/><path d="M7.2 12H20"/></>,
     close: <path d="m6 6 12 12M18 6 6 18"/>,
     memory: <><path d="M20 12c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8 8 3.6 8 8Z"/><path d="M12 8v4l2.8 1.8"/></>,
     sound: <><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/></>,
@@ -782,6 +783,7 @@ export default function Home() {
         <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
         <button className="circle-control is-disabled" type="button" disabled aria-label="ไฟล์แนบจะมาในภายหลัง"><Icon name="clip"/></button>
         <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
+        <button className="send-text" type="submit" disabled={sending || !message.trim()} aria-label="ส่งข้อความ"><Icon name="send" size={22}/></button>
         <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>
       </form>
     </section>
