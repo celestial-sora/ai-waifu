@@ -9,7 +9,7 @@ button, input { font: inherit; -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 
 .companion-shell { min-height: 100dvh; background: #10091d; color: #fff; }
-.companion-stage { position: relative; isolation: isolate; width: 100%; min-height: 100dvh; height: 100dvh; overflow: hidden; background: radial-gradient(ellipse 62% 58% at 50% 34%, #76506d 0%, #3b304e 34%, #202238 68%, #0e111d 100%); }
+.companion-stage { position: relative; isolation: isolate; width: 100%; min-height: 100dvh; height: 100dvh; overflow: hidden; background-position: center; background-size: cover; background-repeat: no-repeat; background-color: #10091d; }
 .companion-stage.vivian-bg { background: radial-gradient(ellipse 62% 58% at 50% 34%, #76506d 0%, #3b304e 34%, #202238 68%, #0e111d 100%); }
 .companion-stage.witch-bg { background: radial-gradient(ellipse 62% 58% at 50% 34%, #704f9b 0%, #34234f 37%, #171027 72%, #10091d 100%); }
 .companion-stage::before { content: ""; position: absolute; z-index: 1; inset: 0; pointer-events: none; background: linear-gradient(180deg, #160d25aa 0%, transparent 22%, transparent 65%, #0c0616 100%); }
