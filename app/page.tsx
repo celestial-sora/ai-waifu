@@ -50,6 +50,12 @@ const MIN_SPEECH_MS = 320;
 const IDLE_AFTER_MS = 75_000;
 const IDLE_COOLDOWN_MS = 8 * 60 * 1000;
 const LAST_IDLE_KEY = "vivian-last-idle";
+type SceneMood = Mood | "angry" | "surprised" | "thinking";
+const SCENE_BACKGROUNDS: Record<SceneMood, string> = {
+  calm: "/backgrounds/calm.jpg", warm: "/backgrounds/warm.jpg", playful: "/backgrounds/playful.png",
+  shy: "/backgrounds/shy.png", melancholy: "/backgrounds/melancholy.png", angry: "/backgrounds/angry.png",
+  surprised: "/backgrounds/surprised.png", tired: "/backgrounds/tired.png", thinking: "/backgrounds/thinking.jpg",
+};
 
 function abortAfter(ms: number) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
@@ -113,6 +119,7 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
+  const [sceneMood, setSceneMood] = useState<SceneMood>("calm");
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
   sendingRef.current = sending;
@@ -262,7 +269,7 @@ export default function Home() {
       if (Array.isArray(data.memories)) setMemories(data.memories);
       if (data.messages?.length) setHistoryMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
       const next = normalizeCompanion(data.companion);
-      if (next) setCompanion(next);
+      if (next) { setCompanion(next); setSceneMood(next.mood); }
     } catch { /* Vivian stays usable while Supabase is unavailable. */ }
   }
   function normalizeCompanion(raw: unknown): CompanionState | null {
@@ -568,12 +575,21 @@ export default function Home() {
     if (idle && mood === "tired") return "S chabei";
     return moodExpression(mood, intensity);
   }
+  function sceneForExpression(expression: string, fallback: Mood): SceneMood {
+    const scenes: Record<string, SceneMood> = {
+      "M nu": "angry", "M QAQ": "melancholy", "M love": "shy", "M lianhong": "warm",
+      "M xingxing": "playful", "M xingxing2": "playful", "X shetou": "playful",
+      "M wenhao ": "surprised", "S chabei": "tired", "M ##": "thinking",
+    };
+    return scenes[expression] ?? fallback;
+  }
   async function playReaction(reply: string, userText: string, idle = false) {
     const model = modelRef.current;
     if (!model) return;
     const combined = `${reply} ${userText}`;
     const { mood, moodIntensity: intensity } = companionRef.current;
     const expression = situationExpression(combined, mood, intensity, idle);
+    setSceneMood(sceneForExpression(expression, mood));
     try {
       const supportedExpressions = MODEL_CONFIG[selectedModel].expressions;
       if (expression && supportedExpressions.includes(expression)) await model.expression(expression);
@@ -739,7 +755,7 @@ export default function Home() {
   }
 
   return <main className="companion-shell">
-    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background}`} aria-label="Vivian companion">
+    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background}`} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-label="Vivian companion">
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
