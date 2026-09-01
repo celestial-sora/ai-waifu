@@ -132,6 +132,13 @@ function mergeRoles(messages: ChatMessage[]) {
   return contents;
 }
 
+function removeEmoji(value: string) {
+  return value
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string) {
   const characterStyle: Record<CharacterKey, string> = {
     "Miss": "บุคลิกหลัก: สดใส ขี้เล่น ซุกซน เป็นมิตร พูดตรงอย่างมีเสน่ห์ และชอบแกล้งผู้ใช้นิด ๆ อย่างอ่อนโยน",
@@ -259,7 +266,7 @@ export async function POST(request: Request) {
     .filter((source: { title?: string; uri?: string } | undefined): source is { title: string; uri: string } => Boolean(source?.title && source.uri))
     .filter((source: { uri: string }, index: number, all: { uri: string }[]) => all.findIndex((item) => item.uri === source.uri) === index)
     .slice(0, 3);
-  const text = sources.length ? `${generatedText}\n\nแหล่งข้อมูล:\n${sources.map((source: { title: string; uri: string }) => `- ${source.title}: ${source.uri}`).join("\n")}` : generatedText;
+  const text = removeEmoji(sources.length ? `${generatedText}\n\nแหล่งข้อมูล:\n${sources.map((source: { title: string; uri: string }) => `- ${source.title}: ${source.uri}`).join("\n")}` : generatedText);
   if (!text) return NextResponse.json({ error: "OpenRouter returned no text" }, { status: 502 });
 
   const nextState = applyConversationTurn(state, lastUserText, text, idle);
