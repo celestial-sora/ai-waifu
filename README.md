@@ -100,7 +100,7 @@ npm run build
 vercel --prod
 ```
 
-หลัง deploy ต้องตรวจว่า deployment เป็น `READY` และ alias ยังคงชี้ไปที่ `https://vivian-chan.vercel.app`
+หลัง deploy ต้องตรวจว่า deployment เป็น `READY` และ alias ยังคงชี้ไปที่ `https://your-domain.vercel.app`
 
 ## Live2D constraints
 
@@ -109,3 +109,4 @@ vercel --prod
 - Cubism Core ถูก preload จาก `app/layout.tsx`
 - Live2D โหลดฝั่ง client ภายใน `useEffect` เท่านั้น
 - อย่าเปลี่ยนกลับไปใช้ texture 8192 บน production เพราะ iPad/Safari อาจ crash
+Model  cradit : Cai Cat
