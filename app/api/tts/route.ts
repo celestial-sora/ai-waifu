@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         // punctuation already carry Vivian's conversational expression.
         text: cleanText,
         reference_id: voiceId,
-        prosody: { speed: Math.min(1.2, Math.max(0.75, speed ?? 0.95)), volume: 0, normalize_loudness: true },
+        prosody: { speed: Math.min(1.2, Math.max(0.75, speed ?? 1.05)), volume: 0, normalize_loudness: true },
         format: "mp3",
         sample_rate: 44100,
         mp3_bitrate: 128,
