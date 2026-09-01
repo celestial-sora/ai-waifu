@@ -1,0 +1,36 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "薇薇安.moc3",
+		"Textures": [
+			"薇薇安.4096/texture_00.png",
+			"薇薇安.4096/texture_01.png",
+			"薇薇安.4096/texture_02.png",
+			"薇薇安.4096/texture_03.png",
+			"薇薇安.4096/texture_04.png",
+			"薇薇安.4096/texture_05.png",
+			"薇薇安.4096/texture_06.png",
+			"薇薇安.4096/texture_07.png",
+			"薇薇安.4096/texture_08.png",
+			"薇薇安.4096/texture_09.png",
+			"薇薇安.4096/texture_10.png"
+		],
+		"Physics": "薇薇安.physics3.json",
+		"DisplayInfo": "薇薇安.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}
