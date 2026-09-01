@@ -132,6 +132,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // Warm every scene into the browser cache before the first reaction can
+    // request a swap. This prevents a network fetch from delaying the fade.
+    Object.values(SCENE_BACKGROUNDS).forEach((source) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = source;
+    });
+  }, []);
+
+  useEffect(() => {
     const unlock = () => {
       void unlockAudio();
       if (!greetingSpokenRef.current && !muted) {
@@ -755,7 +765,8 @@ export default function Home() {
   }
 
   return <main className="companion-shell">
-    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background}`} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-label="Vivian companion">
+    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background}`} aria-label="Vivian companion">
+      <div className="scene-background" key={sceneMood} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
