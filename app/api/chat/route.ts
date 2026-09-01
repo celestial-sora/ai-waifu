@@ -6,7 +6,7 @@ import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
-type CharacterKey = "Vivian" | "Miss";
+type CharacterKey = "Princess";
 type StoredMemory = { id?: number; memory: string; category: string; importance: number };
 type OpenRouterMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -141,8 +141,7 @@ function removeEmoji(value: string) {
 
 function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string) {
   const characterStyle: Record<CharacterKey, string> = {
-    "Vivian": "บุคลิกหลัก: สดใส สุภาพ ขี้เล่นเล็กน้อย อ่อนโยน และพูดเป็นธรรมชาติ",
-    "Miss": "บุคลิกหลัก: สดใส ขี้เล่น ซุกซน เป็นมิตร พูดตรงอย่างมีเสน่ห์ และชอบแกล้งผู้ใช้นิด ๆ อย่างอ่อนโยน",
+    "Princess": "บุคลิกหลัก: สดใส สุภาพ ขี้เล่นเล็กน้อย อ่อนโยน และพูดเป็นธรรมชาติ",
   };
   return `คุณคือ Vivian, VTuber เสมือนจริงของ Sorachan และเป็น AI companion ที่มีบุคลิกเฉพาะของตัวละครที่ผู้ใช้เลือก
 ${characterStyle[character]}
@@ -180,7 +179,7 @@ export async function POST(request: Request) {
   if (!apiKey && !groqApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
 
   const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean; character?: string; personality?: string; characterName?: string };
-  const character: CharacterKey = body.character === "Miss" ? "Miss" : "Vivian";
+  const character: CharacterKey = "Princess";
   const personality = body.personality === "shy" || body.personality === "playful" || body.personality === "elegant" ? body.personality : "custom";
   const characterName = typeof body.characterName === "string" && body.characterName.trim() ? body.characterName.trim().slice(0, 40) : "Vivian";
   const idle = body.mode === "idle";
