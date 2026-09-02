@@ -79,6 +79,6 @@ API keys belong in environment variables only. Never commit `.env.local` or expo
 
 ## Credits
 
-Live2D model credit: Cai Cat
+Live2D Credit: Cai Cat
 
 If you like the project, feel free to star the repository.
