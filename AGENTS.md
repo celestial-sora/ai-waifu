@@ -81,7 +81,7 @@ import { Container } from "pixi-live2d-display";
 
 ### Deployment Workflow
 - After every completed code change, run a production deployment with `vercel --prod`.
-- Confirm the deployment reaches `READY` and the production alias is `https://vivian-chan.vercel.app`.
+- Confirm the deployment reaches `READY` and the configured production alias is available.
 
 ### Adding a New API Route
 1. Create file at `app/api/[feature]/route.ts`
@@ -273,7 +273,7 @@ This section is the current source of truth for continuing work. Read it before 
 - Product: Vivian Personal Project
 - Character: Vivian
 - Codename: Columbina
-- Production URL: https://vivian-chan.vercel.app
+- Production URL: not published in this repository
 - Repository: https://github.com/celestial-sora/ai-waifu
 - Git branch: `main`
 - Latest committed version: `488fcb4` (`apply ultra smooth UI polish`)
@@ -332,7 +332,7 @@ This section is the current source of truth for continuing work. Read it before 
 5. Commit only intentional source changes with a descriptive message.
 6. Push `main` before production deployment.
 7. Deploy with `XDG_CACHE_HOME=/tmp vercel deploy --prod --yes` only when deployment is requested.
-8. After deployment, verify the alias `https://vivian-chan.vercel.app` and report the Git commit plus Vercel deployment ID.
+8. After deployment, verify the configured production alias and report the Git commit plus Vercel deployment ID.
 
 ### Performance Issues
 1. Profile React component renders (DevTools → Profiler)
