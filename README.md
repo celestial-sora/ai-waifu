@@ -1,4 +1,6 @@
-# Vivian AI Companion
+# Vivian AI Companion — Live2D AI Chat Companion
+
+เว็บ AI companion แบบ Live2D สำหรับ Vivian สร้างด้วย Next.js, React, TypeScript, PixiJS และ Live2D Cubism 4
 
 เว็บ AI companion แบบ Live2D สำหรับ Vivian โดยเน้น Experience บน Mobile and Tablet 
 
