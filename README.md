@@ -1,6 +1,6 @@
 # Vivian AI Companion
 
-เว็บ AI companion แบบ Live2D สำหรับ Vivian โดยเน้นการใช้งานบน iPhone และ iPad
+เว็บ AI companion แบบ Live2D สำหรับ Vivian โดยเน้น Experience บน Mobile and Tablet 
 
 Production: ไม่มีเว็บให้ลองเล่นหรอก baka 
 
