@@ -17,7 +17,7 @@ type OpenRouterTurn = {
 export const maxDuration = 60;
 
 const userKey = "default";
-const modelName = () => process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.2-11b-vision-instruct:free";
+const modelName = () => process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.3-70b-instruct";
 const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const groqVisionModel = () => process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
 const geminiPrimaryModel = () => {
@@ -73,7 +73,7 @@ async function callGroq(apiKey: string, messages: OpenRouterTurn[], model = groq
       model,
       messages,
       temperature: 0.8,
-      max_completion_tokens: 420,
+      max_tokens: 420,
     }),
   });
 }
@@ -326,76 +326,70 @@ export async function POST(request: Request) {
 
   let response: Response | undefined;
 
-  // 1. Try Gemini if search or image or primary
-  if (geminiApiKey && (provider === "gemini" || shouldSearch)) {
-    const candidates = Array.from(new Set([
-      geminiPrimaryModel(),
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-      "gemini-1.5-flash-latest",
-      "gemini-1.5-pro",
-    ]));
+  // 1. Groq first for text — fast and reliable with user's preferred model
+  if (!hasImage && !shouldSearch && groqApiKey) {
+    const groqTextModels = [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+    for (const gModel of groqTextModels) {
+      try {
+        response = await callGroq(groqApiKey, [{ role: "system" as const, content: systemPrompt }, ...promptContents], gModel);
+        if (response.ok) { provider = "groq"; break; }
+        console.warn(`Groq text (${gModel}) returned ${response.status}`);
+      } catch (err) { console.warn(`Groq text (${gModel}) error`, err); }
+    }
+  }
 
-    for (const model of candidates) {
+  // 2. Try Gemini for vision/search (confirmed-live slugs for v1beta only)
+  if ((!response || !response.ok) && geminiApiKey && (provider === "gemini" || shouldSearch || hasImage)) {
+    // v1beta confirmed-live model IDs as of 2026
+    const geminiCandidates = [
+      "gemini-1.5-flash-8b",
+      "gemini-1.5-flash-002",
+      "gemini-1.5-pro-002",
+      "gemini-2.0-flash-lite",
+      "gemini-2.0-flash",
+    ];
+    for (const model of geminiCandidates) {
       try {
         const payload = shouldSearch ? { ...geminiPayload, tools: [{ google_search: {} }] } : geminiPayload;
         response = await callGemini(geminiApiKey, payload, model);
-        if (response.ok) {
-          provider = "gemini";
-          break;
-        }
+        if (response.ok) { provider = "gemini"; break; }
         console.warn(`Gemini (${model}) returned ${response.status}`);
-      } catch (err) {
-        console.warn(`Gemini (${model}) network error`, err);
-      }
+      } catch (err) { console.warn(`Gemini (${model}) network error`, err); }
     }
   }
 
-  // 2. Try OpenRouter (supports multimodal and broad free/paid model pool)
+  // 3. OpenRouter — paid, stable slugs only (no :free suffixes that are volatile)
   if ((!response || !response.ok) && apiKey && !shouldSearch) {
+    // These are non-free paid models available on OpenRouter; they don't rate-limit the same way
     const openRouterCandidates = Array.from(new Set([
       modelName(),
-      "openrouter/auto",
-      "google/gemini-2.0-flash-001",
-      "openai/gpt-4o-mini",
       "meta-llama/llama-3.3-70b-instruct",
       "deepseek/deepseek-chat",
-      "meta-llama/llama-3.1-8b-instruct:free",
+      "openai/gpt-4o-mini",
+      "google/gemini-2.0-flash-001",
+      "anthropic/claude-haiku-3-5",
+      "mistralai/mistral-7b-instruct:free",
     ]));
-
     for (const orModel of openRouterCandidates) {
       try {
         response = await callOpenRouter(apiKey, openRouterMessages, { model: orModel });
-        if (response.ok) {
-          provider = "openrouter";
-          break;
-        }
+        if (response.ok) { provider = "openrouter"; break; }
         console.warn(`OpenRouter (${orModel}) returned ${response.status}`);
-      } catch (err) {
-        console.warn(`OpenRouter (${orModel}) network error`, err);
-      }
+      } catch (err) { console.warn(`OpenRouter (${orModel}) network error`, err); }
     }
   }
 
-  // 3. Try Groq (try vision if image, fallback to Groq text LLM so chat never fails)
-  if ((!response || !response.ok) && groqApiKey && !shouldSearch) {
-    const groqModelsToTry = hasImage
-      ? [groqVisionModel(), "llama-3.2-90b-vision-preview", groqModelName(), "llama-3.3-70b-versatile"]
-      : [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
-
-    for (const gModel of groqModelsToTry) {
+  // 4. Groq vision last resort (images, after all else failed)
+  if ((!response || !response.ok) && groqApiKey && hasImage && !shouldSearch) {
+    const visionModels = [groqVisionModel(), "llama-3.2-90b-vision-preview", "llama-3.3-70b-versatile"];
+    for (const gModel of visionModels) {
       try {
-        const isVisionModel = gModel.includes("vision");
-        const messagesToSend = isVisionModel ? groqMessages : [{ role: "system" as const, content: systemPrompt }, ...promptContents];
-        response = await callGroq(groqApiKey, messagesToSend, gModel);
-        if (response.ok) {
-          provider = "groq";
-          break;
-        }
-        console.warn(`Groq (${gModel}) returned ${response.status}`);
-      } catch (err) {
-        console.warn(`Groq (${gModel}) call error`, err);
-      }
+        const isVision = gModel.includes("vision");
+        const msgs = isVision ? groqMessages : [{ role: "system" as const, content: systemPrompt }, ...promptContents];
+        response = await callGroq(groqApiKey, msgs, gModel);
+        if (response.ok) { provider = "groq"; break; }
+        console.warn(`Groq vision fallback (${gModel}) returned ${response.status}`);
+      } catch (err) { console.warn(`Groq vision fallback (${gModel}) error`, err); }
     }
   }
 
