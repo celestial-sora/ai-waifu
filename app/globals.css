@@ -89,7 +89,7 @@ button { cursor: pointer; }
 .live-badge { display: flex; align-items: center; gap: 6px; color: #d8b4fe; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: pulse-live 1.5s infinite; }
 @keyframes pulse-live { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.8); } }
-.camera-video-feed { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); background: #000; }
+.camera-video-feed { width: 100%; height: 100%; object-fit: cover; background: #000; }
 
 .attachment-preview { position: absolute; z-index: 6; left: 50%; bottom: calc(max(22px, env(safe-area-inset-bottom)) + 74px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 5px 12px 5px 6px; border-radius: 20px; border: 1px solid #d8b4fe66; background: #1f1533ee; box-shadow: 0 8px 24px #0008, 0 0 12px #a855f733; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); color: #e9d5ff; font-size: 13px; }
 .attachment-preview img { width: 34px; height: 34px; border-radius: 10px; object-fit: cover; border: 1px solid #ffffff33; }

@@ -110,6 +110,7 @@ export default function Home() {
   const lastVisionTriggerRef = useRef(0);
   const visionTimerRef = useRef<number | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   cameraActiveRef.current = cameraActive;
   // Keep the first server/client render identical; rotate greetings after the
@@ -876,10 +877,10 @@ export default function Home() {
     }
   }, [cameraActive]);
 
-  async function startCamera() {
+  async function startCamera(facing: "user" | "environment" = cameraFacing) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: facing },
         audio: false,
       });
       videoStreamRef.current = stream;
@@ -889,6 +890,7 @@ export default function Home() {
         video.muted = true;
         await video.play().catch((err) => console.warn("Initial camera play failed", err));
       }
+      setCameraFacing(facing);
       setCameraActive(true);
       cameraActiveRef.current = true;
       lastVisionTriggerRef.current = Date.now();
@@ -916,6 +918,14 @@ export default function Home() {
     } else {
       await startCamera();
     }
+  }
+
+  async function switchCamera() {
+    const nextFacing = cameraFacing === "user" ? "environment" : "user";
+    // Stop current tracks before switching
+    videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+    videoStreamRef.current = null;
+    await startCamera(nextFacing);
   }
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1011,9 +1021,16 @@ export default function Home() {
         <div className="camera-pip-header">
           <div className="live-badge">
             <span className="live-dot" aria-hidden="true" />
-            <span>LIVE VISION</span>
+            <span>{cameraFacing === "environment" ? "REAR CAM" : "LIVE VISION"}</span>
           </div>
-          <button type="button" onClick={stopCamera} aria-label="ปิดกล้อง">×</button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button type="button" onClick={switchCamera} aria-label="สลับกล้อง" title="สลับกล้องหน้า/หลัง">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 7H4m0 0l4-4M4 7l4 4M4 17h16m0 0-4 4m4-4-4-4"/>
+              </svg>
+            </button>
+            <button type="button" onClick={stopCamera} aria-label="ปิดกล้อง">×</button>
+          </div>
         </div>
         <video
           ref={videoRef}
@@ -1021,6 +1038,7 @@ export default function Home() {
           playsInline
           muted
           className="camera-video-feed"
+          style={{ transform: cameraFacing === "environment" ? "none" : "scaleX(-1)" }}
           onLoadedMetadata={(e) => {
             e.currentTarget.play().catch((err) => console.warn("Video play on metadata blocked", err));
           }}
