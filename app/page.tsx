@@ -865,6 +865,17 @@ export default function Home() {
     return canvas.toDataURL("image/jpeg", 0.72);
   }
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (cameraActive && video && videoStreamRef.current) {
+      if (video.srcObject !== videoStreamRef.current) {
+        video.srcObject = videoStreamRef.current;
+      }
+      video.muted = true;
+      video.play().catch((err) => console.warn("Camera play failed", err));
+    }
+  }, [cameraActive]);
+
   async function startCamera() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -872,9 +883,11 @@ export default function Home() {
         audio: false,
       });
       videoStreamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        video.muted = true;
+        await video.play().catch((err) => console.warn("Initial camera play failed", err));
       }
       setCameraActive(true);
       cameraActiveRef.current = true;
@@ -965,19 +978,25 @@ export default function Home() {
       <div className="scene-background" key={sceneMood} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
-      {cameraActive && (
-        <div className="camera-pip" aria-label="Live Camera Vision">
-          <div className="camera-pip-header">
-            <div className="live-badge">
-              <span className="live-dot" aria-hidden="true" />
-              <span>LIVE VISION</span>
-            </div>
-            <button type="button" onClick={stopCamera} aria-label="ปิดกล้อง">×</button>
+      <div className="camera-pip" style={{ display: cameraActive ? "flex" : "none" }} aria-label="Live Camera Vision">
+        <div className="camera-pip-header">
+          <div className="live-badge">
+            <span className="live-dot" aria-hidden="true" />
+            <span>LIVE VISION</span>
           </div>
-          <video ref={videoRef} autoPlay playsInline muted className="camera-video-feed" />
+          <button type="button" onClick={stopCamera} aria-label="ปิดกล้อง">×</button>
         </div>
-      )}
-      {!cameraActive && <video ref={videoRef} autoPlay playsInline muted style={{ display: "none" }} />}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="camera-video-feed"
+          onLoadedMetadata={(e) => {
+            e.currentTarget.play().catch((err) => console.warn("Video play on metadata blocked", err));
+          }}
+        />
+      </div>
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
