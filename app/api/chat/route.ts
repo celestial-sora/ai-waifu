@@ -79,9 +79,10 @@ async function callGroq(apiKey: string, messages: OpenRouterTurn[], model = groq
 }
 
 async function callGemini(apiKey: string, payload: Record<string, unknown>, model = geminiPrimaryModel(), version = "v1beta") {
-  return fetch(`https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent`, {
+  const cleanKey = apiKey.trim();
+  return fetch(`https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": cleanKey },
     signal: AbortSignal.timeout(providerTimeoutMs),
     body: JSON.stringify(payload),
   });
@@ -350,37 +351,16 @@ export async function POST(request: Request) {
     }
   }
 
-  // 2. Try Groq (handles text with GPT-OSS-120B and vision with llama-3.2-11b-vision-preview without system role)
-  if ((!response || !response.ok) && groqApiKey && !shouldSearch) {
-    const modelToUse = hasImage ? groqVisionModel() : groqModelName();
-    try {
-      response = await callGroq(groqApiKey, groqMessages, modelToUse);
-      if (response.ok) {
-        provider = "groq";
-      } else {
-        console.warn(`Groq (${modelToUse}) returned ${response.status}`);
-        if (hasImage && modelToUse !== "llama-3.2-90b-vision-preview") {
-          const fallbackGroq = await callGroq(groqApiKey, groqMessages, "llama-3.2-90b-vision-preview");
-          if (fallbackGroq.ok) {
-            response = fallbackGroq;
-            provider = "groq";
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("Groq call error", err);
-    }
-  }
-
-  // 3. Try OpenRouter (handles both text and multimodal image_url with multiple fallback models)
+  // 2. Try OpenRouter (supports multimodal and broad free/paid model pool)
   if ((!response || !response.ok) && apiKey && !shouldSearch) {
     const openRouterCandidates = Array.from(new Set([
       modelName(),
-      "meta-llama/llama-3.2-11b-vision-instruct:free",
-      "google/gemini-2.0-flash-exp:free",
-      "qwen/qwen-2.5-vl-72b-instruct:free",
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "google/gemma-4-31b-it:free",
+      "openrouter/auto",
+      "google/gemini-2.0-flash-001",
+      "openai/gpt-4o-mini",
+      "meta-llama/llama-3.3-70b-instruct",
+      "deepseek/deepseek-chat",
+      "meta-llama/llama-3.1-8b-instruct:free",
     ]));
 
     for (const orModel of openRouterCandidates) {
@@ -393,6 +373,28 @@ export async function POST(request: Request) {
         console.warn(`OpenRouter (${orModel}) returned ${response.status}`);
       } catch (err) {
         console.warn(`OpenRouter (${orModel}) network error`, err);
+      }
+    }
+  }
+
+  // 3. Try Groq (try vision if image, fallback to Groq text LLM so chat never fails)
+  if ((!response || !response.ok) && groqApiKey && !shouldSearch) {
+    const groqModelsToTry = hasImage
+      ? [groqVisionModel(), "llama-3.2-90b-vision-preview", groqModelName(), "llama-3.3-70b-versatile"]
+      : [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+
+    for (const gModel of groqModelsToTry) {
+      try {
+        const isVisionModel = gModel.includes("vision");
+        const messagesToSend = isVisionModel ? groqMessages : [{ role: "system" as const, content: systemPrompt }, ...promptContents];
+        response = await callGroq(groqApiKey, messagesToSend, gModel);
+        if (response.ok) {
+          provider = "groq";
+          break;
+        }
+        console.warn(`Groq (${gModel}) returned ${response.status}`);
+      } catch (err) {
+        console.warn(`Groq (${gModel}) call error`, err);
       }
     }
   }
