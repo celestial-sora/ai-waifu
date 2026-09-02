@@ -4,13 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 
-type IconName = "focus" | "wardrobe" | "trash" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound";
+type IconName = "focus" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
     focus: <><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="3.4"/></>,
     wardrobe: <><path d="M12 3a3 3 0 0 1 3 3c0 1.4-1.1 2.3-2.4 2.8L4 14.2A2 2 0 0 0 5.1 18h13.8a2 2 0 0 0 1.1-3.8l-8.6-5.4"/><path d="M9 18v2M15 18v2"/></>,
-    trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></>,
     chevron: <path d="m5 9 7 7 7-7"/>,
     mic: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></>,
     micOff: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6M4 4l16 16"/></>,
@@ -117,12 +116,13 @@ export default function Home() {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
-  const [selectedModel, setSelectedModel] = useState<ModelKey>("Princess");
+  const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [sceneMood, setSceneMood] = useState<SceneMood>("calm");
   const [speechSpeed, setSpeechSpeed] = useState(1.05);
   const [speechPitch, setSpeechPitch] = useState(1);
+  const [customInstructions, setCustomInstructions] = useState("");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
@@ -138,6 +138,7 @@ export default function Home() {
     if (isModelKey(storedModel)) setSelectedModel(storedModel);
     const storedSpeed = Number(window.localStorage.getItem("vivian-speech-speed-v2"));
     const storedPitch = Number(window.localStorage.getItem("vivian-speech-pitch"));
+    setCustomInstructions(window.localStorage.getItem("vivian-custom-instructions") ?? "");
     if (Number.isFinite(storedSpeed)) setSpeechSpeed(Math.min(1.2, Math.max(.75, storedSpeed)));
     if (Number.isFinite(storedPitch)) setSpeechPitch(Math.min(1.2, Math.max(.8, storedPitch)));
     const today = new Date().toISOString().slice(0, 10);
@@ -558,6 +559,7 @@ export default function Home() {
           mode: idle ? "idle" : "chat",
           messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
           character: selectedModel,
+          customInstructions,
         }),
       });
       const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; code?: string; memories?: Memory[]; companion?: CompanionState }>, 5000, null);
@@ -817,15 +819,6 @@ export default function Home() {
       void startRecording();
     }
   }
-  async function clearConversation() {
-    await fetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "conversation" }) }).catch(() => undefined);
-    setMessages([{ from: "vivian", text: "เริ่มบทสนทนาใหม่แล้วค่ะ" }]);
-  }
-  async function deleteMemory(id: number) {
-    const response = await fetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "memory", id }) });
-    if (response.ok) setMemories((current) => current.filter((memory) => memory.id !== id));
-  }
-
   return <main className="companion-shell">
     <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
       <div className="scene-background" key={sceneMood} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-hidden="true" />
@@ -837,7 +830,6 @@ export default function Home() {
       <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => window.dispatchEvent(new Event("resize"))} aria-label="จัด Vivian ให้อยู่กึ่งกลาง"><Icon name="focus"/></button>
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="memory"/></button>
-        <button type="button" onClick={() => void clearConversation()} aria-label="ล้างบทสนทนา"><Icon name="trash"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
@@ -864,7 +856,8 @@ export default function Home() {
           <div key={String(label)}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><em>{value}</em></div>
         ))}
       </div>
-      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" onClick={() => void deleteMemory(memory.id)} aria-label="ลบความทรงจำ"><Icon name="trash" size={17}/></button></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
+      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
+      <div className="custom-instructions"><strong>Custom instructions</strong><p>บอก Vivian ว่าคุณอยากให้ตอบอย่างไร เช่น ภาษา โทนเสียง หรือสิ่งที่ควรหลีกเลี่ยง</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="เช่น เรียกฉันว่า... ตอบสั้น ๆ และใช้ภาษาไทยเป็นหลัก" /></div>
       <div className="voice-settings"><strong>ตั้งค่าเสียง</strong><label>ความเร็ว <input type="range" min=".75" max="1.2" step=".05" value={speechSpeed} onChange={(event) => { const value = Number(event.target.value); setSpeechSpeed(value); window.localStorage.setItem("vivian-speech-speed-v2", String(value)); }} /></label><label>โทนเสียง <input type="range" min=".8" max="1.2" step=".05" value={speechPitch} onChange={(event) => { const value = Number(event.target.value); setSpeechPitch(value); window.localStorage.setItem("vivian-speech-pitch", String(value)); }} /></label></div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}

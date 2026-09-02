@@ -1,4 +1,4 @@
-export type ModelKey = "Princess";
+export type ModelKey = "Miss";
 
 export const MODEL_CONFIG: Record<ModelKey, {
   reading: string;
@@ -6,7 +6,7 @@ export const MODEL_CONFIG: Record<ModelKey, {
   expressions: string[];
   background: string;
 }> = {
-  "Princess": { reading: "Princess", path: "/live2d/Vivian/薇薇安.model3.json", expressions: ["伞关闭", "哭", "害羞", "慌张", "白眼", "黑脸"], background: "witch-bg" },
+  "Miss": { reading: "Miss", path: "/live2d/Miss/Miss.model3.json", expressions: ["#", "M ###", "M ##", "M QAQ", "M lianhong", "M love", "M miyan", "M nu", "M wenhao", "M xingxing", "M xingxing2", "S chabei", "S shouji", "T faxing", "X shetou"], background: "witch-bg" },
 };
 
 export const PERSONALITIES = {
@@ -19,7 +19,7 @@ export const PERSONALITIES = {
 export type PersonalityKey = keyof typeof PERSONALITIES;
 
 export function isModelKey(value: string | null): value is ModelKey {
-  return value === "Princess";
+  return value === "Miss";
 }
 
 export function isPersonalityKey(value: string | null): value is PersonalityKey {
