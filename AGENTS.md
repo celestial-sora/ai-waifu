@@ -276,8 +276,8 @@ This section is the current source of truth for continuing work. Read it before 
 - Production URL: https://vivian-chan.vercel.app
 - Repository: https://github.com/celestial-sora/ai-waifu
 - Git branch: `main`
-- Latest committed version: `04255f2` (`perf: lower weather tool timeout to 2s for fast concurrent pre-flight resolution`)
-- Latest production deployment: `Ready in 24s (https://vivian-chan.vercel.app)`
+- Latest committed version: `6808570` (`feat: auto-capture camera frame on vision queries, prioritize Gemini for image recognition, and scrub meta system phrases`)
+- Latest production deployment: `Ready in 41s (https://vivian-chan.vercel.app)`
 
 ### Actual runtime flow
 
