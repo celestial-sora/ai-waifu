@@ -1,12 +1,13 @@
 /**
- * Composio integration for Vivian
- * Fetches tools connected in the Composio dashboard and executes them on demand.
- * Requires COMPOSIO_API_KEY in environment variables (set on Vercel, never in code).
+ * Composio integration for Vivian — connects to Composio v3.1 REST API.
+ * Requires COMPOSIO_API_KEY in environment variables.
  */
 
 export interface ComposioTool {
+  slug: string;
   name: string;
   description: string;
+  toolkitSlug?: string;
   parameters: {
     type: "object";
     properties: Record<string, { type: string; description?: string; enum?: string[] }>;
@@ -14,8 +15,15 @@ export interface ComposioTool {
   };
 }
 
+export interface ComposioConnectedAccount {
+  id: string;
+  appUniqueId: string;
+  status: string;
+  toolkit: { slug: string; name: string };
+}
+
 export interface ComposioToolCall {
-  name: string;
+  slug: string;
   arguments: Record<string, unknown>;
 }
 
@@ -25,44 +33,73 @@ export interface ComposioToolResult {
   content: string;
 }
 
-const COMPOSIO_BASE = "https://backend.composio.dev/api/v1";
+const COMPOSIO_BASE = "https://backend.composio.dev/api/v3";
+const COMPOSIO_V31_BASE = "https://backend.composio.dev/api/v3.1";
 
 function getApiKey(): string | undefined {
   return process.env.COMPOSIO_API_KEY?.trim();
 }
 
 /**
- * Fetch the list of enabled tools from Composio.
- * Returns an empty array if COMPOSIO_API_KEY is not set or request fails.
+ * Fetch connected accounts for this API key.
  */
-export async function getComposioTools(limit = 20): Promise<ComposioTool[]> {
+export async function getComposioConnectedAccounts(): Promise<ComposioConnectedAccount[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
 
   try {
-    const res = await fetch(`${COMPOSIO_BASE}/actions/list/all?limit=${limit}`, {
+    const res = await fetch(`${COMPOSIO_BASE}/connected_accounts`, {
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { items?: ComposioConnectedAccount[] };
+    return data.items ?? [];
+  } catch (err) {
+    console.warn("Composio connected_accounts check error", err);
+    return [];
+  }
+}
+
+/**
+ * Fetch tools from Composio v3.
+ * Returns an empty array if COMPOSIO_API_KEY is not set or request fails.
+ */
+export async function getComposioTools(limit = 12): Promise<ComposioTool[]> {
+  const apiKey = getApiKey();
+  if (!apiKey) return [];
+
+  try {
+    const res = await fetch(`${COMPOSIO_BASE}/tools?limit=${limit}`, {
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
-      console.warn(`Composio tool list failed: ${res.status}`);
+      console.warn(`Composio tools list returned ${res.status}`);
       return [];
     }
     const data = await res.json() as {
       items?: Array<{
+        slug: string;
         name: string;
         description: string;
-        parameters?: { properties?: Record<string, unknown>; required?: string[] };
+        toolkit?: { slug: string; name: string };
+        input_parameters?: {
+          properties?: Record<string, unknown>;
+          required?: string[];
+        };
       }>;
     };
 
-    return (data.items ?? []).map((action) => ({
-      name: action.name,
-      description: action.description ?? action.name,
+    return (data.items ?? []).map((item) => ({
+      slug: item.slug,
+      name: item.name,
+      description: item.description ?? item.name,
+      toolkitSlug: item.toolkit?.slug,
       parameters: {
         type: "object" as const,
-        properties: (action.parameters?.properties ?? {}) as ComposioTool["parameters"]["properties"],
-        required: action.parameters?.required ?? [],
+        properties: (item.input_parameters?.properties ?? {}) as ComposioTool["parameters"]["properties"],
+        required: item.input_parameters?.required ?? [],
       },
     }));
   } catch (err) {
@@ -72,46 +109,48 @@ export async function getComposioTools(limit = 20): Promise<ComposioTool[]> {
 }
 
 /**
- * Execute a Composio tool call.
- * Returns ComposioToolResult with ok=false if execution fails.
+ * Execute a Composio tool by slug via v3.1 REST API.
  */
-export async function executeComposioTool(toolCall: ComposioToolCall): Promise<ComposioToolResult> {
+export async function executeComposioTool(toolCall: ComposioToolCall, userId = "default"): Promise<ComposioToolResult> {
   const apiKey = getApiKey();
   if (!apiKey) {
-    return { tool: toolCall.name, ok: false, content: "COMPOSIO_API_KEY not configured" };
+    return { tool: toolCall.slug, ok: false, content: "COMPOSIO_API_KEY not configured" };
   }
 
   try {
-    const res = await fetch(`${COMPOSIO_BASE}/actions/execute`, {
+    const res = await fetch(`${COMPOSIO_V31_BASE}/tools/execute/${encodeURIComponent(toolCall.slug)}`, {
       method: "POST",
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
-        action: toolCall.name,
-        input: toolCall.arguments,
-        entityId: "default",
+        arguments: toolCall.arguments,
+        version: "latest",
+        user_id: userId,
       }),
     });
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      console.warn(`Composio execute failed: ${res.status}`, errText);
-      return { tool: toolCall.name, ok: false, content: `Tool execution failed: ${res.status}` };
+      console.warn(`Composio execute failed (${res.status}):`, errText);
+      return { tool: toolCall.slug, ok: false, content: `Composio action failed (${res.status})` };
     }
 
-    const data = await res.json() as { response?: { data?: unknown }; error?: string };
-    if (data.error) {
-      return { tool: toolCall.name, ok: false, content: `Tool error: ${data.error}` };
+    const data = await res.json() as {
+      response?: { data?: unknown };
+      data?: unknown;
+      error?: { message?: string };
+    };
+
+    if (data.error?.message) {
+      return { tool: toolCall.slug, ok: false, content: `Tool error: ${data.error.message}` };
     }
 
-    const resultText = typeof data.response?.data === "string"
-      ? data.response.data
-      : JSON.stringify(data.response?.data ?? data);
-
-    return { tool: toolCall.name, ok: true, content: resultText.slice(0, 2000) };
+    const result = data.response?.data ?? data.data ?? data;
+    const resultText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+    return { tool: toolCall.slug, ok: true, content: resultText.slice(0, 2000) };
   } catch (err) {
     console.warn("Composio executeAction error", err);
-    return { tool: toolCall.name, ok: false, content: "Tool execution timed out or failed" };
+    return { tool: toolCall.slug, ok: false, content: "Tool execution timed out or network error" };
   }
 }
 
@@ -122,17 +161,19 @@ export function composioToolsToFunctions(tools: ComposioTool[]) {
   return tools.map((tool) => ({
     type: "function" as const,
     function: {
-      name: tool.name,
-      description: tool.description,
+      name: tool.slug,
+      description: `[Composio Tool] ${tool.name}: ${tool.description}`.slice(0, 300),
       parameters: tool.parameters,
     },
   }));
 }
 
 /**
- * Format Composio tool results as a readable context block for the system prompt.
+ * Format Composio tool results as a context block for the system prompt.
  */
 export function composioResultsBlock(results: ComposioToolResult[]): string {
   if (!results.length) return "";
-  return `\n\nผลการใช้ Composio Tools:\n${results.map((r) => `- ${r.tool}: ${r.ok ? r.content : `[ล้มเหลว] ${r.content}`}`).join("\n")}`;
+  return `\n\nผลจาก Composio Tools:\n${results
+    .map((r) => `- ${r.tool}: ${r.ok ? r.content : `[ล้มเหลว] ${r.content}`}`)
+    .join("\n")}`;
 }
