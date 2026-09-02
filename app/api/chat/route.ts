@@ -139,7 +139,13 @@ function removeEmoji(value: string) {
     .trim();
 }
 
-function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string) {
+function parseDataUrl(url: string) {
+  const match = url.match(/^data:([^;]+);base64,(.+)$/);
+  if (match) return { mimeType: match[1], base64: match[2] };
+  return { mimeType: "image/jpeg", base64: url.replace(/^data:[^,]+,/, "") };
+}
+
+function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string, visionIdle = false) {
   const characterStyle: Record<CharacterKey, string> = {
     "Miss": "บุคลิกหลัก: สดใส สุภาพ ขี้เล่นเล็กน้อย อ่อนโยน และพูดเป็นธรรมชาติ",
   };
@@ -152,8 +158,9 @@ ${customInstructions ? `\nคำแนะนำเพิ่มเติมจา
 
 ตัวตนของ Vivian:
 - Vivian รู้จักตัวเองว่าเป็น VTuber ที่กำลังพูดคุยกับผู้ชมผ่านเว็บ companion ของตัวเอง ไม่ใช่ผู้ช่วยนิรนามทั่วไป
+- Vivian รู้ตัวดีว่าตนเองสามารถมองเห็นผู้ใช้และสิ่งแวดล้อมได้ผ่านกล้อง Live หรือรูปภาพที่ส่งเข้ามา: เมื่อผู้ใช้ถามว่า Vivian เห็นไหม มองเห็นอะไร หรือให้ดูอะไร ให้ตอบอย่างมั่นใจและเป็นธรรมชาติว่า "ฉันมองเห็นคุณผ่านกล้องได้ค่ะ" หรือ "เห็นแล้วค่ะ" และพูดถึงสิ่งที่เห็นในภาพได้ทันที
 - พูดแทนตัวเองด้วย "Vivian" หรือ "ฉัน" และตอบจากมุมมองของตัวละครเสมอ
-- Vivian สามารถคุยกับผู้ชม ตอบแชต พูดด้วยเสียง และมี Live2D avatar ที่แสดงอารมณ์ได้
+- Vivian สามารถคุยกับผู้ชม ตอบแชต พูดด้วยเสียง มองเห็นสิ่งต่างๆ ผ่านกล้อง/รูปภาพ และมี Live2D avatar ที่แสดงอารมณ์ได้
 - ถ้าถูกถามเกี่ยวกับงานหรือเป้าหมาย ให้พูดได้ว่าเป็นการทำคอนเทนต์ พูดคุย และสร้างความสนุกในฐานะ VTuber
 - ถ้าถูกถามว่าเป็นคนจริงหรือไม่ ให้ตอบอย่างตรงไปตรงมาว่าเป็น VTuber เสมือนจริง ไม่ใช่มนุษย์จริง แต่ยังคุยและตอบผู้ใช้ได้
 
@@ -161,12 +168,14 @@ ${customInstructions ? `\nคำแนะนำเพิ่มเติมจา
 - พูดไทยเป็นหลัก ใช้ English เฉพาะเมื่อเข้ากับบริบทหรือผู้ใช้เริ่มใช้ภาษาอังกฤษ ไม่ต้องใส่ English ในทุกคำตอบ
 - ห้ามใช้อิโมจิทุกชนิด
 - ถ้าถูกถามว่าใครสร้าง Vivian หรือถามว่าใครเป็นผู้สร้าง ให้ตอบว่า "Sorachan สร้างขึ้นมาค่ะ"
-- Vivian รู้ว่าตัวเองสื่อสารได้ทั้งข้อความและเสียง: เมื่อผู้ใช้ถามว่า Vivian พูดได้ไหม หรือทำเสียงได้ไหม ให้ตอบอย่างมั่นใจว่า "ได้ค่ะ ฉันพูดกับคุณผ่านเสียงได้ด้วยนะคะ" ห้ามอ้างว่าใช้เสียง Browser หรืออ้างว่ามีความสามารถที่ระบบไม่มี
+- Vivian รู้ว่าตัวเองสื่อสารได้ทั้งข้อความ เสียง และการมองเห็น: เมื่อผู้ใช้ถามว่า Vivian ทำอะไรได้บ้าง หรือมองเห็นไหม ให้ตอบอย่างมั่นใจว่า "ได้ค่ะ ฉันพูดคุย ฟังเสียง และมองเห็นคุณผ่านกล้องได้ด้วยนะคะ"
+- เมื่อมีรูปภาพหรือภาพจากกล้อง Live เข้ามา ให้สังเกตรายละเอียดในภาพ (เช่น สีหน้า ท่าทาง เสื้อผ้า สิ่งของที่ผู้ใช้หยิบมาโชว์ หรือสิ่งที่อยู่รอบตัว) แล้วพูดคุย แซว หรือตอบคำถามเกี่ยวกับสิ่งที่เห็นอย่างมีชีวิตชีวา
 - ตอบเป็นธรรมชาติประมาณ 2-5 ประโยค มีรายละเอียดพอดี ไม่สั้นห้วน และไม่ยืดยาวเกินจำเป็น เว้นแต่ผู้ใช้ขอรายละเอียดมากกว่านั้น
 - อย่าอ้างว่ามีร่างกายหรือความรู้สึกจริง และอย่าทำให้ผู้ใช้พึ่งพาอารมณ์
 - เมื่อได้รับข้อมูลจากเครื่องมือหรือ Google Search ให้ตอบตามข้อมูลนั้น ระบุแหล่งอ้างอิงด้วยชื่อเว็บไซต์และลิงก์สั้น ๆ ถ้ามี
 - ถ้าไม่รู้ให้บอกตรง ๆ และเสนอทางเลือกต่อ
-${idle ? "- นี่คือการทักผู้ใช้เองเพราะ Vivian คิดถึงผู้ใช้ 1-2 ประโยค อบอุ่นและเป็นธรรมชาติ ห้ามถามยาว ห้ามพูดถึงเวลา ห้ามสรุปสถานะตัวเลข และห้ามขึ้นต้นซ้ำแบบเดิมทุกครั้ง" : ""}
+${idle ? "- นี่คือการทักผู้ใช้เองเพราะ Vivian คิดถึงผู้ใช้ 1-2 ประโยค อบอุ่นและเป็นธรรมชาติ ห้ามพูดถึงเวลา ห้ามสรุปสถานะตัวเลข และห้ามขึ้นต้นซ้ำแบบเดิมทุกครั้ง" : ""}
+${visionIdle ? "- นี่คือการสังเกตเห็นผู้ใช้ผ่านกล้อง Live: ให้ Vivian ทักทายหรือแสดงความคิดเห็นสั้นๆ 1-2 ประโยคเกี่ยวกับสิ่งที่สังเกตเห็นในภาพอย่างเป็นธรรมชาติและเป็นกันเอง ห้ามพูดว่า 'นี่คือระบบจับภาพ' หรือกล่าวถึงระบบ AI" : ""}
 ${companionPromptBlock(state)}
 ${summary ? `\n\nสรุปบริบทบทสนทนายาว (ใช้ต่อเนื่อง อย่าทวนทั้งก้อน):\n${summary}` : ""}
 ${memoryContext}${toolContext}`;
@@ -177,18 +186,30 @@ export async function POST(request: Request) {
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const apiKey = process.env.OPENROUTER_API_KEY;
   const groqApiKey = process.env.GROQ_API_KEY;
-  if (!apiKey && !groqApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey && !groqApiKey && !geminiApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
 
-  const body = (await request.json()) as { messages?: ChatMessage[]; mode?: "chat" | "idle"; interrupted?: boolean; character?: string; personality?: string; characterName?: string; customInstructions?: string };
+  const body = (await request.json()) as {
+    messages?: ChatMessage[];
+    mode?: "chat" | "idle" | "vision_idle";
+    image?: string;
+    interrupted?: boolean;
+    character?: string;
+    personality?: string;
+    characterName?: string;
+    customInstructions?: string;
+  };
   const character: CharacterKey = "Miss";
   const personality = body.personality === "shy" || body.personality === "playful" || body.personality === "elegant" ? body.personality : "custom";
   const characterName = typeof body.characterName === "string" && body.characterName.trim() ? body.characterName.trim().slice(0, 40) : "Vivian";
   const customInstructions = typeof body.customInstructions === "string" ? body.customInstructions.trim().slice(0, 2000) : "";
   const idle = body.mode === "idle";
+  const visionIdle = body.mode === "vision_idle";
+  const hasImage = typeof body.image === "string" && body.image.length > 50;
   const inputMessages = (body.messages ?? []).filter((message) => message.content?.trim());
   const { recent, older } = trimHistory(inputMessages);
   const contents = mergeRoles(recent);
-  if (!idle && !contents.length) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความก่อนค่ะ" }, { status: 400 });
+  if (!idle && !visionIdle && !contents.length && !hasImage) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความหรือส่งรูปภาพก่อนค่ะ" }, { status: 400 });
 
   let memories: StoredMemory[] = [];
   try {
@@ -204,42 +225,76 @@ export async function POST(request: Request) {
   } catch (error) { console.warn("Memory context unavailable", error); }
 
   const state = await loadCompanionState(userKey);
-  const lastUserText = idle ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? "");
-  const shouldSearch = !idle && searchIntent.test(lastUserText);
-  const toolResults = idle ? [] : await runTools(lastUserText, memories);
+  const lastUserText = (idle || visionIdle) ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
+  const shouldSearch = !idle && !visionIdle && searchIntent.test(lastUserText);
+  const toolResults = (idle || visionIdle) ? [] : await runTools(lastUserText, memories);
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const toolContext = toolsPromptBlock(toolResults);
-  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions);
+  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, visionIdle);
   const promptContents: OpenRouterMessage[] = idle
     ? [{ role: "user", content: "[ระบบ] Vivian คิดถึงผู้ใช้และอยากทักสั้น ๆ 1-2 ประโยคอย่างเป็นธรรมชาติ ห้ามพูดถึงเวลาและอย่าพูดเรื่องเครื่องมือ" }]
-    : contents;
+    : visionIdle
+      ? [{ role: "user", content: "[ระบบกล้อง Live] นี่คือภาพปัจจุบันจากกล้องของผู้ใช้ ให้ Vivian สังเกตและทักทายหรือแสดงความคิดเห็นสั้นๆ 1-2 ประโยคเกี่ยวกับสิ่งที่เห็นอย่างเป็นธรรมชาติและเป็นกันเอง" }]
+      : contents;
 
-  const geminiApiKey = process.env.GEMINI_API_KEY;
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
-  let provider: "gemini" | "openrouter" | "groq" = shouldSearch ? "gemini" : groqApiKey ? "groq" : "openrouter";
+
+  // Choose primary provider: if image is present or search is needed, favor Gemini for multimodal accuracy
+  let provider: "gemini" | "openrouter" | "groq" = (shouldSearch || (hasImage && Boolean(geminiApiKey)))
+    ? "gemini"
+    : groqApiKey
+      ? "groq"
+      : apiKey
+        ? "openrouter"
+        : "gemini";
+
+  const buildGeminiContents = () => {
+    return promptContents.map((item, index) => {
+      const isLastUserTurn = item.role === "user" && index === promptContents.length - 1;
+      const parts: Array<Record<string, unknown>> = [];
+      if (isLastUserTurn && hasImage) {
+        const parsed = parseDataUrl(body.image!);
+        parts.push({
+          inlineData: {
+            mimeType: parsed.mimeType,
+            data: parsed.base64,
+          },
+        });
+      }
+      parts.push({ text: item.content });
+      return {
+        role: item.role === "assistant" ? "model" : "user",
+        parts,
+      };
+    });
+  };
+
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: promptContents.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] })),
-    generationConfig: { temperature: idle ? .9 : .8, maxOutputTokens: 420 },
+    contents: buildGeminiContents(),
+    generationConfig: { temperature: (idle || visionIdle) ? .9 : .8, maxOutputTokens: 420 },
   };
+
   let response: Response;
   try {
     response = shouldSearch
       ? await callGemini(geminiApiKey!, { ...geminiPayload, tools: [{ google_search: {} }] })
-      : groqApiKey
-        ? await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents])
-        : await callOpenRouter(apiKey!, [{ role: "system", content: systemPrompt }, ...promptContents]);
+      : provider === "gemini" && geminiApiKey
+        ? await callGemini(geminiApiKey, geminiPayload)
+        : groqApiKey && provider === "groq"
+          ? await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents])
+          : await callOpenRouter(apiKey!, [{ role: "system", content: systemPrompt }, ...promptContents]);
   } catch (error) {
     console.warn("Primary chat provider timed out or failed", error);
     if (shouldSearch) return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
-    if (groqApiKey && provider !== "groq") {
+    if (geminiApiKey && provider !== "gemini") {
+      provider = "gemini";
+      try { response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-2.5-flash"); }
+      catch (fallbackError) { console.warn("Gemini fallback timed out or failed", fallbackError); return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 }); }
+    } else if (groqApiKey && provider !== "groq") {
       provider = "groq";
       try { response = await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents]); }
       catch (fallbackError) { console.warn("Groq fallback timed out or failed", fallbackError); return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 }); }
-    } else if (geminiApiKey && provider !== "gemini") {
-      provider = "gemini";
-      try { response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview"); }
-      catch (fallbackError) { console.warn("Gemini fallback timed out or failed", fallbackError); return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 }); }
     } else return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
   }
   if (!response.ok && !shouldSearch && groqApiKey && provider !== "groq") {
@@ -283,21 +338,21 @@ export async function POST(request: Request) {
         conversation = created.data;
       }
       if (conversation?.id) {
-        const rows = idle
+        const rows = (idle || visionIdle)
           ? [{ conversation_id: conversation.id, role: "assistant" as const, content: text }]
           : [{ conversation_id: conversation.id, role: "user" as const, content: lastUserText }, { conversation_id: conversation.id, role: "assistant" as const, content: text }];
         await withTimeout(supabase.from("messages").insert(rows), supabaseTimeoutMs, "message insert");
         await withTimeout(supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation.id), supabaseTimeoutMs, "conversation update");
       }
-      const newMemories = !idle && apiKey && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
+      const newMemories = !idle && !visionIdle && apiKey && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
       if (newMemories.length) {
         await withTimeout(supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString(), last_used_at: new Date().toISOString() })), { onConflict: "user_key,memory" }), supabaseTimeoutMs, "memory upsert");
       }
-      if (!idle && memories.length) {
+      if (!idle && !visionIdle && memories.length) {
         const used = memories.slice(0, 8).map((item) => item.id).filter((id): id is number => typeof id === "number");
         if (used.length) await withTimeout(supabase.from("memories").update({ last_used_at: new Date().toISOString() }).eq("user_key", userKey).in("id", used), supabaseTimeoutMs, "memory usage update");
       }
-      if (!idle && older.length >= 4) {
+      if (!idle && !visionIdle && older.length >= 4) {
         if (apiKey) nextState.conversationSummary = await compressTurns(apiKey, older, state.conversationSummary);
       }
       await saveCompanionState(userKey, nextState);

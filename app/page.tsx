@@ -50,6 +50,9 @@ const MIN_SPEECH_MS = 320;
 const IDLE_AFTER_MS = 75_000;
 const IDLE_COOLDOWN_MS = 8 * 60 * 1000;
 const LAST_IDLE_KEY = "vivian-last-idle";
+const VISION_MIN_INTERVAL_MS = 5000;
+const VISION_MAX_INTERVAL_MS = 10000;
+const VISION_COOLDOWN_MS = 6000;
 type SceneMood = Mood | "angry" | "surprised" | "thinking";
 const SCENE_BACKGROUNDS: Record<SceneMood, string> = {
   calm: "/backgrounds/calm.jpg", warm: "/backgrounds/warm.jpg", playful: "/backgrounds/playful.png",
@@ -100,6 +103,15 @@ export default function Home() {
   const interactedRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraActiveRef = useRef(false);
+  const lastVisionTriggerRef = useRef(0);
+  const visionTimerRef = useRef<number | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  cameraActiveRef.current = cameraActive;
   // Keep the first server/client render identical; rotate greetings after the
   // session is hydrated instead of letting Math.random() cause a mismatch.
   const initialGreeting = useRef<Message>({ from: "vivian", text: greetings[0] });
@@ -530,23 +542,31 @@ export default function Home() {
       if (ttsAbortRef.current === abort) ttsAbortRef.current = null;
     }
   }
-  async function sendMessage(overrideText?: string, options: { idle?: boolean } = {}) {
+  async function sendMessage(overrideText?: string, options: { idle?: boolean; visionIdle?: boolean; image?: string } = {}) {
     const idle = Boolean(options.idle);
+    const visionIdle = Boolean(options.visionIdle);
     const text = (overrideText ?? message).trim();
+    let imageToSend = options.image ?? attachedImage;
+    if (!imageToSend && cameraActiveRef.current && !idle && !visionIdle) {
+      imageToSend = captureCurrentFrame();
+    }
     if (sendingRef.current) return;
-    if (!idle && !text) return;
-    if (!idle && await handleExpressionCommand(text)) {
+    if (!idle && !visionIdle && !text && !imageToSend) return;
+    if (!idle && !visionIdle && text && await handleExpressionCommand(text)) {
       setMessage("");
+      setAttachedImage(null);
       markActivity();
       return;
     }
     if (speakingRef.current) stopSpeech();
     markActivity();
-    if (!idle) interactedRef.current = true;
-    const nextMessages = idle ? messagesRef.current : [...messagesRef.current, { from: "me" as const, text }];
-    if (!idle) {
+    if (!idle && !visionIdle) interactedRef.current = true;
+    const displayText = text || (imageToSend ? "📷 [ส่งรูปภาพ]" : "");
+    const nextMessages = (idle || visionIdle) ? messagesRef.current : [...messagesRef.current, { from: "me" as const, text: displayText }];
+    if (!idle && !visionIdle) {
       setMessages(nextMessages);
       setMessage("");
+      setAttachedImage(null);
     }
     setSending(true);
     sendingRef.current = true;
@@ -556,8 +576,9 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         signal: abortAfter(CHAT_TIMEOUT_MS),
         body: JSON.stringify({
-          mode: idle ? "idle" : "chat",
+          mode: visionIdle ? "vision_idle" : idle ? "idle" : "chat",
           messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
+          image: imageToSend ?? undefined,
           character: selectedModel,
           customInstructions,
         }),
@@ -575,11 +596,11 @@ export default function Home() {
       if (data.memories?.length) setMemories(data.memories.filter((item: Memory) => typeof item.id === "number"));
       setSending(false);
       sendingRef.current = false;
-      void playReaction(reply, text, idle);
+      void playReaction(reply, text, idle || visionIdle);
     } catch (error) {
       console.error("Vivian response unavailable", error);
       resetReaction();
-      if (!idle) {
+      if (!idle && !visionIdle) {
         const message = error instanceof Error && error.message.includes("RATE_LIMITED") ? "ส่งถี่เกินไปค่ะ รอสักครู่นะคะ" : "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ";
         setErrorNotice(message);
         setMessages((current) => [...current, { from: "vivian", text: message }]);
@@ -819,11 +840,144 @@ export default function Home() {
       void startRecording();
     }
   }
+
+  function captureCurrentFrame(): string | null {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || !video.videoWidth) return null;
+    const canvas = document.createElement("canvas");
+    const maxDim = 640;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+    if (width > maxDim || height > maxDim) {
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.72);
+  }
+
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false,
+      });
+      videoStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setCameraActive(true);
+      cameraActiveRef.current = true;
+      lastVisionTriggerRef.current = Date.now();
+    } catch (err) {
+      console.error("Camera access failed", err);
+      setErrorNotice("ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตการเข้าถึงกล้องนะคะ");
+    }
+  }
+
+  function stopCamera() {
+    videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+    videoStreamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+    cameraActiveRef.current = false;
+    if (visionTimerRef.current) window.clearTimeout(visionTimerRef.current);
+    visionTimerRef.current = null;
+  }
+
+  async function toggleCamera() {
+    if (cameraActive) {
+      stopCamera();
+    } else {
+      await startCamera();
+    }
+  }
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setErrorNotice("กรุณาเลือกไฟล์รูปภาพนะคะ");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setAttachedImage(base64);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  useEffect(() => {
+    if (!cameraActive) {
+      if (visionTimerRef.current) window.clearTimeout(visionTimerRef.current);
+      visionTimerRef.current = null;
+      return;
+    }
+    let isMounted = true;
+    function scheduleNextCapture() {
+      const delay = Math.floor(Math.random() * (VISION_MAX_INTERVAL_MS - VISION_MIN_INTERVAL_MS + 1)) + VISION_MIN_INTERVAL_MS;
+      visionTimerRef.current = window.setTimeout(async () => {
+        if (!isMounted || !cameraActiveRef.current) return;
+        const now = Date.now();
+        const timeSinceLast = now - lastVisionTriggerRef.current;
+        if (
+          timeSinceLast >= VISION_COOLDOWN_MS &&
+          !sendingRef.current &&
+          !speakingRef.current &&
+          !recordingRef.current &&
+          !message.trim()
+        ) {
+          const frame = captureCurrentFrame();
+          if (frame) {
+            lastVisionTriggerRef.current = Date.now();
+            await sendMessage("", { visionIdle: true, image: frame });
+          }
+        }
+        if (isMounted && cameraActiveRef.current) {
+          scheduleNextCapture();
+        }
+      }, delay);
+    }
+    scheduleNextCapture();
+    return () => {
+      isMounted = false;
+      if (visionTimerRef.current) window.clearTimeout(visionTimerRef.current);
+      visionTimerRef.current = null;
+    };
+  }, [cameraActive, message]);
+
   return <main className="companion-shell">
     <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
       <div className="scene-background" key={sceneMood} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
+      {cameraActive && (
+        <div className="camera-pip" aria-label="Live Camera Vision">
+          <div className="camera-pip-header">
+            <div className="live-badge">
+              <span className="live-dot" aria-hidden="true" />
+              <span>LIVE VISION</span>
+            </div>
+            <button type="button" onClick={stopCamera} aria-label="ปิดกล้อง">×</button>
+          </div>
+          <video ref={videoRef} autoPlay playsInline muted className="camera-video-feed" />
+        </div>
+      )}
+      {!cameraActive && <video ref={videoRef} autoPlay playsInline muted style={{ display: "none" }} />}
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
@@ -832,12 +986,20 @@ export default function Home() {
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="memory"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
+      {attachedImage && (
+        <div className="attachment-preview" aria-label="รูปภาพที่แนบ">
+          <img src={attachedImage} alt="Attachment preview" />
+          <span>แนบรูปภาพแล้ว</span>
+          <button type="button" onClick={() => setAttachedImage(null)} aria-label="ลบรูปภาพ">×</button>
+        </div>
+      )}
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
         <button className={`circle-control ${recording ? "is-recording" : "is-muted"}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Microphone muted, click to unmute"}><Icon name={recording ? "mic" : "micOff"}/></button>
-        <button className="circle-control is-disabled" type="button" disabled aria-label="กล้องจะมาในภายหลัง"><Icon name="video"/></button>
-        <button className="circle-control is-disabled" type="button" disabled aria-label="ไฟล์แนบจะมาในภายหลัง"><Icon name="clip"/></button>
-        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
-        <button className="send-text" type="submit" disabled={sending || !message.trim()} aria-label="ส่งข้อความ"><Icon name="send" size={22}/></button>
+        <button className={`circle-control ${cameraActive ? "is-active is-camera-active" : ""}`} type="button" onClick={toggleCamera} aria-pressed={cameraActive} aria-label={cameraActive ? "ปิดกล้อง Live" : "เปิดกล้อง Live"}><Icon name="video"/></button>
+        <button className={`circle-control ${attachedImage ? "is-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()} aria-label="แนบรูปภาพ"><Icon name="clip"/></button>
+        <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} tabIndex={-1} />
+        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : cameraActive ? "กล้อง Live กำลังทำงาน... พิมพ์คุยได้" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
+        <button className="send-text" type="submit" disabled={sending || (!message.trim() && !attachedImage)} aria-label="ส่งข้อความ"><Icon name="send" size={22}/></button>
         <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>
       </form>
     </section>
