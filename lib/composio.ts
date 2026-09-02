@@ -44,6 +44,9 @@ function getApiKey(): string | undefined {
 const toolkitCache = new Map<string, { timestamp: number; tools: ComposioTool[] }>();
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
+let connectedAccountsCache: { timestamp: number; accounts: ComposioConnectedAccount[] } | null = null;
+const ACCOUNTS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
  * Fetch connected accounts for this API key.
  */
@@ -51,17 +54,24 @@ export async function getComposioConnectedAccounts(): Promise<ComposioConnectedA
   const apiKey = getApiKey();
   if (!apiKey) return [];
 
+  const now = Date.now();
+  if (connectedAccountsCache && (now - connectedAccountsCache.timestamp < ACCOUNTS_CACHE_TTL_MS)) {
+    return connectedAccountsCache.accounts;
+  }
+
   try {
     const res = await fetch(`${COMPOSIO_BASE}/connected_accounts`, {
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(1500),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return connectedAccountsCache?.accounts ?? [];
     const data = await res.json() as { items?: ComposioConnectedAccount[] };
-    return data.items ?? [];
+    const accounts = data.items ?? [];
+    connectedAccountsCache = { timestamp: now, accounts };
+    return accounts;
   } catch (err) {
     console.warn("Composio connected_accounts check error", err);
-    return [];
+    return connectedAccountsCache?.accounts ?? [];
   }
 }
 
@@ -188,7 +198,7 @@ export async function getComposioTools(toolkitsOrSearch?: string | string[], use
 
         const res = await fetch(`${COMPOSIO_BASE}/tools?toolkit_slug=${encodeURIComponent(tk)}&limit=60`, {
           headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(2000),
         });
 
         if (res.ok) {
@@ -211,7 +221,7 @@ export async function getComposioTools(toolkitsOrSearch?: string | string[], use
     } else {
       const res = await fetch(`${COMPOSIO_BASE}/tools?limit=30`, {
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(2000),
       });
       if (res.ok) {
         const data = await res.json() as { items?: Array<{ slug: string; name: string; description: string; toolkit?: { slug: string; name: string }; input_parameters?: { properties?: Record<string, unknown>; required?: string[] } }> };
@@ -256,7 +266,7 @@ export async function getOrCreateConnectLink(toolkitSlug: string, userId = "defa
     let authConfigId: string | null = null;
     const authRes = await fetch(`${COMPOSIO_BASE}/auth_configs?toolkit_slug=${encodeURIComponent(normalizedSlug)}`, {
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(2000),
     });
 
     if (authRes.ok) {
@@ -271,7 +281,7 @@ export async function getOrCreateConnectLink(toolkitSlug: string, userId = "defa
       const createRes = await fetch(`${COMPOSIO_BASE}/auth_configs`, {
         method: "POST",
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(2000),
         body: JSON.stringify({
           toolkit: { slug: normalizedSlug },
           auth_scheme: "OAUTH2",
@@ -290,7 +300,7 @@ export async function getOrCreateConnectLink(toolkitSlug: string, userId = "defa
     const linkRes = await fetch(`${COMPOSIO_BASE}/connected_accounts/link`, {
       method: "POST",
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(2500),
       body: JSON.stringify({
         auth_config_id: authConfigId,
         user_id: userId,
@@ -321,7 +331,7 @@ export async function executeComposioTool(toolCall: ComposioToolCall, userId = "
     const res = await fetch(`${COMPOSIO_V31_BASE}/tools/execute/${encodeURIComponent(toolCall.slug)}`, {
       method: "POST",
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         arguments: toolCall.arguments,
         version: "latest",
