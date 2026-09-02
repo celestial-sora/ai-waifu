@@ -601,6 +601,7 @@ export default function Home() {
       setSending(false);
       sendingRef.current = false;
       void playReaction(reply, text, idle || visionIdle);
+      void loadMemory();
     } catch (error) {
       console.error("Vivian response unavailable", error);
       resetReaction();
