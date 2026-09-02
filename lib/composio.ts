@@ -62,67 +62,110 @@ export async function getComposioConnectedAccounts(): Promise<ComposioConnectedA
 }
 
 /**
- * Extract service keywords to search relevant Composio tools.
+ * Detect toolkit slugs from user message.
  */
-export function extractToolKeywords(userText: string): string | undefined {
+export function detectToolkits(userText: string): string[] {
   const lower = userText.toLowerCase();
-  if (lower.includes("discord")) return "discord";
-  if (lower.includes("github") || lower.includes("issue") || lower.includes("repo") || lower.includes("commit")) return "github";
-  if (lower.includes("spotify") || lower.includes("เพลง") || lower.includes("song") || lower.includes("music")) return "spotify";
-  if (lower.includes("calendar") || lower.includes("ปฏิทิน") || lower.includes("นัด") || lower.includes("meeting")) return "googlecalendar";
-  if (lower.includes("mail") || lower.includes("email") || lower.includes("อีเมล") || lower.includes("จดหมาย")) return "gmail";
-  if (lower.includes("notion") || lower.includes("โน้ต")) return "notion";
-  if (lower.includes("slack")) return "slack";
-  if (lower.includes("tweet") || lower.includes("twitter")) return "twitter";
-  if (lower.includes("youtube") || lower.includes("คลิป") || lower.includes("วิดีโอ")) return "youtube";
-  return undefined;
+  const matched = new Set<string>();
+
+  if (lower.includes("youtube") || lower.includes("ยูทูป") || lower.includes("คลิป") || lower.includes("วิดีโอ") || lower.includes("video")) {
+    matched.add("youtube");
+  }
+  if (lower.includes("discord") || lower.includes("ดิสคอร์ด") || lower.includes("ดิส")) {
+    matched.add("discord");
+    matched.add("discordbot");
+  }
+  if (lower.includes("spotify") || lower.includes("สปอติฟาย") || lower.includes("เพลง") || lower.includes("song") || lower.includes("music")) {
+    matched.add("spotify");
+  }
+  if (lower.includes("github") || lower.includes("กิตฮับ") || lower.includes("issue") || lower.includes("repo") || lower.includes("commit") || lower.includes("pull request") || lower.includes("pr")) {
+    matched.add("github");
+  }
+  if (lower.includes("calendar") || lower.includes("ปฏิทิน") || lower.includes("นัด") || lower.includes("meeting") || lower.includes("event")) {
+    matched.add("googlecalendar");
+  }
+  if (lower.includes("mail") || lower.includes("email") || lower.includes("อีเมล") || lower.includes("เมล") || lower.includes("gmail")) {
+    matched.add("gmail");
+  }
+  if (lower.includes("notion") || lower.includes("โน้ต") || lower.includes("บันทึก")) {
+    matched.add("notion");
+  }
+  if (lower.includes("slack") || lower.includes("สแล็ค")) {
+    matched.add("slack");
+  }
+  if (lower.includes("tweet") || lower.includes("twitter") || lower.includes("ทวิต")) {
+    matched.add("twitter");
+  }
+
+  return Array.from(matched);
 }
 
 /**
- * Fetch tools from Composio v3 (optionally filtered by search keyword).
+ * Fetch tools from Composio v3 by toolkit slugs or limit.
  * Returns an empty array if COMPOSIO_API_KEY is not set or request fails.
  */
-export async function getComposioTools(search?: string, limit = 8): Promise<ComposioTool[]> {
+export async function getComposioTools(toolkitsOrSearch?: string | string[], limit = 8): Promise<ComposioTool[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
 
-  try {
-    const query = search ? `&search=${encodeURIComponent(search)}` : "";
-    const res = await fetch(`${COMPOSIO_BASE}/tools?limit=${limit}${query}`, {
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) {
-      console.warn(`Composio tools list returned ${res.status}`);
-      return [];
-    }
-    const data = await res.json() as {
-      items?: Array<{
-        slug: string;
-        name: string;
-        description: string;
-        toolkit?: { slug: string; name: string };
-        input_parameters?: {
-          properties?: Record<string, unknown>;
-          required?: string[];
-        };
-      }>;
-    };
+  const toolkits = Array.isArray(toolkitsOrSearch)
+    ? toolkitsOrSearch
+    : typeof toolkitsOrSearch === "string"
+      ? [toolkitsOrSearch]
+      : [];
 
-    return (data.items ?? []).map((item) => ({
-      slug: item.slug,
-      name: item.name,
-      description: item.description ?? item.name,
-      toolkitSlug: item.toolkit?.slug,
-      parameters: {
-        type: "object" as const,
-        properties: (item.input_parameters?.properties ?? {}) as ComposioTool["parameters"]["properties"],
-        required: item.input_parameters?.required ?? [],
-      },
-    }));
+  const allTools: ComposioTool[] = [];
+
+  try {
+    if (toolkits.length > 0) {
+      for (const tk of toolkits.slice(0, 3)) {
+        const res = await fetch(`${COMPOSIO_BASE}/tools?toolkit_slug=${encodeURIComponent(tk)}&limit=${limit}`, {
+          headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(4000),
+        });
+        if (res.ok) {
+          const data = await res.json() as { items?: Array<{ slug: string; name: string; description: string; toolkit?: { slug: string; name: string }; input_parameters?: { properties?: Record<string, unknown>; required?: string[] } }> };
+          for (const item of data.items ?? []) {
+            allTools.push({
+              slug: item.slug,
+              name: item.name,
+              description: item.description ?? item.name,
+              toolkitSlug: item.toolkit?.slug,
+              parameters: {
+                type: "object" as const,
+                properties: (item.input_parameters?.properties ?? {}) as ComposioTool["parameters"]["properties"],
+                required: item.input_parameters?.required ?? [],
+              },
+            });
+          }
+        }
+      }
+    } else {
+      const res = await fetch(`${COMPOSIO_BASE}/tools?limit=${limit}`, {
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const data = await res.json() as { items?: Array<{ slug: string; name: string; description: string; toolkit?: { slug: string; name: string }; input_parameters?: { properties?: Record<string, unknown>; required?: string[] } }> };
+        for (const item of data.items ?? []) {
+          allTools.push({
+            slug: item.slug,
+            name: item.name,
+            description: item.description ?? item.name,
+            toolkitSlug: item.toolkit?.slug,
+            parameters: {
+              type: "object" as const,
+              properties: (item.input_parameters?.properties ?? {}) as ComposioTool["parameters"]["properties"],
+              required: item.input_parameters?.required ?? [],
+            },
+          });
+        }
+      }
+    }
+    return allTools;
   } catch (err) {
     console.warn("Composio getTools error", err);
-    return [];
+    return allTools;
   }
 }
 
