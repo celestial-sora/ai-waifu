@@ -29,8 +29,8 @@ const geminiPrimaryModel = () => {
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
 const recentTurnLimit = 12;
 const recentCharLimit = 4500;
-const providerTimeoutMs = 25000;
-const supabaseTimeoutMs = 4000;
+const providerTimeoutMs = 9000;
+const supabaseTimeoutMs = 2000;
 
 async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string) {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -240,26 +240,40 @@ export async function POST(request: Request) {
   const contents = mergeRoles(recent);
   if (!idle && !visionIdle && !contents.length && !hasImage) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความหรือส่งรูปภาพก่อนค่ะ" }, { status: 400 });
 
-  let memories: StoredMemory[] = [];
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance,updated_at,last_used_at,use_count").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(30), supabaseTimeoutMs, "memory load");
-    memories = (data ?? []).sort((a, b) => {
-      const score = (item: typeof a) => {
-        const ageDays = Math.max(0, (Date.now() - new Date(item.last_used_at ?? item.updated_at ?? Date.now()).getTime()) / 86_400_000);
-        return Number(item.importance ?? 3) * (1 / (1 + ageDays / 45)) + Math.min(1, Number(item.use_count ?? 0) / 10);
-      };
-      return score(b) - score(a);
-    });
-  } catch (error) { console.warn("Memory context unavailable", error); }
-
-  const state = await loadCompanionState(userKey);
   const lastUserText = (idle || visionIdle) ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
   const shouldSearch = !idle && !visionIdle && searchIntent.test(lastUserText);
-  const toolResults = (idle || visionIdle) ? [] : await runTools(lastUserText, memories);
-  const composioAccounts: ComposioConnectedAccount[] = (!idle && !visionIdle) ? await getComposioConnectedAccounts().catch(() => []) : [];
   const composioToolkits = (!idle && !visionIdle) ? detectToolkits(lastUserText) : [];
-  const composioTools = composioToolkits.length > 0 ? await getComposioTools(composioToolkits, lastUserText, 10).catch(() => []) : [];
+
+  // Run independent pre-flight tasks concurrently in Promise.all to save critical seconds
+  const [memoriesRes, state, toolResults, composioAccounts, composioTools] = await Promise.all([
+    // 1. Memories
+    (async () => {
+      try {
+        const supabase = getSupabaseAdmin();
+        const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance,updated_at,last_used_at,use_count").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(30), supabaseTimeoutMs, "memory load");
+        return (data ?? []).sort((a: StoredMemory, b: StoredMemory) => {
+          const score = (item: typeof a) => {
+            const ageDays = Math.max(0, (Date.now() - new Date((item as any).last_used_at ?? (item as any).updated_at ?? Date.now()).getTime()) / 86_400_000);
+            return Number(item.importance ?? 3) * (1 / (1 + ageDays / 45)) + Math.min(1, Number((item as any).use_count ?? 0) / 10);
+          };
+          return score(b) - score(a);
+        });
+      } catch (error) {
+        console.warn("Memory context unavailable", error);
+        return [];
+      }
+    })(),
+    // 2. Companion state
+    loadCompanionState(userKey),
+    // 3. Local tools (weather / search)
+    (idle || visionIdle) ? Promise.resolve([]) : runTools(lastUserText, []),
+    // 4. Composio connected accounts
+    (!idle && !visionIdle) ? getComposioConnectedAccounts().catch(() => []) : Promise.resolve([]),
+    // 5. Composio tools
+    composioToolkits.length > 0 ? getComposioTools(composioToolkits, lastUserText, 10).catch(() => []) : Promise.resolve([]),
+  ]);
+
+  const memories = memoriesRes;
   const composioFunctions = composioTools.length ? composioToolsToFunctions(composioTools) : undefined;
 
   const composioContext = composioAccounts.length
