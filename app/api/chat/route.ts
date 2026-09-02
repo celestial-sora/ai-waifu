@@ -30,7 +30,7 @@ const geminiPrimaryModel = () => {
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
 const recentTurnLimit = 12;
 const recentCharLimit = 4500;
-const providerTimeoutMs = 9000;
+const providerTimeoutMs = 30000;
 const visionTimeoutMs = 20000; // Vision requests need more time to upload base64 image
 const supabaseTimeoutMs = 2000;
 
@@ -62,7 +62,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], option
       model: selectedModel,
       messages,
       temperature: options.json ? 0 : 0.8,
-      ...(!options.json ? { max_tokens: 420 } : {}),
+      ...(!options.json ? { max_tokens: 2500 } : {}),
       ...(options.json ? { max_tokens: 280, response_format: { type: "json_object" } } : {}),
     }),
   });
@@ -78,7 +78,7 @@ async function callGroq(
     model,
     messages,
     temperature: 0.8,
-    max_tokens: 420,
+    max_tokens: 2500,
   };
   if (options.tools && options.tools.length > 0) {
     payload.tools = options.tools;
@@ -330,7 +330,7 @@ export async function POST(request: Request) {
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: buildGeminiContents(),
-    generationConfig: { temperature: (idle || visionIdle) ? .9 : .8, maxOutputTokens: 420 },
+    generationConfig: { temperature: (idle || visionIdle) ? .9 : .8, maxOutputTokens: 2500 },
   };
 
   const openRouterMessages: OpenRouterTurn[] = [
