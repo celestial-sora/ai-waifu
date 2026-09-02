@@ -200,6 +200,7 @@ ${customInstructions ? `\nคำแนะนำเพิ่มเติมจา
 - เมื่อมีรูปภาพหรือภาพจากกล้อง Live เข้ามา ให้สังเกตรายละเอียดในภาพ (เช่น สีหน้า ท่าทาง เสื้อผ้า สิ่งของที่ผู้ใช้หยิบมาโชว์ หรือสิ่งที่อยู่รอบตัว) แล้วพูดคุย แซว หรือตอบคำถามเกี่ยวกับสิ่งที่เห็นอย่างมีชีวิตชีวา
 - ตอบเป็นธรรมชาติประมาณ 2-5 ประโยค มีรายละเอียดพอดี ไม่สั้นห้วน และไม่ยืดยาวเกินจำเป็น เว้นแต่ผู้ใช้ขอรายละเอียดมากกว่านั้น
 - อย่าอ้างว่ามีร่างกายหรือความรู้สึกจริง และอย่าทำให้ผู้ใช้พึ่งพาอารมณ์
+- Vivian มีเครื่องมือเชื่อมต่อกับแอปพลิเคชันภายนอก (เช่น Discord, YouTube, Spotify, GitHub, Google Calendar, Gmail, Notion): เมื่อผู้ใช้สั่งให้ส่งข้อความ ค้นหาวิดีโอ ดึงข้อมูลผู้ใช้ เปิดเพลง หรือทำงานกับแอป ให้เรียกใช้ Tool ที่มีให้เสมอ อย่าปฏิเสธว่าทำไม่ได้ หาก Tool ทำงานเสร็จให้นำผลลัพธ์มาตอบอย่างเป็นธรรมชาติ หรือหาก Tool รายงานว่ายังไม่ได้ต่อบัญชีให้บอกผู้ใช้ตรง ๆ
 - เมื่อได้รับข้อมูลจากเครื่องมือหรือ Google Search ให้ตอบตามข้อมูลนั้น ระบุแหล่งอ้างอิงด้วยชื่อเว็บไซต์และลิงก์สั้น ๆ ถ้ามี
 - ถ้าไม่รู้ให้บอกตรง ๆ และเสนอทางเลือกต่อ
 ${idle ? "- นี่คือการทักผู้ใช้เองเพราะ Vivian คิดถึงผู้ใช้ 1-2 ประโยค อบอุ่นและเป็นธรรมชาติ ห้ามพูดถึงเวลา ห้ามสรุปสถานะตัวเลข และห้ามขึ้นต้นซ้ำแบบเดิมทุกครั้ง" : ""}
@@ -258,7 +259,7 @@ export async function POST(request: Request) {
   const toolResults = (idle || visionIdle) ? [] : await runTools(lastUserText, memories);
   const composioAccounts: ComposioConnectedAccount[] = (!idle && !visionIdle) ? await getComposioConnectedAccounts().catch(() => []) : [];
   const composioToolkits = (!idle && !visionIdle) ? detectToolkits(lastUserText) : [];
-  const composioTools = composioToolkits.length > 0 ? await getComposioTools(composioToolkits, 6).catch(() => []) : [];
+  const composioTools = composioToolkits.length > 0 ? await getComposioTools(composioToolkits, lastUserText, 10).catch(() => []) : [];
   const composioFunctions = composioTools.length ? composioToolsToFunctions(composioTools) : undefined;
 
   const composioContext = composioAccounts.length
