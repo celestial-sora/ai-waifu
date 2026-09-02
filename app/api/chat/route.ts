@@ -17,7 +17,7 @@ type OpenRouterTurn = {
 export const maxDuration = 60;
 
 const userKey = "default";
-const modelName = () => process.env.OPENROUTER_MODEL ?? "google/gemma-4-31b-it:free";
+const modelName = () => process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.2-11b-vision-instruct:free";
 const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const groqVisionModel = () => process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
 const geminiPrimaryModel = () => {
@@ -43,7 +43,8 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string
   }
 }
 
-async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], options: { json?: boolean } = {}) {
+async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], options: { json?: boolean; model?: string } = {}) {
+  const selectedModel = options.model ?? modelName();
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -54,7 +55,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], option
     },
     signal: AbortSignal.timeout(providerTimeoutMs),
     body: JSON.stringify({
-      model: modelName(),
+      model: selectedModel,
       messages,
       temperature: options.json ? 0 : 0.8,
       ...(!options.json ? { max_tokens: 420 } : {}),
@@ -307,6 +308,21 @@ export async function POST(request: Request) {
     }),
   ];
 
+  const groqMessages: OpenRouterTurn[] = hasImage
+    ? [
+        {
+          role: "user" as const,
+          content: [
+            { type: "text" as const, text: `${systemPrompt}\n\n[ข้อความของผู้ใช้]: ${lastUserText || "ช่วยดูภาพนี้ให้หน่อยค่ะ"}` },
+            { type: "image_url" as const, image_url: { url: body.image! } },
+          ],
+        },
+      ]
+    : [
+        { role: "system" as const, content: systemPrompt },
+        ...promptContents,
+      ];
+
   let response: Response | undefined;
 
   // 1. Try Gemini if search or image or primary
@@ -334,18 +350,17 @@ export async function POST(request: Request) {
     }
   }
 
-  // 2. Try Groq (handles text with GPT-OSS-120B and vision with llama-3.2-11b-vision-preview)
+  // 2. Try Groq (handles text with GPT-OSS-120B and vision with llama-3.2-11b-vision-preview without system role)
   if ((!response || !response.ok) && groqApiKey && !shouldSearch) {
     const modelToUse = hasImage ? groqVisionModel() : groqModelName();
     try {
-      response = await callGroq(groqApiKey, openRouterMessages, modelToUse);
+      response = await callGroq(groqApiKey, groqMessages, modelToUse);
       if (response.ok) {
         provider = "groq";
       } else {
         console.warn(`Groq (${modelToUse}) returned ${response.status}`);
-        // If 11b vision preview failed on Groq, try 90b vision preview
         if (hasImage && modelToUse !== "llama-3.2-90b-vision-preview") {
-          const fallbackGroq = await callGroq(groqApiKey, openRouterMessages, "llama-3.2-90b-vision-preview");
+          const fallbackGroq = await callGroq(groqApiKey, groqMessages, "llama-3.2-90b-vision-preview");
           if (fallbackGroq.ok) {
             response = fallbackGroq;
             provider = "groq";
@@ -357,17 +372,28 @@ export async function POST(request: Request) {
     }
   }
 
-  // 3. Try OpenRouter (handles both text and multimodal image_url)
+  // 3. Try OpenRouter (handles both text and multimodal image_url with multiple fallback models)
   if ((!response || !response.ok) && apiKey && !shouldSearch) {
-    try {
-      response = await callOpenRouter(apiKey, openRouterMessages);
-      if (response.ok) {
-        provider = "openrouter";
-      } else {
-        console.warn(`OpenRouter returned ${response.status}`);
+    const openRouterCandidates = Array.from(new Set([
+      modelName(),
+      "meta-llama/llama-3.2-11b-vision-instruct:free",
+      "google/gemini-2.0-flash-exp:free",
+      "qwen/qwen-2.5-vl-72b-instruct:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "google/gemma-4-31b-it:free",
+    ]));
+
+    for (const orModel of openRouterCandidates) {
+      try {
+        response = await callOpenRouter(apiKey, openRouterMessages, { model: orModel });
+        if (response.ok) {
+          provider = "openrouter";
+          break;
+        }
+        console.warn(`OpenRouter (${orModel}) returned ${response.status}`);
+      } catch (err) {
+        console.warn(`OpenRouter (${orModel}) network error`, err);
       }
-    } catch (err) {
-      console.warn("OpenRouter call error", err);
     }
   }
 
