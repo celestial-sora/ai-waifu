@@ -9,12 +9,21 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 type CharacterKey = "Miss";
 type StoredMemory = { id?: number; memory: string; category: string; importance: number };
 type OpenRouterMessage = { role: "system" | "user" | "assistant"; content: string };
+type OpenRouterTurn = {
+  role: "system" | "user" | "assistant";
+  content: string | Array<{ type: "text" | "image_url"; text?: string; image_url?: { url: string } }>;
+};
 
 export const maxDuration = 60;
 
 const userKey = "default";
 const modelName = () => process.env.OPENROUTER_MODEL ?? "google/gemma-4-31b-it:free";
 const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
+const geminiPrimaryModel = () => {
+  const custom = process.env.GEMINI_MODEL;
+  if (custom && custom !== "gemini-2.5-flash" && custom !== "gemini-3-flash-preview") return custom;
+  return "gemini-2.0-flash";
+};
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
 const recentTurnLimit = 12;
 const recentCharLimit = 4500;
@@ -33,7 +42,7 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string
   }
 }
 
-async function callOpenRouter(apiKey: string, messages: OpenRouterMessage[], options: { json?: boolean } = {}) {
+async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], options: { json?: boolean } = {}) {
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -62,7 +71,7 @@ async function callGroq(apiKey: string, messages: OpenRouterMessage[]) {
   });
 }
 
-async function callGemini(apiKey: string, payload: Record<string, unknown>, model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash") {
+async function callGemini(apiKey: string, payload: Record<string, unknown>, model = geminiPrimaryModel()) {
   return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -275,43 +284,75 @@ export async function POST(request: Request) {
     generationConfig: { temperature: (idle || visionIdle) ? .9 : .8, maxOutputTokens: 420 },
   };
 
-  let response: Response;
-  try {
-    response = shouldSearch
-      ? await callGemini(geminiApiKey!, { ...geminiPayload, tools: [{ google_search: {} }] })
-      : provider === "gemini" && geminiApiKey
-        ? await callGemini(geminiApiKey, geminiPayload)
-        : groqApiKey && provider === "groq"
-          ? await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents])
-          : await callOpenRouter(apiKey!, [{ role: "system", content: systemPrompt }, ...promptContents]);
-  } catch (error) {
-    console.warn("Primary chat provider timed out or failed", error);
-    if (shouldSearch) return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
-    if (geminiApiKey && provider !== "gemini") {
-      provider = "gemini";
-      try { response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-2.5-flash"); }
-      catch (fallbackError) { console.warn("Gemini fallback timed out or failed", fallbackError); return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 }); }
-    } else if (groqApiKey && provider !== "groq") {
-      provider = "groq";
-      try { response = await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents]); }
-      catch (fallbackError) { console.warn("Groq fallback timed out or failed", fallbackError); return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 }); }
-    } else return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
-  }
-  if (!response.ok && !shouldSearch && groqApiKey && provider !== "groq") {
-    provider = "groq";
-    try { response = await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents]); }
-    catch (error) { console.warn("Groq fallback timed out or failed", error); }
-  }
-  if (!response.ok && !shouldSearch && geminiApiKey && provider !== "gemini") {
-    provider = "gemini";
+  const openRouterMessages: OpenRouterTurn[] = [
+    { role: "system", content: systemPrompt },
+    ...promptContents.map((item, index) => {
+      const isLastUserTurn = item.role === "user" && index === promptContents.length - 1;
+      if (isLastUserTurn && hasImage) {
+        return {
+          role: "user" as const,
+          content: [
+            { type: "text" as const, text: item.content || "ช่วยดูภาพนี้ให้หน่อยค่ะ" },
+            { type: "image_url" as const, image_url: { url: body.image! } },
+          ],
+        };
+      }
+      return item;
+    }),
+  ];
+
+  let response: Response | undefined;
+
+  // 1. Try Gemini if search or image or primary
+  if (provider === "gemini" && geminiApiKey) {
     try {
-      response = await callGemini(geminiApiKey, geminiPayload, process.env.GEMINI_FALLBACK_MODEL ?? "gemini-3-flash-preview");
-    } catch (error) {
-      console.warn("Gemini fallback timed out or failed", error);
-      return NextResponse.json({ error: "ผู้ให้บริการตอบช้าเกินไป ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
+      response = shouldSearch
+        ? await callGemini(geminiApiKey, { ...geminiPayload, tools: [{ google_search: {} }] })
+        : await callGemini(geminiApiKey, geminiPayload, geminiPrimaryModel());
+      if (!response.ok) {
+        console.warn(`Gemini primary model returned ${response.status}, trying fallback gemini-1.5-flash`);
+        response = await callGemini(geminiApiKey, geminiPayload, "gemini-1.5-flash");
+      }
+    } catch (err) {
+      console.warn("Gemini call error", err);
     }
   }
-  if (!response.ok) return NextResponse.json({ error: `${provider} request failed`, detail: await response.text() }, { status: response.status });
+
+  // 2. Try Groq (if text-only conversation and Groq key is present)
+  if ((!response || !response.ok) && groqApiKey && !hasImage && !shouldSearch) {
+    provider = "groq";
+    try {
+      response = await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents]);
+    } catch (err) {
+      console.warn("Groq call error", err);
+    }
+  }
+
+  // 3. Try OpenRouter (handles both text and multimodal image_url)
+  if ((!response || !response.ok) && apiKey && !shouldSearch) {
+    provider = "openrouter";
+    try {
+      response = await callOpenRouter(apiKey, openRouterMessages);
+    } catch (err) {
+      console.warn("OpenRouter call error", err);
+    }
+  }
+
+  // 4. Final Gemini fallback if not already tried
+  if ((!response || !response.ok) && geminiApiKey && provider !== "gemini") {
+    provider = "gemini";
+    try {
+      response = await callGemini(geminiApiKey, geminiPayload, "gemini-1.5-flash");
+    } catch (err) {
+      console.warn("Gemini final fallback error", err);
+    }
+  }
+
+  if (!response || !response.ok) {
+    const errorDetail = response ? await response.text().catch(() => "") : "All providers unreachable";
+    console.error("All chat providers failed", { status: response?.status, errorDetail });
+    return NextResponse.json({ error: "ผู้ให้บริการตอบช้าหรือไม่พร้อมใช้งาน ลองใหม่อีกครั้งนะคะ", detail: errorDetail }, { status: response?.status || 504 });
+  }
   const data = await response.json();
   const message = data.choices?.[0]?.message;
   const candidate = data.candidates?.[0];

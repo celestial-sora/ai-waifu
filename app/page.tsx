@@ -927,8 +927,37 @@ export default function Home() {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      const base64 = reader.result as string;
-      setAttachedImage(base64);
+      const rawData = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", 0.75);
+          setAttachedImage(compressed);
+        } else {
+          setAttachedImage(rawData);
+        }
+      };
+      img.onerror = () => {
+        setAttachedImage(rawData);
+      };
+      img.src = rawData;
     };
     reader.readAsDataURL(file);
     e.target.value = "";
