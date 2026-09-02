@@ -62,15 +62,33 @@ export async function getComposioConnectedAccounts(): Promise<ComposioConnectedA
 }
 
 /**
- * Fetch tools from Composio v3.
+ * Extract service keywords to search relevant Composio tools.
+ */
+export function extractToolKeywords(userText: string): string | undefined {
+  const lower = userText.toLowerCase();
+  if (lower.includes("discord")) return "discord";
+  if (lower.includes("github") || lower.includes("issue") || lower.includes("repo") || lower.includes("commit")) return "github";
+  if (lower.includes("spotify") || lower.includes("เพลง") || lower.includes("song") || lower.includes("music")) return "spotify";
+  if (lower.includes("calendar") || lower.includes("ปฏิทิน") || lower.includes("นัด") || lower.includes("meeting")) return "googlecalendar";
+  if (lower.includes("mail") || lower.includes("email") || lower.includes("อีเมล") || lower.includes("จดหมาย")) return "gmail";
+  if (lower.includes("notion") || lower.includes("โน้ต")) return "notion";
+  if (lower.includes("slack")) return "slack";
+  if (lower.includes("tweet") || lower.includes("twitter")) return "twitter";
+  if (lower.includes("youtube") || lower.includes("คลิป") || lower.includes("วิดีโอ")) return "youtube";
+  return undefined;
+}
+
+/**
+ * Fetch tools from Composio v3 (optionally filtered by search keyword).
  * Returns an empty array if COMPOSIO_API_KEY is not set or request fails.
  */
-export async function getComposioTools(limit = 12): Promise<ComposioTool[]> {
+export async function getComposioTools(search?: string, limit = 8): Promise<ComposioTool[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
 
   try {
-    const res = await fetch(`${COMPOSIO_BASE}/tools?limit=${limit}`, {
+    const query = search ? `&search=${encodeURIComponent(search)}` : "";
+    const res = await fetch(`${COMPOSIO_BASE}/tools?limit=${limit}${query}`, {
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(5000),
     });

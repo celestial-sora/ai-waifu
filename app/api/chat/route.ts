@@ -4,7 +4,7 @@ import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
-import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
+import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, extractToolKeywords, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type CharacterKey = "Miss";
@@ -65,17 +65,27 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], option
   });
 }
 
-async function callGroq(apiKey: string, messages: OpenRouterTurn[], model = groqModelName()) {
+async function callGroq(
+  apiKey: string,
+  messages: any[],
+  model = groqModelName(),
+  options: { tools?: any[]; tool_choice?: string } = {}
+) {
+  const payload: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: 0.8,
+    max_tokens: 420,
+  };
+  if (options.tools && options.tools.length > 0) {
+    payload.tools = options.tools;
+    payload.tool_choice = options.tool_choice ?? "auto";
+  }
   return fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     signal: AbortSignal.timeout(providerTimeoutMs),
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.8,
-      max_tokens: 420,
-    }),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -247,6 +257,10 @@ export async function POST(request: Request) {
   const shouldSearch = !idle && !visionIdle && searchIntent.test(lastUserText);
   const toolResults = (idle || visionIdle) ? [] : await runTools(lastUserText, memories);
   const composioAccounts: ComposioConnectedAccount[] = (!idle && !visionIdle) ? await getComposioConnectedAccounts().catch(() => []) : [];
+  const composioKeyword = (!idle && !visionIdle) ? extractToolKeywords(lastUserText) : undefined;
+  const composioTools = composioKeyword ? await getComposioTools(composioKeyword, 6).catch(() => []) : [];
+  const composioFunctions = composioTools.length ? composioToolsToFunctions(composioTools) : undefined;
+
   const composioContext = composioAccounts.length
     ? `\n\nบริการที่เชื่อมต่อผ่าน Composio: ${composioAccounts.map((a: ComposioConnectedAccount) => a.toolkit?.name || a.appUniqueId).join(", ")}`
     : "";
@@ -261,11 +275,11 @@ export async function POST(request: Request) {
 
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
 
-  // Choose primary provider: if image is present or search is needed, favor Gemini for multimodal accuracy
-  let provider: "gemini" | "openrouter" | "groq" = (shouldSearch || (hasImage && Boolean(geminiApiKey)))
-    ? "gemini"
-    : groqApiKey
-      ? "groq"
+  // Primary Provider: Groq (GPT-OSS-120B) is always primary when available
+  let provider: "groq" | "gemini" | "openrouter" = groqApiKey
+    ? "groq"
+    : shouldSearch || hasImage
+      ? "gemini"
       : apiKey
         ? "openrouter"
         : "gemini";
@@ -331,20 +345,63 @@ export async function POST(request: Request) {
 
   let response: Response | undefined;
 
-  // 1. Groq first for text — fast and reliable with user's preferred model
-  if (!hasImage && !shouldSearch && groqApiKey) {
-    const groqTextModels = [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
-    for (const gModel of groqTextModels) {
+  // 1. PRIMARY: Groq (GPT-OSS-120B / Llama 3.3 / Llama 3.2 Vision with Composio Tool Calling)
+  if (groqApiKey && !shouldSearch) {
+    const groqCandidates = hasImage
+      ? [groqVisionModel(), "llama-3.2-90b-vision-preview", groqModelName(), "llama-3.3-70b-versatile"]
+      : [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+
+    for (const gModel of groqCandidates) {
       try {
-        response = await callGroq(groqApiKey, [{ role: "system" as const, content: systemPrompt }, ...promptContents], gModel);
-        if (response.ok) { provider = "groq"; break; }
-        console.warn(`Groq text (${gModel}) returned ${response.status}`);
-      } catch (err) { console.warn(`Groq text (${gModel}) error`, err); }
+        const isVision = gModel.includes("vision");
+        const msgs = isVision ? groqMessages : [{ role: "system" as const, content: systemPrompt }, ...promptContents];
+        const initialRes = await callGroq(groqApiKey, msgs, gModel, { tools: isVision ? undefined : composioFunctions });
+        if (initialRes.ok) {
+          const initialData = await initialRes.json();
+          const choice = initialData.choices?.[0];
+
+          // Check if Groq invoked Composio tools
+          if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+            console.log("Groq requested Composio tool call:", choice.message.tool_calls);
+            const toolExecResults: any[] = [];
+            for (const tc of choice.message.tool_calls) {
+              const slug = tc.function.name;
+              let args = {};
+              try { args = JSON.parse(tc.function.arguments); } catch {}
+              const execRes = await executeComposioTool({ slug, arguments: args });
+              toolExecResults.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: execRes.content,
+              });
+            }
+            // Send tool outputs back to Groq for natural final response
+            const secondTurnMessages = [
+              ...msgs,
+              choice.message,
+              ...toolExecResults,
+            ];
+            const followUpRes = await callGroq(groqApiKey, secondTurnMessages, gModel);
+            if (followUpRes.ok) {
+              response = followUpRes;
+              provider = "groq";
+              break;
+            }
+          } else {
+            response = new Response(JSON.stringify(initialData), { status: initialRes.status, headers: initialRes.headers });
+            provider = "groq";
+            break;
+          }
+        }
+        console.warn(`Groq (${gModel}) returned ${initialRes.status}`);
+      } catch (err) {
+        console.warn(`Groq (${gModel}) error`, err);
+      }
     }
   }
 
-  // 2. Try Gemini for vision/search/chat
-  if ((!response || !response.ok) && geminiApiKey && (provider === "gemini" || shouldSearch || hasImage)) {
+  // 2. FALLBACK / SEARCH: Gemini (Google Search grounding or Multimodal vision)
+  if ((!response || !response.ok) && geminiApiKey) {
     const geminiCandidates = Array.from(new Set([
       geminiPrimaryModel(),
       "gemini-3.6-flash",
@@ -352,17 +409,23 @@ export async function POST(request: Request) {
       "gemini-3-flash",
       "gemini-3-flash-preview",
     ]));
+
     for (const model of geminiCandidates) {
       try {
         const payload = shouldSearch ? { ...geminiPayload, tools: [{ google_search: {} }] } : geminiPayload;
         response = await callGemini(geminiApiKey, payload, model);
-        if (response.ok) { provider = "gemini"; break; }
+        if (response.ok) {
+          provider = "gemini";
+          break;
+        }
         console.warn(`Gemini (${model}) returned ${response.status}`);
-      } catch (err) { console.warn(`Gemini (${model}) network error`, err); }
+      } catch (err) {
+        console.warn(`Gemini (${model}) network error`, err);
+      }
     }
   }
 
-  // 3. OpenRouter — paid, stable slugs (handles text, vision, and search fallbacks)
+  // 3. FALLBACK: OpenRouter (paid stable pool)
   if ((!response || !response.ok) && apiKey) {
     const openRouterCandidates = Array.from(new Set([
       modelName(),
@@ -372,28 +435,18 @@ export async function POST(request: Request) {
       "google/gemini-2.0-flash-001",
       "anthropic/claude-haiku-3-5",
     ]));
+
     for (const orModel of openRouterCandidates) {
       try {
         response = await callOpenRouter(apiKey, openRouterMessages, { model: orModel });
-        if (response.ok) { provider = "openrouter"; break; }
+        if (response.ok) {
+          provider = "openrouter";
+          break;
+        }
         console.warn(`OpenRouter (${orModel}) returned ${response.status}`);
-      } catch (err) { console.warn(`OpenRouter (${orModel}) network error`, err); }
-    }
-  }
-
-  // 4. Groq fallback (tries vision if image, fallback to Groq text LLM so chat never fails)
-  if ((!response || !response.ok) && groqApiKey) {
-    const groqCandidates = hasImage
-      ? [groqVisionModel(), "llama-3.2-90b-vision-preview", groqModelName(), "llama-3.3-70b-versatile"]
-      : [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
-    for (const gModel of groqCandidates) {
-      try {
-        const isVision = gModel.includes("vision");
-        const msgs = isVision ? groqMessages : [{ role: "system" as const, content: systemPrompt }, ...promptContents];
-        response = await callGroq(groqApiKey, msgs, gModel);
-        if (response.ok) { provider = "groq"; break; }
-        console.warn(`Groq fallback (${gModel}) returned ${response.status}`);
-      } catch (err) { console.warn(`Groq fallback (${gModel}) error`, err); }
+      } catch (err) {
+        console.warn(`OpenRouter (${orModel}) network error`, err);
+      }
     }
   }
 
