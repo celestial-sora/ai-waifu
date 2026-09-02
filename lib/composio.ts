@@ -1,6 +1,6 @@
 /**
  * Composio integration for Vivian — connects to Composio v3.1 REST API.
- * Requires COMPOSIO_API_KEY in environment variables.
+ * Includes in-memory caching and smart relevance ranking for tools.
  */
 
 export interface ComposioTool {
@@ -39,6 +39,10 @@ const COMPOSIO_V31_BASE = "https://backend.composio.dev/api/v3.1";
 function getApiKey(): string | undefined {
   return process.env.COMPOSIO_API_KEY?.trim();
 }
+
+/** In-memory cache for toolkit tools (1 hour TTL) */
+const toolkitCache = new Map<string, { timestamp: number; tools: ComposioTool[] }>();
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
 /**
  * Fetch connected accounts for this API key.
@@ -101,10 +105,66 @@ export function detectToolkits(userText: string): string[] {
 }
 
 /**
- * Fetch tools from Composio v3 by toolkit slugs or limit.
- * Returns an empty array if COMPOSIO_API_KEY is not set or request fails.
+ * Score and rank tools by relevance to user's action query.
  */
-export async function getComposioTools(toolkitsOrSearch?: string | string[], limit = 8): Promise<ComposioTool[]> {
+function rankTools(tools: ComposioTool[], query: string): ComposioTool[] {
+  const lower = query.toLowerCase();
+  const tokens = lower.split(/[\s,./?~!@#$%^&*()_+=\-[\]{};':"\\|<>]+/).filter((t) => t.length >= 2);
+
+  // Intent keyword boosting
+  const isSearch = /search|ค้นหา|หา|ดู|list|get/i.test(lower);
+  const isMessage = /send|message|ส่ง|ข้อความ|ทัก|chat|post|create/i.test(lower);
+  const isUser = /user|ผู้ใช้|ยูส|id|member|profile|who|me/i.test(lower);
+  const isPlay = /play|เปิด|เพลง|track|music/i.test(lower);
+  const isCreate = /create|สร้าง|เพิ่ม|add|new/i.test(lower);
+
+  return [...tools].sort((a, b) => {
+    let scoreA = 0;
+    let scoreB = 0;
+
+    const slugA = a.slug.toLowerCase();
+    const slugB = b.slug.toLowerCase();
+    const descA = a.description.toLowerCase();
+    const descB = b.description.toLowerCase();
+
+    // Intent specific scoring
+    if (isUser) {
+      if (slugA.includes("get_user") || slugA.includes("get_my_user") || slugA.includes("user")) scoreA += 10;
+      if (slugB.includes("get_user") || slugB.includes("get_my_user") || slugB.includes("user")) scoreB += 10;
+    }
+    if (isMessage) {
+      if (slugA.includes("create_message") || slugA.includes("send_message") || slugA.includes("message")) scoreA += 10;
+      if (slugB.includes("create_message") || slugB.includes("send_message") || slugB.includes("message")) scoreB += 10;
+    }
+    if (isSearch) {
+      if (slugA.includes("search") || slugA.includes("list")) scoreA += 8;
+      if (slugB.includes("search") || slugB.includes("list")) scoreB += 8;
+    }
+    if (isPlay) {
+      if (slugA.includes("play") || slugA.includes("playback") || slugA.includes("start")) scoreA += 10;
+      if (slugB.includes("play") || slugB.includes("playback") || slugB.includes("start")) scoreB += 10;
+    }
+    if (isCreate) {
+      if (slugA.includes("create") || slugA.includes("add")) scoreA += 6;
+      if (slugB.includes("create") || slugB.includes("add")) scoreB += 6;
+    }
+
+    // Token matching
+    for (const tok of tokens) {
+      if (slugA.includes(tok)) scoreA += 4;
+      if (slugB.includes(tok)) scoreB += 4;
+      if (descA.includes(tok)) scoreA += 2;
+      if (descB.includes(tok)) scoreB += 2;
+    }
+
+    return scoreB - scoreA;
+  });
+}
+
+/**
+ * Fetch tools from Composio v3 by toolkit slugs and rank them by user query relevance.
+ */
+export async function getComposioTools(toolkitsOrSearch?: string | string[], userQuery = "", limit = 10): Promise<ComposioTool[]> {
   const apiKey = getApiKey();
   if (!apiKey) return [];
 
@@ -115,35 +175,43 @@ export async function getComposioTools(toolkitsOrSearch?: string | string[], lim
       : [];
 
   const allTools: ComposioTool[] = [];
+  const now = Date.now();
 
   try {
     if (toolkits.length > 0) {
       for (const tk of toolkits.slice(0, 3)) {
-        const res = await fetch(`${COMPOSIO_BASE}/tools?toolkit_slug=${encodeURIComponent(tk)}&limit=${limit}`, {
+        const cached = toolkitCache.get(tk);
+        if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+          allTools.push(...cached.tools);
+          continue;
+        }
+
+        const res = await fetch(`${COMPOSIO_BASE}/tools?toolkit_slug=${encodeURIComponent(tk)}&limit=60`, {
           headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-          signal: AbortSignal.timeout(4000),
+          signal: AbortSignal.timeout(5000),
         });
+
         if (res.ok) {
           const data = await res.json() as { items?: Array<{ slug: string; name: string; description: string; toolkit?: { slug: string; name: string }; input_parameters?: { properties?: Record<string, unknown>; required?: string[] } }> };
-          for (const item of data.items ?? []) {
-            allTools.push({
-              slug: item.slug,
-              name: item.name,
-              description: item.description ?? item.name,
-              toolkitSlug: item.toolkit?.slug,
-              parameters: {
-                type: "object" as const,
-                properties: (item.input_parameters?.properties ?? {}) as ComposioTool["parameters"]["properties"],
-                required: item.input_parameters?.required ?? [],
-              },
-            });
-          }
+          const parsed = (data.items ?? []).map((item) => ({
+            slug: item.slug,
+            name: item.name,
+            description: item.description ?? item.name,
+            toolkitSlug: item.toolkit?.slug,
+            parameters: {
+              type: "object" as const,
+              properties: (item.input_parameters?.properties ?? {}) as ComposioTool["parameters"]["properties"],
+              required: item.input_parameters?.required ?? [],
+            },
+          }));
+          toolkitCache.set(tk, { timestamp: now, tools: parsed });
+          allTools.push(...parsed);
         }
       }
     } else {
-      const res = await fetch(`${COMPOSIO_BASE}/tools?limit=${limit}`, {
+      const res = await fetch(`${COMPOSIO_BASE}/tools?limit=30`, {
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(4000),
+        signal: AbortSignal.timeout(5000),
       });
       if (res.ok) {
         const data = await res.json() as { items?: Array<{ slug: string; name: string; description: string; toolkit?: { slug: string; name: string }; input_parameters?: { properties?: Record<string, unknown>; required?: string[] } }> };
@@ -162,10 +230,14 @@ export async function getComposioTools(toolkitsOrSearch?: string | string[], lim
         }
       }
     }
-    return allTools;
+
+    if (userQuery && allTools.length > 0) {
+      return rankTools(allTools, userQuery).slice(0, limit);
+    }
+    return allTools.slice(0, limit);
   } catch (err) {
     console.warn("Composio getTools error", err);
-    return allTools;
+    return allTools.slice(0, limit);
   }
 }
 
@@ -193,7 +265,13 @@ export async function executeComposioTool(toolCall: ComposioToolCall, userId = "
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
       console.warn(`Composio execute failed (${res.status}):`, errText);
-      return { tool: toolCall.slug, ok: false, content: `Composio action failed (${res.status})` };
+      try {
+        const errJson = JSON.parse(errText);
+        const errMsg = errJson?.error?.message ?? errJson?.message ?? `Error ${res.status}`;
+        return { tool: toolCall.slug, ok: false, content: errMsg };
+      } catch {
+        return { tool: toolCall.slug, ok: false, content: `Composio action failed (${res.status})` };
+      }
     }
 
     const data = await res.json() as {
