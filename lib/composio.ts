@@ -242,6 +242,73 @@ export async function getComposioTools(toolkitsOrSearch?: string | string[], use
 }
 
 /**
+ * Generate a connect / OAuth authorization link for a toolkit.
+ */
+export async function getOrCreateConnectLink(toolkitSlug: string, userId = "default"): Promise<string | null> {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+
+  try {
+    // Normalize slug (e.g. discordbot -> discord)
+    const normalizedSlug = toolkitSlug === "discordbot" ? "discord" : toolkitSlug;
+
+    // 1. Find existing auth config for this toolkit
+    let authConfigId: string | null = null;
+    const authRes = await fetch(`${COMPOSIO_BASE}/auth_configs?toolkit_slug=${encodeURIComponent(normalizedSlug)}`, {
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(4000),
+    });
+
+    if (authRes.ok) {
+      const authData = await authRes.json() as { items?: Array<{ id: string }> };
+      if (authData.items && authData.items.length > 0) {
+        authConfigId = authData.items[0].id;
+      }
+    }
+
+    // 2. If no auth config exists, create a Composio-managed one
+    if (!authConfigId) {
+      const createRes = await fetch(`${COMPOSIO_BASE}/auth_configs`, {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(4000),
+        body: JSON.stringify({
+          toolkit: { slug: normalizedSlug },
+          auth_scheme: "OAUTH2",
+          is_composio_managed: true,
+        }),
+      });
+      if (createRes.ok) {
+        const createData = await createRes.json() as { auth_config?: { id: string } };
+        authConfigId = createData.auth_config?.id ?? null;
+      }
+    }
+
+    if (!authConfigId) return null;
+
+    // 3. Request link
+    const linkRes = await fetch(`${COMPOSIO_BASE}/connected_accounts/link`, {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(5000),
+      body: JSON.stringify({
+        auth_config_id: authConfigId,
+        user_id: userId,
+      }),
+    });
+
+    if (linkRes.ok) {
+      const linkData = await linkRes.json() as { redirect_url?: string };
+      return linkData.redirect_url ?? null;
+    }
+    return null;
+  } catch (err) {
+    console.warn(`Failed to get connect link for ${toolkitSlug}`, err);
+    return null;
+  }
+}
+
+/**
  * Execute a Composio tool by slug via v3.1 REST API.
  */
 export async function executeComposioTool(toolCall: ComposioToolCall, userId = "default"): Promise<ComposioToolResult> {
@@ -268,6 +335,19 @@ export async function executeComposioTool(toolCall: ComposioToolCall, userId = "
       try {
         const errJson = JSON.parse(errText);
         const errMsg = errJson?.error?.message ?? errJson?.message ?? `Error ${res.status}`;
+
+        // If account is not connected, generate connection link automatically
+        if (errMsg.toLowerCase().includes("no connected account") || errMsg.toLowerCase().includes("not found")) {
+          const rawSlug = toolCall.slug.split("_")[0].toLowerCase();
+          const link = await getOrCreateConnectLink(rawSlug, userId).catch(() => null);
+          if (link) {
+            return {
+              tool: toolCall.slug,
+              ok: false,
+              content: `ยังไม่ได้เชื่อมต่อบัญชี ${rawSlug} กรุณาแจ้งผู้ใช้ให้กดเชื่อมต่อที่ลิงก์นี้: ${link}`,
+            };
+          }
+        }
         return { tool: toolCall.slug, ok: false, content: errMsg };
       } catch {
         return { tool: toolCall.slug, ok: false, content: `Composio action failed (${res.status})` };
@@ -281,7 +361,19 @@ export async function executeComposioTool(toolCall: ComposioToolCall, userId = "
     };
 
     if (data.error?.message) {
-      return { tool: toolCall.slug, ok: false, content: `Tool error: ${data.error.message}` };
+      const errMsg = data.error.message;
+      if (errMsg.toLowerCase().includes("no connected account") || errMsg.toLowerCase().includes("not found")) {
+        const rawSlug = toolCall.slug.split("_")[0].toLowerCase();
+        const link = await getOrCreateConnectLink(rawSlug, userId).catch(() => null);
+        if (link) {
+          return {
+            tool: toolCall.slug,
+            ok: false,
+            content: `ยังไม่ได้เชื่อมต่อบัญชี ${rawSlug} กรุณาแจ้งผู้ใช้ให้กดเชื่อมต่อที่ลิงก์นี้: ${link}`,
+          };
+        }
+      }
+      return { tool: toolCall.slug, ok: false, content: `Tool error: ${errMsg}` };
     }
 
     const result = data.response?.data ?? data.data ?? data;
