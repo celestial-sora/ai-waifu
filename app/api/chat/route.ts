@@ -344,7 +344,7 @@ export async function POST(request: Request) {
         ...promptContents,
       ];
 
-  let response: Response | undefined;
+  let generatedData: any = null;
 
   // 1. PRIMARY: Groq (GPT-OSS-120B / Llama 3.3 / Llama 3.2 Vision with Composio Tool Calling)
   if (groqApiKey && !shouldSearch) {
@@ -364,7 +364,7 @@ export async function POST(request: Request) {
           // Check if Groq invoked Composio tools
           if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
             console.log("Groq requested Composio tool call:", choice.message.tool_calls);
-            const toolExecResults: any[] = [];
+            const toolExecResults = [];
             for (const tc of choice.message.tool_calls) {
               const slug = tc.function.name;
               let args = {};
@@ -384,17 +384,18 @@ export async function POST(request: Request) {
             ];
             const followUpRes = await callGroq(groqApiKey, secondTurnMessages, gModel);
             if (followUpRes.ok) {
-              response = followUpRes;
+              generatedData = await followUpRes.json();
               provider = "groq";
               break;
             }
           } else {
-            response = new Response(JSON.stringify(initialData), { status: initialRes.status, headers: initialRes.headers });
+            generatedData = initialData;
             provider = "groq";
             break;
           }
+        } else {
+          console.warn(`Groq (${gModel}) returned ${initialRes.status}`);
         }
-        console.warn(`Groq (${gModel}) returned ${initialRes.status}`);
       } catch (err) {
         console.warn(`Groq (${gModel}) error`, err);
       }
@@ -402,7 +403,7 @@ export async function POST(request: Request) {
   }
 
   // 2. FALLBACK / SEARCH: Gemini (Google Search grounding or Multimodal vision)
-  if ((!response || !response.ok) && geminiApiKey) {
+  if (!generatedData && geminiApiKey) {
     const geminiCandidates = Array.from(new Set([
       geminiPrimaryModel(),
       "gemini-3.6-flash",
@@ -414,12 +415,13 @@ export async function POST(request: Request) {
     for (const model of geminiCandidates) {
       try {
         const payload = shouldSearch ? { ...geminiPayload, tools: [{ google_search: {} }] } : geminiPayload;
-        response = await callGemini(geminiApiKey, payload, model);
-        if (response.ok) {
+        const res = await callGemini(geminiApiKey, payload, model);
+        if (res.ok) {
+          generatedData = await res.json();
           provider = "gemini";
           break;
         }
-        console.warn(`Gemini (${model}) returned ${response.status}`);
+        console.warn(`Gemini (${model}) returned ${res.status}`);
       } catch (err) {
         console.warn(`Gemini (${model}) network error`, err);
       }
@@ -427,7 +429,7 @@ export async function POST(request: Request) {
   }
 
   // 3. FALLBACK: OpenRouter (paid stable pool)
-  if ((!response || !response.ok) && apiKey) {
+  if (!generatedData && apiKey) {
     const openRouterCandidates = Array.from(new Set([
       modelName(),
       "meta-llama/llama-3.3-70b-instruct",
@@ -439,24 +441,25 @@ export async function POST(request: Request) {
 
     for (const orModel of openRouterCandidates) {
       try {
-        response = await callOpenRouter(apiKey, openRouterMessages, { model: orModel });
-        if (response.ok) {
+        const res = await callOpenRouter(apiKey, openRouterMessages, { model: orModel });
+        if (res.ok) {
+          generatedData = await res.json();
           provider = "openrouter";
           break;
         }
-        console.warn(`OpenRouter (${orModel}) returned ${response.status}`);
+        console.warn(`OpenRouter (${orModel}) returned ${res.status}`);
       } catch (err) {
         console.warn(`OpenRouter (${orModel}) network error`, err);
       }
     }
   }
 
-  if (!response || !response.ok) {
-    const errorDetail = response ? await response.text().catch(() => "") : "All providers unreachable";
-    console.error("All chat providers failed", { status: response?.status, errorDetail });
-    return NextResponse.json({ error: "ผู้ให้บริการตอบช้าหรือไม่พร้อมใช้งาน ลองใหม่อีกครั้งนะคะ", detail: errorDetail }, { status: response?.status || 504 });
+  if (!generatedData) {
+    console.error("All chat providers failed");
+    return NextResponse.json({ error: "ผู้ให้บริการตอบช้าหรือไม่พร้อมใช้งาน ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
   }
-  const data = await response.json();
+
+  const data = generatedData;
   const message = data.choices?.[0]?.message;
   const candidate = data.candidates?.[0];
   const generatedText = (provider === "gemini"

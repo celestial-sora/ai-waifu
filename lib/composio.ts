@@ -293,6 +293,23 @@ export async function executeComposioTool(toolCall: ComposioToolCall, userId = "
   }
 }
 
+function cleanProperties(props: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(props)) {
+    if (v && typeof v === "object") {
+      const field = v as Record<string, unknown>;
+      cleaned[k] = {
+        type: typeof field.type === "string" ? field.type : "string",
+        ...(typeof field.description === "string" ? { description: field.description.slice(0, 200) } : {}),
+        ...(Array.isArray(field.enum) ? { enum: field.enum } : {}),
+      };
+    } else {
+      cleaned[k] = { type: "string" };
+    }
+  }
+  return cleaned;
+}
+
 /**
  * Convert Composio tools to OpenAI-compatible function definitions for LLM tool calling.
  */
@@ -302,7 +319,11 @@ export function composioToolsToFunctions(tools: ComposioTool[]) {
     function: {
       name: tool.slug,
       description: `[Composio Tool] ${tool.name}: ${tool.description}`.slice(0, 300),
-      parameters: tool.parameters,
+      parameters: {
+        type: "object",
+        properties: cleanProperties(tool.parameters?.properties ?? {}),
+        required: Array.isArray(tool.parameters?.required) ? tool.parameters.required : [],
+      },
     },
   }));
 }
