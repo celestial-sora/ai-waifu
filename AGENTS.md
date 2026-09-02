@@ -264,7 +264,7 @@ model.setExpression(null);
 
 ---
 
-## Cursor Handoff — Current State (2026-08-30)
+## Cursor Handoff — Current State (2026-09-02)
 
 This section is the current source of truth for continuing work. Read it before changing the app.
 
@@ -273,11 +273,11 @@ This section is the current source of truth for continuing work. Read it before 
 - Product: Vivian Personal Project
 - Character: Vivian
 - Codename: Columbina
-- Production URL: not published in this repository
+- Production URL: https://vivian-chan.vercel.app
 - Repository: https://github.com/celestial-sora/ai-waifu
 - Git branch: `main`
-- Latest committed version: `488fcb4` (`apply ultra smooth UI polish`)
-- Latest production deployment after that commit: `dpl_5KiZtbhqLxSra9NE6ZujqPStp71b`
+- Latest committed version: `04255f2` (`perf: lower weather tool timeout to 2s for fast concurrent pre-flight resolution`)
+- Latest production deployment: `Ready in 24s (https://vivian-chan.vercel.app)`
 
 ### Actual runtime flow
 
