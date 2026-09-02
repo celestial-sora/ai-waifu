@@ -4,6 +4,7 @@ import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
+import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type CharacterKey = "Miss";
@@ -245,8 +246,12 @@ export async function POST(request: Request) {
   const lastUserText = (idle || visionIdle) ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
   const shouldSearch = !idle && !visionIdle && searchIntent.test(lastUserText);
   const toolResults = (idle || visionIdle) ? [] : await runTools(lastUserText, memories);
+  const composioAccounts: ComposioConnectedAccount[] = (!idle && !visionIdle) ? await getComposioConnectedAccounts().catch(() => []) : [];
+  const composioContext = composioAccounts.length
+    ? `\n\nบริการที่เชื่อมต่อผ่าน Composio: ${composioAccounts.map((a: ComposioConnectedAccount) => a.toolkit?.name || a.appUniqueId).join(", ")}`
+    : "";
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
-  const toolContext = toolsPromptBlock(toolResults);
+  const toolContext = toolsPromptBlock(toolResults) + composioContext;
   const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, visionIdle);
   const promptContents: OpenRouterMessage[] = idle
     ? [{ role: "user", content: "[ระบบ] Vivian คิดถึงผู้ใช้และอยากทักสั้น ๆ 1-2 ประโยคอย่างเป็นธรรมชาติ ห้ามพูดถึงเวลาและอย่าพูดเรื่องเครื่องมือ" }]
