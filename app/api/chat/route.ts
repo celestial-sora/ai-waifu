@@ -23,13 +23,15 @@ const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const groqVisionModel = () => process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
 const geminiPrimaryModel = () => {
   const custom = process.env.GEMINI_MODEL;
-  if (custom && custom !== "gemini-2.5-flash" && custom !== "gemini-2.0-flash") return custom;
-  return "gemini-3.6-flash";
+  // Only use custom if it looks like a real model name (not an old name)
+  if (custom && !custom.startsWith("gemini-3")) return custom;
+  return "gemini-2.5-flash";
 };
 const memoryIntent = /(จำไว้|จำว่า|เรียกฉันว่า|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|ความชอบ|favorite|prefer|my name|remember|call me)/i;
 const recentTurnLimit = 12;
 const recentCharLimit = 4500;
 const providerTimeoutMs = 9000;
+const visionTimeoutMs = 20000; // Vision requests need more time to upload base64 image
 const supabaseTimeoutMs = 2000;
 
 async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string) {
@@ -44,8 +46,9 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string
   }
 }
 
-async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], options: { json?: boolean; model?: string } = {}) {
+async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], options: { json?: boolean; model?: string; timeoutMs?: number } = {}) {
   const selectedModel = options.model ?? modelName();
+  const timeout = options.timeoutMs ?? providerTimeoutMs;
   return fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -54,7 +57,7 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], option
       "HTTP-Referer": "https://vivian-chan.vercel.app",
       "X-Title": "Vivian Personal Project",
     },
-    signal: AbortSignal.timeout(providerTimeoutMs),
+    signal: AbortSignal.timeout(timeout),
     body: JSON.stringify({
       model: selectedModel,
       messages,
@@ -69,7 +72,7 @@ async function callGroq(
   apiKey: string,
   messages: any[],
   model = groqModelName(),
-  options: { tools?: any[]; tool_choice?: string } = {}
+  options: { tools?: any[]; tool_choice?: string; timeoutMs?: number } = {}
 ) {
   const payload: Record<string, unknown> = {
     model,
@@ -84,17 +87,19 @@ async function callGroq(
   return fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(providerTimeoutMs),
+    signal: AbortSignal.timeout(options.timeoutMs ?? providerTimeoutMs),
     body: JSON.stringify(payload),
   });
 }
 
-async function callGemini(apiKey: string, payload: Record<string, unknown>, model = geminiPrimaryModel(), version = "v1beta") {
+async function callGemini(apiKey: string, payload: Record<string, unknown>, model = geminiPrimaryModel(), options: { version?: string; timeoutMs?: number } = {}) {
   const cleanKey = apiKey.trim();
+  const version = options.version ?? "v1beta";
+  const timeoutMs = options.timeoutMs ?? providerTimeoutMs;
   return fetch(`https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": cleanKey },
-    signal: AbortSignal.timeout(providerTimeoutMs),
+    signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify(payload),
   });
 }
@@ -364,17 +369,18 @@ export async function POST(request: Request) {
 
   // 1. PRIMARY FOR VISION: If image is provided, Gemini is always primary (native multimodal)
   if (hasImage && geminiApiKey) {
-    const geminiCandidates = Array.from(new Set([
+    const geminiVisionCandidates = Array.from(new Set([
       geminiPrimaryModel(),
-      "gemini-3.6-flash",
-      "gemini-3-flash",
-      "gemini-3.6-pro",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-2.5-pro",
     ]));
 
-    for (const model of geminiCandidates) {
+    for (const model of geminiVisionCandidates) {
       try {
         const payload = shouldSearch ? { ...geminiPayload, tools: [{ google_search: {} }] } : geminiPayload;
-        const res = await callGemini(geminiApiKey, payload, model);
+        const res = await callGemini(geminiApiKey, payload, model, { timeoutMs: visionTimeoutMs });
         if (res.ok) {
           generatedData = await res.json();
           provider = "gemini";
@@ -444,16 +450,16 @@ export async function POST(request: Request) {
   if (!generatedData && geminiApiKey) {
     const geminiCandidates = Array.from(new Set([
       geminiPrimaryModel(),
-      "gemini-3.6-flash",
-      "gemini-3.6-pro",
-      "gemini-3-flash",
-      "gemini-3-flash-preview",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-2.5-pro",
     ]));
 
     for (const model of geminiCandidates) {
       try {
         const payload = shouldSearch ? { ...geminiPayload, tools: [{ google_search: {} }] } : geminiPayload;
-        const res = await callGemini(geminiApiKey, payload, model);
+        const res = await callGemini(geminiApiKey, payload, model, { timeoutMs: hasImage ? visionTimeoutMs : providerTimeoutMs });
         if (res.ok) {
           generatedData = await res.json();
           provider = "gemini";
@@ -471,15 +477,15 @@ export async function POST(request: Request) {
     const openRouterCandidates = Array.from(new Set([
       hasImage ? "openai/gpt-4o-mini" : modelName(),
       hasImage ? "google/gemini-2.0-flash-001" : "meta-llama/llama-3.3-70b-instruct",
-      "deepseek/deepseek-chat",
       "openai/gpt-4o-mini",
       "google/gemini-2.0-flash-001",
+      "deepseek/deepseek-chat",
       "anthropic/claude-haiku-3-5",
     ]));
 
     for (const orModel of openRouterCandidates) {
       try {
-        const res = await callOpenRouter(apiKey, openRouterMessages, { model: orModel });
+        const res = await callOpenRouter(apiKey, openRouterMessages, { model: orModel, timeoutMs: hasImage ? visionTimeoutMs : providerTimeoutMs });
         if (res.ok) {
           generatedData = await res.json();
           provider = "openrouter";
