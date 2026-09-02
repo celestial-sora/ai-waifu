@@ -1,30 +1,57 @@
-# Vivian AI Companion — Live2D AI Chat Companion
+# Vivian AI Companion
 
-เว็บ AI companion แบบ Live2D สำหรับ Vivian สร้างด้วย Next.js, React, TypeScript, PixiJS และ Live2D Cubism 4
+An interactive Live2D AI companion for chatting, voice conversations, and persistent memories.
 
-เว็บ AI companion แบบ Live2D สำหรับ Vivian โดยเน้น Experience บน Mobile and Tablet 
+Vivian is built around the **Miss** Live2D character and designed for a smooth mobile experience on iPhone and iPad.
 
-Production: ไม่มีเว็บให้ลองเล่นหรอก baka 
+## Features
 
-## Current features
+- Live2D Cubism 4 avatar with expressive reactions
+- Text chat with provider fallback
+- Speech-to-text and text-to-speech
+- Lip sync driven by voice playback
+- Persistent memories and conversation history
+- Mood, affinity, trust, and familiarity state
+- Custom Instructions for personal response preferences
+- Optional web search with grounded answers
+- Responsive portrait and landscape layouts
 
-- Live2D Cubism 4 รุ่น Miss ใช้ texture ต้นฉบับ 4096×4096
-- โหลดโมเดลทีละตัวและจัดตำแหน่งใหม่เมื่อเปลี่ยน orientation
-- Render บน Apple mobile สูงสุด 1.5x ของ CSS resolution เพื่อเพิ่มความคม โดยมีเพดานกัน Safari crash
-- Chat แบบ text และ session greeting
-- Speech-to-Text แบบเปิด/ปิดไมค์ พร้อม voice activity detection, noise suppression และ STT preview
-- Text-to-Speech ผ่าน Fish Audio โดยข้อความจะแสดงหลังเสียงเริ่มเล่น เพื่อให้ภาพและเสียงมาพร้อมกัน
-- Lip sync จาก audio amplitude บน desktop และ timing-based lip sync บน iOS
-- Memory และประวัติการสนทนาผ่าน Supabase แบบ graceful degradation
-- Mood ถาวร, affinity, trust, familiarity และ mood intensity ระดับ 0–100
-- Mood decay ลดความเข้มของอารมณ์ทุก 2 ชั่วโมง และกลับสู่ calm เมื่ออารมณ์เบาลง
-- Expression ของ Miss ครบ 15 แบบ โดยเลือกตามสถานการณ์และ mood แบบ deterministic ไม่สุ่ม
-- Expression-to-motion pairing รองรับ motion group หากโมเดลมี และ fallback เป็น Idle หากไม่มี
-- Web search ใช้ Gemini พร้อม Google Search grounding
+## Tech stack
 
-## Manual expression commands
+- Next.js
+- React
+- TypeScript
+- PixiJS 6
+- `pixi-live2d-display` Cubism 4
+- Supabase PostgreSQL
+- External LLM, STT, and TTS providers
 
-สามารถควบคุม expression ของโมเดล Miss จากช่องแชตได้โดยตรง คำสั่งเหล่านี้ทำงานใน browser และไม่ส่งข้อความไปยัง LLM:
+## Run locally
+
+Clone the repository:
+
+```bash
+git clone https://github.com/celestial-sora/ai-waifu.git
+cd ai-waifu
+```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Create `.env.local` from `.env.example`, add the provider keys you want to use, then start the development server:
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Custom expressions
+
+Expressions can be triggered from the chat input:
 
 ```text
 /expression list
@@ -33,82 +60,25 @@ Production: ไม่มีเว็บให้ลองเล่นหรอ�
 /expression default
 ```
 
-ใช้ `/exp` แทน `/expression` ได้ และไม่จำเป็นต้องพิมพ์ช่องว่างท้ายชื่อ expression เช่น `M wenhao` ระบบจะจับคู่ให้เอง
+Use `/exp` as a shorter alias.
 
-## Expression mapping
+## Project structure
 
-ระบบใช้ข้อความล่าสุดและ mood ประกอบการเลือก expression:
-
-| Expression | ใช้เมื่อ |
-| --- | --- |
-| `#` | default หรือ calm |
-| `M ###` | มอง ตากระพริบ ดูนี่ |
-| `M ##` | งง ไม่เข้าใจ สงสัย |
-| `M QAQ` | เศร้า เหงา เสียใจ |
-| `M lianhong` | รัก คิดถึง กอด อบอุ่น |
-| `M love` | เขิน อาย ถูกชม |
-| `M miyan` | ยิ้ม ทักทาย ขอบคุณ |
-| `M nu` | โกรธ หงุดหงิด ไม่พอใจ |
-| `M wenhao` | ตกใจ ประหลาดใจ |
-| `M xingxing` | ดีใจ ตื่นเต้น ฉลอง |
-| `M xingxing2` | ขำ ตลก หัวเราะ |
-| `S chabei` | ชา กาแฟ พัก เหนื่อย |
-| `S shouji` | โทรศัพท์ ข้อความ แจ้งเตือน |
-| `T faxing` | ทรงผม แต่งตัว รูปลักษณ์ |
-| `X shetou` | แกล้ง หยอก จุ๊บ |
-
-สถานการณ์ที่ตรวจพบจะมี priority สูงกว่า mood หากจับสถานการณ์ไม่ได้จึงใช้ mood เป็น fallback
-
-## Provider architecture
-
-Vercel ทำหน้าที่ serve หน้าเว็บและ proxy API เท่านั้น งาน LLM, STT และ TTS ทำผ่าน external API ไม่รันโมเดลหนักบนเครื่องผู้ใช้หรือ Vercel
-
-- LLM หลัก: Groq (`GROQ_API_KEY`)
-- LLM fallback: OpenRouter (`OPENROUTER_API_KEY`) และ Gemini ตามลำดับที่ตั้งค่าไว้
-- Web search: Gemini (`GEMINI_API_KEY`)
-- STT: ElevenLabs Scribe (`ELEVENLABS_API_KEY`)
-- TTS: Fish Audio (`FISH_AUDIO_API_KEY`, `FISH_AUDIO_VOICE_ID`)
-- Memory: Supabase PostgreSQL (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`)
-
-API routes:
-
-- `POST /api/chat` — chat, provider fallback, mood state, memory context และ web search
-- `GET/POST/DELETE /api/memory` — memory และ conversation history
-- `POST /api/stt` — แปลงเสียงเป็นข้อความ
-- `POST /api/tts` — สร้างเสียง MP3 จากข้อความ
-
-## Local development
-
-ต้องใช้ Node.js และตั้งค่า environment variables ใน `.env.local` โดยดูชื่อจาก `.env.example` ห้ามใส่ API key ลงใน source code หรือ commit ไฟล์ `.env.local`
-
-```bash
-npm install
-npm run dev
+```text
+app/                  Next.js pages, UI, and API routes
+lib/                  Models, companion state, tools, and Supabase helpers
+public/live2d/Miss/   Miss Live2D model and expressions
+supabase/migrations/  Database schema migrations
 ```
 
-เปิด [http://localhost:3000](http://localhost:3000)
+## Development notes
 
-ตรวจ production build:
+The project uses PixiJS 6 with the Cubism 4 runtime. The Miss model uses 4096×4096 source textures to remain compatible with mobile Safari and WebGL memory limits.
 
-```bash
-npm run build
-```
+API keys belong in environment variables only. Never commit `.env.local` or expose provider keys in client-side code.
 
-## Production deployment
+## Credits
 
-โปรเจกต์เชื่อมกับ Vercel แล้ว การ deploy production ใช้:
+Live2D model credit: Cai Cat
 
-```bash
-vercel --prod
-```
-
-หลัง deploy ต้องตรวจว่า deployment เป็น `READY` และ alias ยังคงชี้ไปที่ `https://your-domain.vercel.app`
-
-## Live2D constraints
-
-- ใช้ `pixi.js@6.5.10` ร่วมกับ `pixi-live2d-display@0.4.0`
-- ใช้ Cubism 4 import path เท่านั้น: `pixi-live2d-display/cubism4`
-- Cubism Core ถูก preload จาก `app/layout.tsx`
-- Live2D โหลดฝั่ง client ภายใน `useEffect` เท่านั้น
-- อย่าเปลี่ยนกลับไปใช้ texture 8192 บน production เพราะ iPad/Safari อาจ crash
-Model  cradit : Cai Cat
+If you like the project, feel free to star the repository.
