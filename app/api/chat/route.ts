@@ -4,7 +4,7 @@ import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
-import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, extractToolKeywords, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
+import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, detectToolkits, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type CharacterKey = "Miss";
@@ -257,8 +257,8 @@ export async function POST(request: Request) {
   const shouldSearch = !idle && !visionIdle && searchIntent.test(lastUserText);
   const toolResults = (idle || visionIdle) ? [] : await runTools(lastUserText, memories);
   const composioAccounts: ComposioConnectedAccount[] = (!idle && !visionIdle) ? await getComposioConnectedAccounts().catch(() => []) : [];
-  const composioKeyword = (!idle && !visionIdle) ? extractToolKeywords(lastUserText) : undefined;
-  const composioTools = composioKeyword ? await getComposioTools(composioKeyword, 6).catch(() => []) : [];
+  const composioToolkits = (!idle && !visionIdle) ? detectToolkits(lastUserText) : [];
+  const composioTools = composioToolkits.length > 0 ? await getComposioTools(composioToolkits, 6).catch(() => []) : [];
   const composioFunctions = composioTools.length ? composioToolsToFunctions(composioTools) : undefined;
 
   const composioContext = composioAccounts.length
