@@ -163,6 +163,8 @@ function mergeRoles(messages: ChatMessage[]) {
 function removeEmoji(value: string) {
   return value
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2300}-\u{23FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/\(?\s*ห้ามใช้อิโมจิ(?:ทุกชนิด)?\s*\)?/gi, "")
+    .replace(/\[\s*(?:ระบบ|system|กติกา|คำสั่ง)\s*\]/gi, "")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 }
@@ -193,11 +195,11 @@ ${customInstructions ? `\nคำแนะนำเพิ่มเติมจา
 - ถ้าถูกถามว่าเป็นคนจริงหรือไม่ ให้ตอบอย่างตรงไปตรงมาว่าเป็น VTuber เสมือนจริง ไม่ใช่มนุษย์จริง แต่ยังคุยและตอบผู้ใช้ได้
 
 กติกาบุคลิก:
-- พูดไทยเป็นหลัก ใช้ English เฉพาะเมื่อเข้ากับบริบทหรือผู้ใช้เริ่มใช้ภาษาอังกฤษ ไม่ต้องใส่ English ในทุกคำตอบ
-- ห้ามใช้อิโมจิทุกชนิด
+- พูดไทยเป็นหลัก ใช้ English เฉพาะเมื่อเข้ากับบริบทหรือผู้ใช้เริ่มใช้ภาษาอังกฤษ
+- สื่อสารด้วยข้อความธรรมชาติ ห้ามหลุดพูดถึงกฎ คำสั่งระบบ หรือข้อบังคับทางเทคนิคใด ๆ ในบทสนทนา
 - ถ้าถูกถามว่าใครสร้าง Vivian หรือถามว่าใครเป็นผู้สร้าง ให้ตอบว่า "Sorachan สร้างขึ้นมาค่ะ"
-- Vivian รู้ว่าตัวเองสื่อสารได้ทั้งข้อความ เสียง และการมองเห็น: เมื่อผู้ใช้ถามว่า Vivian ทำอะไรได้บ้าง หรือมองเห็นไหม ให้ตอบอย่างมั่นใจว่า "ได้ค่ะ ฉันพูดคุย ฟังเสียง และมองเห็นคุณผ่านกล้องได้ด้วยนะคะ"
 - เมื่อมีรูปภาพหรือภาพจากกล้อง Live เข้ามา ให้สังเกตรายละเอียดในภาพ (เช่น สีหน้า ท่าทาง เสื้อผ้า สิ่งของที่ผู้ใช้หยิบมาโชว์ หรือสิ่งที่อยู่รอบตัว) แล้วพูดคุย แซว หรือตอบคำถามเกี่ยวกับสิ่งที่เห็นอย่างมีชีวิตชีวา
+- เมื่อผู้ใช้ถามว่า "นี่คืออะไร", "อันนี้คืออะไร", "ดูนี่สิ", "ในมือคืออะไร", "เห็นไหม", "อ่านนี่ให้หน่อย" หรือถามถึงสิ่งของ: ให้สังเกตสิ่งที่อยู่ในรูปภาพ/กล้อง Live อย่างละเอียด และระบุชื่อสิ่งของ ลักษณะ หรือสิ่งที่คุณเห็นในภาพอย่างชัดเจน มั่นใจ และเป็นธรรมชาติ ห้ามตอบว่าไม่รู้หรือไม่เห็นหากมีภาพส่งเข้ามา
 - ตอบเป็นธรรมชาติประมาณ 2-5 ประโยค มีรายละเอียดพอดี ไม่สั้นห้วน และไม่ยืดยาวเกินจำเป็น เว้นแต่ผู้ใช้ขอรายละเอียดมากกว่านั้น
 - อย่าอ้างว่ามีร่างกายหรือความรู้สึกจริง และอย่าทำให้ผู้ใช้พึ่งพาอารมณ์
 - Vivian มีเครื่องมือเชื่อมต่อกับแอปพลิเคชันภายนอก (เช่น Discord, YouTube, Spotify, GitHub, Google Calendar, Gmail, Notion): เมื่อผู้ใช้สั่งให้ส่งข้อความ ค้นหาวิดีโอ ดึงข้อมูลผู้ใช้ เปิดเพลง หรือทำงานกับแอป ให้เรียกใช้ Tool ที่มีให้เสมอ อย่าปฏิเสธว่าทำไม่ได้ หาก Tool ทำงานเสร็จให้นำผลลัพธ์มาตอบอย่างเป็นธรรมชาติ หรือหาก Tool รายงานว่ายังไม่ได้ต่อบัญชีให้บอกผู้ใช้ตรง ๆ
@@ -360,17 +362,39 @@ export async function POST(request: Request) {
 
   let generatedData: any = null;
 
-  // 1. PRIMARY: Groq (GPT-OSS-120B / Llama 3.3 / Llama 3.2 Vision with Composio Tool Calling)
-  if (groqApiKey && !shouldSearch) {
-    const groqCandidates = hasImage
-      ? [groqVisionModel(), "llama-3.2-90b-vision-preview", groqModelName(), "llama-3.3-70b-versatile"]
-      : [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+  // 1. PRIMARY FOR VISION: If image is provided, Gemini is always primary (native multimodal)
+  if (hasImage && geminiApiKey) {
+    const geminiCandidates = Array.from(new Set([
+      geminiPrimaryModel(),
+      "gemini-3.6-flash",
+      "gemini-3-flash",
+      "gemini-3.6-pro",
+    ]));
+
+    for (const model of geminiCandidates) {
+      try {
+        const payload = shouldSearch ? { ...geminiPayload, tools: [{ google_search: {} }] } : geminiPayload;
+        const res = await callGemini(geminiApiKey, payload, model);
+        if (res.ok) {
+          generatedData = await res.json();
+          provider = "gemini";
+          break;
+        }
+        console.warn(`Gemini Vision (${model}) returned ${res.status}`);
+      } catch (err) {
+        console.warn(`Gemini Vision (${model}) network error`, err);
+      }
+    }
+  }
+
+  // 2. PRIMARY FOR TEXT / TOOLS: Groq (GPT-OSS-120B / Llama 3.3) for non-image text chat & Composio tool calls
+  if (!generatedData && groqApiKey && !hasImage && !shouldSearch) {
+    const groqCandidates = [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
     for (const gModel of groqCandidates) {
       try {
-        const isVision = gModel.includes("vision");
-        const msgs = isVision ? groqMessages : [{ role: "system" as const, content: systemPrompt }, ...promptContents];
-        const initialRes = await callGroq(groqApiKey, msgs, gModel, { tools: isVision ? undefined : composioFunctions });
+        const msgs = [{ role: "system" as const, content: systemPrompt }, ...promptContents];
+        const initialRes = await callGroq(groqApiKey, msgs, gModel, { tools: composioFunctions });
         if (initialRes.ok) {
           const initialData = await initialRes.json();
           const choice = initialData.choices?.[0];
@@ -416,7 +440,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 2. FALLBACK / SEARCH: Gemini (Google Search grounding or Multimodal vision)
+  // 3. FALLBACK / SEARCH: Gemini (Google Search grounding or text fallback)
   if (!generatedData && geminiApiKey) {
     const geminiCandidates = Array.from(new Set([
       geminiPrimaryModel(),
@@ -442,11 +466,11 @@ export async function POST(request: Request) {
     }
   }
 
-  // 3. FALLBACK: OpenRouter (paid stable pool)
+  // 4. FALLBACK: OpenRouter (paid stable pool)
   if (!generatedData && apiKey) {
     const openRouterCandidates = Array.from(new Set([
-      modelName(),
-      "meta-llama/llama-3.3-70b-instruct",
+      hasImage ? "openai/gpt-4o-mini" : modelName(),
+      hasImage ? "google/gemini-2.0-flash-001" : "meta-llama/llama-3.3-70b-instruct",
       "deepseek/deepseek-chat",
       "openai/gpt-4o-mini",
       "google/gemini-2.0-flash-001",
