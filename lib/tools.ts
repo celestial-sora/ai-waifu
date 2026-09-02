@@ -50,10 +50,10 @@ function extractCity(userText: string) {
 export async function weatherTool(userText: string): Promise<ToolResult> {
   try {
     const city = extractCity(userText);
-    const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=th`, { signal: AbortSignal.timeout(4000) });
+    const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=th`, { signal: AbortSignal.timeout(2000) });
     const geoData = await geo.json() as { results?: { name: string; latitude: number; longitude: number; country?: string }[] };
     const place = geoData.results?.[0] ?? { name: "Bangkok", latitude: 13.7563, longitude: 100.5018, country: "Thailand" };
-    const weather = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=Asia%2FBangkok`, { signal: AbortSignal.timeout(4000) });
+    const weather = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=Asia%2FBangkok`, { signal: AbortSignal.timeout(2000) });
     if (!weather.ok) throw new Error("weather failed");
     const data = await weather.json() as { current?: { temperature_2m?: number; relative_humidity_2m?: number; weather_code?: number } };
     const current = data.current ?? {};
