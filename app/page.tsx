@@ -548,8 +548,11 @@ export default function Home() {
     const visionIdle = Boolean(options.visionIdle);
     const text = (overrideText ?? message).trim();
     let imageToSend = options.image ?? attachedImage;
-    if (!imageToSend && cameraActiveRef.current && !idle && !visionIdle) {
-      imageToSend = captureCurrentFrame();
+    if (cameraActiveRef.current && !idle && !visionIdle) {
+      const liveFrame = captureCurrentFrame();
+      if (liveFrame) {
+        imageToSend = liveFrame;
+      }
     }
     if (sendingRef.current) return;
     if (!idle && !visionIdle && !text && !imageToSend) return;
@@ -844,26 +847,35 @@ export default function Home() {
 
   function captureCurrentFrame(): string | null {
     const video = videoRef.current;
-    if (!video || video.readyState < 2 || !video.videoWidth) return null;
-    const canvas = document.createElement("canvas");
-    const maxDim = 640;
-    let width = video.videoWidth;
-    let height = video.videoHeight;
-    if (width > maxDim || height > maxDim) {
-      if (width > height) {
-        height = Math.round((height * maxDim) / width);
-        width = maxDim;
-      } else {
-        width = Math.round((width * maxDim) / height);
-        height = maxDim;
+    if (!video) return null;
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    if (!vw || !vh) return null;
+
+    try {
+      const canvas = document.createElement("canvas");
+      const maxDim = 800;
+      let width = vw;
+      let height = vh;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
       }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(video, 0, 0, width, height);
+      return canvas.toDataURL("image/jpeg", 0.75);
+    } catch (err) {
+      console.warn("captureCurrentFrame error", err);
+      return null;
     }
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.drawImage(video, 0, 0, width, height);
-    return canvas.toDataURL("image/jpeg", 0.72);
   }
 
   useEffect(() => {
