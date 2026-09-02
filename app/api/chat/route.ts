@@ -19,6 +19,7 @@ export const maxDuration = 60;
 const userKey = "default";
 const modelName = () => process.env.OPENROUTER_MODEL ?? "google/gemma-4-31b-it:free";
 const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
+const groqVisionModel = () => process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
 const geminiPrimaryModel = () => {
   const custom = process.env.GEMINI_MODEL;
   if (custom && custom !== "gemini-2.5-flash" && custom !== "gemini-3-flash-preview") return custom;
@@ -62,17 +63,22 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], option
   });
 }
 
-async function callGroq(apiKey: string, messages: OpenRouterMessage[]) {
+async function callGroq(apiKey: string, messages: OpenRouterTurn[], model = groqModelName()) {
   return fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     signal: AbortSignal.timeout(providerTimeoutMs),
-    body: JSON.stringify({ model: groqModelName(), messages, temperature: .8, max_completion_tokens: 420 }),
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.8,
+      max_completion_tokens: 420,
+    }),
   });
 }
 
-async function callGemini(apiKey: string, payload: Record<string, unknown>, model = geminiPrimaryModel()) {
-  return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+async function callGemini(apiKey: string, payload: Record<string, unknown>, model = geminiPrimaryModel(), version = "v1beta") {
+  return fetch(`https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     signal: AbortSignal.timeout(providerTimeoutMs),
@@ -304,25 +310,48 @@ export async function POST(request: Request) {
   let response: Response | undefined;
 
   // 1. Try Gemini if search or image or primary
-  if (provider === "gemini" && geminiApiKey) {
-    try {
-      response = shouldSearch
-        ? await callGemini(geminiApiKey, { ...geminiPayload, tools: [{ google_search: {} }] })
-        : await callGemini(geminiApiKey, geminiPayload, geminiPrimaryModel());
-      if (!response.ok) {
-        console.warn(`Gemini primary model returned ${response.status}, trying fallback gemini-1.5-flash`);
-        response = await callGemini(geminiApiKey, geminiPayload, "gemini-1.5-flash");
+  if (geminiApiKey && (provider === "gemini" || shouldSearch)) {
+    const candidates = Array.from(new Set([
+      geminiPrimaryModel(),
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-latest",
+      "gemini-1.5-pro",
+    ]));
+
+    for (const model of candidates) {
+      try {
+        const payload = shouldSearch ? { ...geminiPayload, tools: [{ google_search: {} }] } : geminiPayload;
+        response = await callGemini(geminiApiKey, payload, model);
+        if (response.ok) {
+          provider = "gemini";
+          break;
+        }
+        console.warn(`Gemini (${model}) returned ${response.status}`);
+      } catch (err) {
+        console.warn(`Gemini (${model}) network error`, err);
       }
-    } catch (err) {
-      console.warn("Gemini call error", err);
     }
   }
 
-  // 2. Try Groq (if text-only conversation and Groq key is present)
-  if ((!response || !response.ok) && groqApiKey && !hasImage && !shouldSearch) {
-    provider = "groq";
+  // 2. Try Groq (handles text with GPT-OSS-120B and vision with llama-3.2-11b-vision-preview)
+  if ((!response || !response.ok) && groqApiKey && !shouldSearch) {
+    const modelToUse = hasImage ? groqVisionModel() : groqModelName();
     try {
-      response = await callGroq(groqApiKey, [{ role: "system", content: systemPrompt }, ...promptContents]);
+      response = await callGroq(groqApiKey, openRouterMessages, modelToUse);
+      if (response.ok) {
+        provider = "groq";
+      } else {
+        console.warn(`Groq (${modelToUse}) returned ${response.status}`);
+        // If 11b vision preview failed on Groq, try 90b vision preview
+        if (hasImage && modelToUse !== "llama-3.2-90b-vision-preview") {
+          const fallbackGroq = await callGroq(groqApiKey, openRouterMessages, "llama-3.2-90b-vision-preview");
+          if (fallbackGroq.ok) {
+            response = fallbackGroq;
+            provider = "groq";
+          }
+        }
+      }
     } catch (err) {
       console.warn("Groq call error", err);
     }
@@ -330,21 +359,15 @@ export async function POST(request: Request) {
 
   // 3. Try OpenRouter (handles both text and multimodal image_url)
   if ((!response || !response.ok) && apiKey && !shouldSearch) {
-    provider = "openrouter";
     try {
       response = await callOpenRouter(apiKey, openRouterMessages);
+      if (response.ok) {
+        provider = "openrouter";
+      } else {
+        console.warn(`OpenRouter returned ${response.status}`);
+      }
     } catch (err) {
       console.warn("OpenRouter call error", err);
-    }
-  }
-
-  // 4. Final Gemini fallback if not already tried
-  if ((!response || !response.ok) && geminiApiKey && provider !== "gemini") {
-    provider = "gemini";
-    try {
-      response = await callGemini(geminiApiKey, geminiPayload, "gemini-1.5-flash");
-    } catch (err) {
-      console.warn("Gemini final fallback error", err);
     }
   }
 
