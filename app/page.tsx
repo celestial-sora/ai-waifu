@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 
-type IconName = "focus" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound";
+type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
     focus: <><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="3.4"/></>,
+    config: <><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="18" r="2"/></>,
+    info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></>,
     wardrobe: <><path d="M12 3a3 3 0 0 1 3 3c0 1.4-1.1 2.3-2.4 2.8L4 14.2A2 2 0 0 0 5.1 18h13.8a2 2 0 0 0 1.1-3.8l-8.6-5.4"/><path d="M9 18v2M15 18v2"/></>,
     chevron: <path d="m5 9 7 7 7-7"/>,
     mic: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></>,
@@ -118,6 +120,7 @@ export default function Home() {
   const [sending, setSending] = useState(false);
   const [sttPreview, setSttPreview] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
@@ -1053,8 +1056,9 @@ export default function Home() {
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
       <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
-        <button type="button" onClick={() => window.dispatchEvent(new Event("resize"))} aria-label="จัด Vivian ให้อยู่กึ่งกลาง"><Icon name="focus"/></button>
+        <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิด Config" title="Config"><Icon name="config"/></button>
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="memory"/></button>
+        <button type="button" onClick={() => setInfoOpen(true)} aria-label="ข้อมูลเวอร์ชัน" title="Info"><Icon name="info"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
       {attachedImage && (
@@ -1093,5 +1097,6 @@ export default function Home() {
       <div className="custom-instructions"><strong>Custom instructions</strong><p>บอก Vivian ว่าคุณอยากให้ตอบอย่างไร เช่น ภาษา โทนเสียง หรือสิ่งที่ควรหลีกเลี่ยง</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="เช่น เรียกฉันว่า... ตอบสั้น ๆ และใช้ภาษาไทยเป็นหลัก" /></div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}
+    {infoOpen && <div className="chat-backdrop" role="presentation" onClick={() => setInfoOpen(false)}><section className="info-sheet" role="dialog" aria-modal="true" aria-label="ข้อมูลเวอร์ชัน" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>VIVIAN INFO</small><h1>ข้อมูลเวอร์ชัน</h1><p>ข้อมูลของ companion เวอร์ชันที่กำลังใช้งาน</p></div><button type="button" onClick={() => setInfoOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="info-list"><p><strong>App</strong>Vivian AI Companion</p><p><strong>Codename</strong>{APP_CODENAME}</p><p><strong>Version</strong>v1.0.0-stable</p><p><strong>Character</strong>Miss</p></div></section></div>}
   </main>;
 }
