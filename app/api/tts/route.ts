@@ -10,8 +10,29 @@ const upstreamTimeoutMs = 14_000;
 function speechText(value: string) {
   return value.split(/\n\s*แหล่งข้อมูล\s*:/i)[0]
     .replace(/https?:\/\/\S+/g, "")
+    .replace(/[*_~`]/g, "")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
+    // Keep Thai and English word boundaries audible to the tokenizer.
+    .replace(/([ก-๙])([A-Za-z])/g, "$1 $2")
+    .replace(/([A-Za-z])([ก-๙])/g, "$1 $2")
+    // Turn repeated words into a gentle spoken pause without removing them.
+    .replace(/\b([A-Za-zก-๙]{2,})(\s+\1\b)/giu, "$1, $1")
+    .replace(/([!?]){2,}/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function speechStyle(value: string) {
+  const affectionate = /~|〜|～/.test(value);
+  const exclamatory = /!|！/.test(value);
+  const question = /\?|？/.test(value);
+  const repeated = /\b([A-Za-zก-๙]{2,})\s+\1\b/iu.test(value);
+  return {
+    // Tilde is a user-facing tone cue: soften and stretch the delivery.
+    speedAdjustment: affectionate ? -.05 : exclamatory ? .03 : question ? -.03 : repeated ? -.015 : 0,
+    temperature: affectionate ? .72 : exclamatory ? .7 : question ? .62 : .65,
+    topP: affectionate ? .8 : exclamatory ? .78 : .75,
+  };
 }
 
 export async function POST(request: Request) {
@@ -23,9 +44,10 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "FISH_AUDIO_API_KEY is not configured" }, { status: 500 });
   if (!voiceId) return NextResponse.json({ error: "FISH_AUDIO_VOICE_ID is not configured" }, { status: 500 });
 
-  const { text, speed, pitch } = (await request.json()) as { text?: string; speed?: number; pitch?: number };
+  const { text, speed } = (await request.json()) as { text?: string; speed?: number };
   const cleanText = text ? speechText(text) : "";
   if (!cleanText || cleanText.length > 5000) return NextResponse.json({ error: "Text is required and must be under 5000 characters" }, { status: 400 });
+  const style = speechStyle(text ?? "");
 
   let response: Response;
   try {
@@ -42,11 +64,13 @@ export async function POST(request: Request) {
         // punctuation already carry Vivian's conversational expression.
         text: cleanText,
         reference_id: voiceId,
-        // Keep the reference voice's native cadence. Overriding it with a
-        // faster speed made Thai syllables sound stretched/"เหน่อ".
-        prosody: { speed: 1, volume: 0 },
-        temperature: 0.7,
-        top_p: 0.7,
+        // Keep Thai syllables relaxed while still allowing the user's voice
+        // speed preference to apply. Fish documents speed as the supported
+        // prosody control; pitch is intentionally not sent because it is not
+        // part of this endpoint's standard Prosody schema.
+        prosody: { speed: Math.min(1.2, Math.max(.75, (Number.isFinite(speed) ? speed! : 1) + style.speedAdjustment)), volume: 0, normalize_loudness: true },
+        temperature: style.temperature,
+        top_p: style.topP,
         repetition_penalty: 1.2,
         format: "mp3",
         sample_rate: 44100,
@@ -54,10 +78,10 @@ export async function POST(request: Request) {
         latency: "normal",
         // Avoid loudness reshaping on Thai audio; it can introduce clipping
         // or a metallic/distorted tone on some reference voices.
-        normalize: false,
+        normalize: true,
         // Keep continuity between generated chunks: disabling this can make
         // longer Thai replies end after only their first phrase.
-        chunk_length: 300,
+        chunk_length: 220,
         min_chunk_length: 50,
         condition_on_previous_chunks: true,
       }),

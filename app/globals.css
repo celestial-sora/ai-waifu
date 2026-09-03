@@ -77,6 +77,7 @@ button { cursor: pointer; }
 .bond-panel i { display: block; height: 7px; overflow: hidden; border-radius: 99px; background: #efe7ec; }
 .bond-panel b { display: block; height: 100%; border-radius: 99px; background: #8a5a78; }
 .bond-panel em { font-style: normal; text-align: right; font-family: Arial, sans-serif; font-size: 11px; }
+.memory-edit { flex: 1; display: grid; gap: .5rem; }.memory-edit textarea { min-height: 70px; padding: .6rem; resize: vertical; border: 1px solid #d8cbd5; border-radius: .7rem; font: inherit; }.memory-edit div { display: flex; gap: .4rem; }.memory-edit button, .memory-edit-button { padding: .4rem .7rem; border: 0; border-radius: .6rem; color: #6e5866; background: #eee8ed; }.memory-edit button:first-child { color: #fff; background: #49323f; }.memory-edit-button { flex: 0 0 auto; }
 
 /* Vision & Camera styling — positioned on the left side so it doesn't block side-tools */
 .camera-pip { position: absolute; z-index: 10; top: calc(max(22px, env(safe-area-inset-top)) + 52px); left: clamp(24px, 4vw, 58px); right: auto; width: clamp(160px, 28vw, 240px); aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; border: 1.5px solid #a855f7aa; background: #120924cc; box-shadow: 0 10px 30px #0009, 0 0 16px #a855f744; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); display: flex; flex-direction: column; animation: scene-fade-in .3s ease both; }
