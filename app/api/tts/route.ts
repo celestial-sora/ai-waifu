@@ -42,6 +42,12 @@ export async function POST(request: Request) {
         // punctuation already carry Vivian's conversational expression.
         text: cleanText,
         reference_id: voiceId,
+        // Keep the reference voice's native cadence. Overriding it with a
+        // faster speed made Thai syllables sound stretched/"เหน่อ".
+        prosody: { speed: 1, volume: 0, normalize_loudness: true },
+        temperature: 0.7,
+        top_p: 0.7,
+        repetition_penalty: 1.2,
         format: "mp3",
         sample_rate: 44100,
         mp3_bitrate: 128,
