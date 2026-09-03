@@ -27,14 +27,10 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 type Message = { from: "me" | "vivian"; text: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
 const greetings = [
-  "สวัสดีค่ะ วันนี้อยากคุยกับ Vivian เรื่องอะไรดีคะ?",
-  "อ๊ะ... กลับมาแล้วเหรอคะ ยินดีต้อนรับสู่ New Session นะคะ",
-  "สวัสดีค่ะ ฉันพร้อมฟังคุณเสมอ วันนี้เป็นยังไงบ้างคะ?",
-  "คุณมาแล้ว... ดีจังค่ะ Vivian กำลังรอคุยอยู่พอดีเลย",
-  "Hello... เอ๊ะ ไม่สิ สวัสดีค่ะ วันนี้ให้ฉันช่วยอะไรดีคะ?",
-  "เริ่มบทสนทนาใหม่กันนะคะ ถ้ามีอะไรอยากเล่า Vivian ฟังอยู่ค่ะ",
+  "คิดถึงจังเลย~\nขอกอดหน่อยได้ไหม~",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
+const BACKGROUNDS = { day: "/backgrounds/christmas-day-4x3.jpg", night: "/backgrounds/christmas-night-4x3.jpg" } as const;
 const APP_CODENAME = "Sandrome";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 const CHAT_TIMEOUT_MS = 35000;
@@ -53,12 +49,6 @@ const LAST_IDLE_KEY = "vivian-last-idle";
 const VISION_MIN_INTERVAL_MS = 5000;
 const VISION_MAX_INTERVAL_MS = 10000;
 const VISION_COOLDOWN_MS = 6000;
-type SceneMood = Mood | "angry" | "surprised" | "thinking";
-const SCENE_BACKGROUNDS: Record<SceneMood, string> = {
-  calm: "/backgrounds/calm.jpg", warm: "/backgrounds/warm.jpg", playful: "/backgrounds/playful.png",
-  shy: "/backgrounds/shy.png", melancholy: "/backgrounds/melancholy.png", angry: "/backgrounds/angry.png",
-  surprised: "/backgrounds/surprised.png", tired: "/backgrounds/tired.png", thinking: "/backgrounds/thinking.jpg",
-};
 
 function abortAfter(ms: number) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
@@ -103,6 +93,7 @@ export default function Home() {
   const interactedRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
+  const speechSpeedRef = useRef(1.05);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -132,14 +123,29 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
-  const [sceneMood, setSceneMood] = useState<SceneMood>("calm");
   const [customInstructions, setCustomInstructions] = useState("");
+  const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
+  const [memoryDraft, setMemoryDraft] = useState("");
+  const [backgroundMode, setBackgroundMode] = useState<keyof typeof BACKGROUNDS>("day");
+  const [speechSpeed, setSpeechSpeed] = useState(1.05);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
   sendingRef.current = sending;
+  speechSpeedRef.current = speechSpeed;
   companionRef.current = companion;
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setBackgroundMode(hour >= 6 && hour < 18 ? "day" : "night");
+  }, []);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    const refresh = window.setInterval(() => { void loadMemory(); }, 3000);
+    return () => window.clearInterval(refresh);
+  }, [chatOpen]);
 
   useEffect(() => {
     // Bump the preference key so users who previously had Miss selected
@@ -162,11 +168,6 @@ export default function Home() {
   useEffect(() => {
     // Warm every scene into the browser cache before the first reaction can
     // request a swap. This prevents a network fetch from delaying the fade.
-    Object.values(SCENE_BACKGROUNDS).forEach((source) => {
-      const image = new Image();
-      image.decoding = "async";
-      image.src = source;
-    });
   }, []);
 
   useEffect(() => {
@@ -307,7 +308,7 @@ export default function Home() {
       if (Array.isArray(data.memories)) setMemories(data.memories);
       if (data.messages?.length) setHistoryMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
       const next = normalizeCompanion(data.companion);
-      if (next) { setCompanion(next); setSceneMood(next.mood); }
+      if (next) setCompanion(next);
     } catch { /* Vivian stays usable while Supabase is unavailable. */ }
   }
   function normalizeCompanion(raw: unknown): CompanionState | null {
@@ -482,7 +483,7 @@ export default function Home() {
     try {
       await withTimeout(unlockAudio(), AUDIO_UNLOCK_MS, undefined);
       if (speakId !== speakIdRef.current) return false;
-      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text }) });
+      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text, speed: speechSpeedRef.current }) });
       if (speakId !== speakIdRef.current) return false;
       if (!response.ok) {
         const error = await response.json().catch(() => null) as { error?: string; code?: string } | null;
@@ -637,14 +638,6 @@ export default function Home() {
     if (idle && mood === "tired") return "S chabei";
     return moodExpression(mood, intensity);
   }
-  function sceneForExpression(expression: string, fallback: Mood): SceneMood {
-    const scenes: Record<string, SceneMood> = {
-      "M nu": "angry", "M QAQ": "melancholy", "M love": "shy", "M lianhong": "warm",
-      "M xingxing": "playful", "M xingxing2": "playful", "X shetou": "playful",
-      "M wenhao ": "surprised", "S chabei": "tired", "M ##": "thinking",
-    };
-    return scenes[expression] ?? fallback;
-  }
   async function handleExpressionCommand(text: string) {
     const match = text.match(/^\/(?:expression|exp)(?:\s+(.+))?$/i);
     if (!match) return false;
@@ -656,7 +649,6 @@ export default function Home() {
     }
     if (!argument || argument.toLowerCase() === "default" || argument.toLowerCase() === "reset") {
       resetReaction();
-      setSceneMood(companionRef.current.mood);
       setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: "กลับไปใช้ expression default แล้วค่ะ" }]);
       return true;
     }
@@ -668,7 +660,6 @@ export default function Home() {
     try {
       if (!modelRef.current) throw new Error("Live2D model is not ready");
       await modelRef.current.expression(expression);
-      setSceneMood(sceneForExpression(expression, companionRef.current.mood));
       setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: `เปลี่ยนเป็น expression ${expression.trim()} แล้วค่ะ` }]);
     } catch (error) {
       console.warn("Manual Live2D expression unavailable", error);
@@ -683,7 +674,6 @@ export default function Home() {
     const combined = `${reply} ${userText}`;
     const { mood, moodIntensity: intensity } = companionRef.current;
     const expression = situationExpression(combined, mood, intensity, idle);
-    setSceneMood(sceneForExpression(expression, mood));
     try {
       const supportedExpressions = MODEL_CONFIG[selectedModel].expressions;
       if (expression && supportedExpressions.includes(expression)) await model.expression(expression);
@@ -1019,9 +1009,17 @@ export default function Home() {
     };
   }, [cameraActive, message]);
 
+  async function saveMemory(memory: Memory) {
+    const response = await fetch("/api/memory", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: memory.id, memory: memoryDraft, category: memory.category, importance: memory.importance }) });
+    if (!response.ok) return setErrorNotice("บันทึกความจำไม่สำเร็จค่ะ");
+    const data = await response.json() as { memory?: Memory };
+    if (data.memory) setMemories((current) => current.map((item) => item.id === memory.id ? data.memory! : item));
+    setEditingMemoryId(null);
+  }
+
   return <main className="companion-shell">
     <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
-      <div className="scene-background" key={sceneMood} style={{ backgroundImage: `url("${SCENE_BACKGROUNDS[sceneMood]}")` }} aria-hidden="true" />
+      <div className="scene-background" style={{ backgroundImage: `url("${BACKGROUNDS[backgroundMode]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       <div className="camera-pip" style={{ display: cameraActive ? "flex" : "none" }} aria-label="Live Camera Vision">
@@ -1079,7 +1077,7 @@ export default function Home() {
     {chatOpen && <div className="chat-backdrop" role="presentation" onClick={() => setChatOpen(false)}>
       <section className="chat-sheet" role="dialog" aria-modal="true" aria-label="ประวัติแชตกับ Vivian" onClick={(event) => event.stopPropagation()}>
         <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
-        <div className="chat-history">{[...historyMessages, ...messages].map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><p>{item.text}</p></div>)}</div>
+        <div className="chat-history">{[...historyMessages, ...messages].reverse().map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><p>{item.text}</p></div>)}</div>
       </section>
     </div>}
     {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
@@ -1091,7 +1089,7 @@ export default function Home() {
           <div key={String(label)}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><em>{value}</em></div>
         ))}
       </div>
-      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
+      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/>{editingMemoryId === memory.id ? <div className="memory-edit"><textarea value={memoryDraft} maxLength={500} onChange={(event) => setMemoryDraft(event.target.value)} /><div><button type="button" onClick={() => void saveMemory(memory)}>บันทึก</button><button type="button" onClick={() => setEditingMemoryId(null)}>ยกเลิก</button></div></div> : <><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" className="memory-edit-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryDraft(memory.memory); }} aria-label="แก้ไขความจำ">แก้ไข</button></>}</article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
       <div className="custom-instructions"><strong>Custom instructions</strong><p>บอก Vivian ว่าคุณอยากให้ตอบอย่างไร เช่น ภาษา โทนเสียง หรือสิ่งที่ควรหลีกเลี่ยง</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="เช่น เรียกฉันว่า... ตอบสั้น ๆ และใช้ภาษาไทยเป็นหลัก" /></div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}
