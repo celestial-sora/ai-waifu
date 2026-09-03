@@ -10,14 +10,17 @@ const upstreamTimeoutMs = 14_000;
 function speechText(value: string) {
   return value.split(/\n\s*แหล่งข้อมูล\s*:/i)[0]
     .replace(/https?:\/\/\S+/g, "")
-    .replace(/[*_~`]/g, "")
+    .replace(/[*_`]/g, "")
+    // The tilde is handled as a tone signal below; remove it only after the
+    // style has been selected so it never becomes a spoken syllable.
+    .replace(/[~〜～]/g, "")
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
     // Keep Thai and English word boundaries audible to the tokenizer.
     .replace(/([ก-๙])([A-Za-z])/g, "$1 $2")
     .replace(/([A-Za-z])([ก-๙])/g, "$1 $2")
     // Turn repeated words into a gentle spoken pause without removing them.
     .replace(/\b([A-Za-zก-๙]{2,})(\s+\1\b)/giu, "$1, $1")
-    .replace(/([!?]){2,}/g, "$1")
+    .replace(/([!?！？]){2,}/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -28,10 +31,12 @@ function speechStyle(value: string) {
   const question = /\?|？/.test(value);
   const repeated = /\b([A-Za-zก-๙]{2,})\s+\1\b/iu.test(value);
   return {
-    // Tilde is a user-facing tone cue: soften and stretch the delivery.
-    speedAdjustment: affectionate ? -.05 : exclamatory ? .03 : question ? -.03 : repeated ? -.015 : 0,
-    temperature: affectionate ? .72 : exclamatory ? .7 : question ? .62 : .65,
-    topP: affectionate ? .8 : exclamatory ? .78 : .75,
+    // A tilde should sound warmly affectionate, not drawn-out or nasal.
+    speedAdjustment: affectionate ? -.02 : exclamatory ? .01 : question ? -.015 : repeated ? -.01 : 0,
+    // A tighter sampling range keeps Thai consonants and English terms more
+    // consistent across sentences while retaining a little warmth.
+    temperature: affectionate ? .66 : exclamatory ? .64 : question ? .60 : .61,
+    topP: affectionate ? .74 : exclamatory ? .72 : .70,
   };
 }
 
@@ -68,7 +73,7 @@ export async function POST(request: Request) {
         // speed preference to apply. Fish documents speed as the supported
         // prosody control; pitch is intentionally not sent because it is not
         // part of this endpoint's standard Prosody schema.
-        prosody: { speed: Math.min(1.2, Math.max(.75, (Number.isFinite(speed) ? speed! : 1) + style.speedAdjustment)), volume: 0, normalize_loudness: true },
+        prosody: { speed: Math.min(1.06, Math.max(.90, (Number.isFinite(speed) ? speed! : .98) + style.speedAdjustment)), volume: 0, normalize_loudness: true },
         temperature: style.temperature,
         top_p: style.topP,
         repetition_penalty: 1.2,
@@ -76,13 +81,13 @@ export async function POST(request: Request) {
         sample_rate: 44100,
         mp3_bitrate: 192,
         latency: "normal",
-        // Avoid loudness reshaping on Thai audio; it can introduce clipping
-        // or a metallic/distorted tone on some reference voices.
-        normalize: true,
+        // Fish text normalization targets English and Chinese. Leaving it off
+        // preserves Thai spelling and avoids an unnatural Thai pronunciation.
+        normalize: false,
         // Keep continuity between generated chunks: disabling this can make
         // longer Thai replies end after only their first phrase.
-        chunk_length: 220,
-        min_chunk_length: 50,
+        chunk_length: 280,
+        min_chunk_length: 70,
         condition_on_previous_chunks: true,
       }),
     });
