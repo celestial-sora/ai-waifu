@@ -293,7 +293,7 @@ export async function POST(request: Request) {
   const toolContext = toolsPromptBlock(toolResults) + composioContext;
   const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, visionIdle);
   const promptContents: OpenRouterMessage[] = idle
-    ? [{ role: "user", content: "[ระบบ] Vivian คิดถึงผู้ใช้และอยากทักสั้น ๆ 1-2 ประโยคอย่างเป็นธรรมชาติ ห้ามพูดถึงเวลาและอย่าพูดเรื่องเครื่องมือ" }]
+    ? [{ role: "user", content: `[ระบบ] สุ่มเลือก idle greeting หนึ่งแบบจากสองแบบนี้ แล้วตอบตามข้อความนั้นแบบเป็นธรรมชาติ อบอุ่น และอ้อนเล็กน้อย ห้ามพูดถึงเวลา ห้ามพูดเรื่องเครื่องมือ: (1) "คุณหายไปไหน ฉันเหงา~ กลับมาคุยกับฉันหน่อย~" หรือ (2) "คุณหายไปไหนกันน้าา~ จะกลับมาคุยกันอีกไหมน้าา?"` }]
     : visionIdle
       ? [{ role: "user", content: "[ระบบกล้อง Live] นี่คือภาพปัจจุบันจากกล้องของผู้ใช้ ให้ Vivian สังเกตและทักทายหรือแสดงความคิดเห็นสั้นๆ 1-2 ประโยคเกี่ยวกับสิ่งที่เห็นอย่างเป็นธรรมชาติและเป็นกันเอง" }]
       : contents;
