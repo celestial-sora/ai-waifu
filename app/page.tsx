@@ -35,7 +35,7 @@ const greetings = [
   "เริ่มบทสนทนาใหม่กันนะคะ ถ้ามีอะไรอยากเล่า Vivian ฟังอยู่ค่ะ",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
-const APP_CODENAME = "Columbina";
+const APP_CODENAME = "Sandrome";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 const CHAT_TIMEOUT_MS = 35000;
 // The server aborts Fish at 14 seconds. Give the response a small transport
