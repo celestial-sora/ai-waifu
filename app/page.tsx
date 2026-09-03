@@ -133,8 +133,6 @@ export default function Home() {
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [sceneMood, setSceneMood] = useState<SceneMood>("calm");
-  const [speechSpeed, setSpeechSpeed] = useState(1.05);
-  const [speechPitch, setSpeechPitch] = useState(1);
   const [customInstructions, setCustomInstructions] = useState("");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
@@ -149,11 +147,7 @@ export default function Home() {
     // old cached selection.
     const storedModel = window.localStorage.getItem("vivian-model-v2");
     if (isModelKey(storedModel)) setSelectedModel(storedModel);
-    const storedSpeed = Number(window.localStorage.getItem("vivian-speech-speed-v2"));
-    const storedPitch = Number(window.localStorage.getItem("vivian-speech-pitch"));
     setCustomInstructions(window.localStorage.getItem("vivian-custom-instructions") ?? "");
-    if (Number.isFinite(storedSpeed)) setSpeechSpeed(Math.min(1.2, Math.max(.75, storedSpeed)));
-    if (Number.isFinite(storedPitch)) setSpeechPitch(Math.min(1.2, Math.max(.8, storedPitch)));
     const today = new Date().toISOString().slice(0, 10);
     const lastCheckIn = window.localStorage.getItem("vivian-checkin-date");
     const previousStreak = Number(window.localStorage.getItem("vivian-streak") ?? 0);
@@ -488,7 +482,7 @@ export default function Home() {
     try {
       await withTimeout(unlockAudio(), AUDIO_UNLOCK_MS, undefined);
       if (speakId !== speakIdRef.current) return false;
-      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text, speed: speechSpeed, pitch: speechPitch }) });
+      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text }) });
       if (speakId !== speakIdRef.current) return false;
       if (!response.ok) {
         const error = await response.json().catch(() => null) as { error?: string; code?: string } | null;
@@ -1099,7 +1093,6 @@ export default function Home() {
       </div>
       <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/><p><strong>{memory.category}</strong>{memory.memory}</p></article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
       <div className="custom-instructions"><strong>Custom instructions</strong><p>บอก Vivian ว่าคุณอยากให้ตอบอย่างไร เช่น ภาษา โทนเสียง หรือสิ่งที่ควรหลีกเลี่ยง</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="เช่น เรียกฉันว่า... ตอบสั้น ๆ และใช้ภาษาไทยเป็นหลัก" /></div>
-      <div className="voice-settings"><strong>ตั้งค่าเสียง</strong><label>ความเร็ว <input type="range" min=".75" max="1.2" step=".05" value={speechSpeed} onChange={(event) => { const value = Number(event.target.value); setSpeechSpeed(value); window.localStorage.setItem("vivian-speech-speed-v2", String(value)); }} /></label><label>โทนเสียง <input type="range" min=".8" max="1.2" step=".05" value={speechPitch} onChange={(event) => { const value = Number(event.target.value); setSpeechPitch(value); window.localStorage.setItem("vivian-speech-pitch", String(value)); }} /></label></div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}
   </main>;
