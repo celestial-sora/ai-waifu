@@ -95,7 +95,7 @@ export default function Home() {
   const interactedRef = useRef(false);
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
-  const speechSpeedRef = useRef(1.05);
+  const speechSpeedRef = useRef(.98);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -130,7 +130,7 @@ export default function Home() {
   const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
   const [backgroundMode, setBackgroundMode] = useState<keyof typeof BACKGROUNDS>("day");
-  const [speechSpeed, setSpeechSpeed] = useState(1.05);
+  const [speechSpeed, setSpeechSpeed] = useState(.98);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
