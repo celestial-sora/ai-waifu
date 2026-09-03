@@ -24,7 +24,7 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-type Message = { from: "me" | "vivian"; text: string };
+type Message = { from: "me" | "vivian"; text: string; timestamp?: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
 const greetings = [
   "คิดถึงจังเลย~\nขอกอดหน่อยได้ไหม~",
@@ -306,7 +306,7 @@ export default function Home() {
       const response = await fetch("/api/memory", { cache: "no-store" });
       const data = await response.json();
       if (Array.isArray(data.memories)) setMemories(data.memories);
-      if (data.messages?.length) setHistoryMessages(data.messages.map((item: { role: string; content: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content })));
+      if (data.messages?.length) setHistoryMessages(data.messages.map((item: { role: string; content: string; created_at?: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content, timestamp: item.created_at })));
       const next = normalizeCompanion(data.companion);
       if (next) setCompanion(next);
     } catch { /* Vivian stays usable while Supabase is unavailable. */ }
@@ -589,7 +589,7 @@ export default function Home() {
       // Do not reveal the reply bubble before Fish Audio has started. This
       // keeps the visible text and spoken response arriving together.
       if (!muted) await speak(reply);
-      setMessages((current) => [...current, { from: "vivian", text: reply }]);
+      setMessages((current) => [...current, { from: "vivian", text: reply, timestamp: new Date().toISOString() }]);
       const nextCompanion = normalizeCompanion(data.companion);
       if (nextCompanion) setCompanion(nextCompanion);
       if (data.memories?.length) setMemories(data.memories.filter((item: Memory) => typeof item.id === "number"));
@@ -1077,7 +1077,7 @@ export default function Home() {
     {chatOpen && <div className="chat-backdrop" role="presentation" onClick={() => setChatOpen(false)}>
       <section className="chat-sheet" role="dialog" aria-modal="true" aria-label="ประวัติแชตกับ Vivian" onClick={(event) => event.stopPropagation()}>
         <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
-        <div className="chat-history">{[...historyMessages, ...messages].reverse().map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><p>{item.text}</p></div>)}</div>
+        <div className="chat-history">{[...historyMessages, ...messages].sort((a, b) => (b.timestamp ? Date.parse(b.timestamp) : 0) - (a.timestamp ? Date.parse(a.timestamp) : 0)).map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.timestamp ?? "current"}-${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><time dateTime={item.timestamp}>{item.timestamp ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.timestamp)) : "ตอนนี้"}</time><p>{item.text}</p></div>)}</div>
       </section>
     </div>}
     {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
