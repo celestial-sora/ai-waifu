@@ -29,12 +29,13 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
 
 type Message = { from: "me" | "vivian"; text: string; timestamp?: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
-type SpeechLanguage = "th" | "en" | "ja" | "ko";
+type SpeechLanguage = "th" | "en" | "ja" | "ko" | "zh";
 const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName: string }> = [
   { code: "th", label: "Thai", nativeName: "ไทย" },
   { code: "en", label: "English", nativeName: "EN" },
   { code: "ja", label: "Japanese", nativeName: "JP" },
   { code: "ko", label: "Korean", nativeName: "KR" },
+  { code: "zh", label: "Chinese", nativeName: "CN" },
 ];
 const greetings = [
   "คิดถึงจังเลย~\nขอกอดหน่อยได้ไหม~",
@@ -1073,7 +1074,7 @@ export default function Home() {
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
       <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิด Config" title="Config"><Icon name="config"/></button>
-        <button type="button" className="language-lock" onClick={() => setLanguageOpen(true)} aria-label={`ล็อกภาษา ${speechLanguage.toUpperCase()}`} title={`Language lock: ${speechLanguage.toUpperCase()}`}><Icon name="language"/><span>{speechLanguage === "ja" ? "JP" : speechLanguage === "ko" ? "KR" : speechLanguage.toUpperCase()}</span></button>
+        <button type="button" className="language-lock" onClick={() => setLanguageOpen(true)} aria-label={`ล็อกภาษา ${speechLanguage.toUpperCase()}`} title={`Language lock: ${speechLanguage.toUpperCase()}`}><Icon name="language"/><span>{speechLanguage === "ja" ? "JP" : speechLanguage === "ko" ? "KR" : speechLanguage === "zh" ? "CN" : speechLanguage.toUpperCase()}</span></button>
         <button type="button" onClick={() => setInfoOpen(true)} aria-label="ข้อมูลเวอร์ชัน" title="Info"><Icon name="info"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>

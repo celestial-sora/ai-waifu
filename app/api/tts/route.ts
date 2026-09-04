@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   if (!voiceId) return NextResponse.json({ error: "FISH_AUDIO_VOICE_ID is not configured" }, { status: 500 });
 
   const { text, speed, language } = (await request.json()) as { text?: string; speed?: number; language?: string };
-  const speechLanguage = language === "en" || language === "ja" || language === "ko" || language === "th" ? language : "th";
+  const speechLanguage = language === "en" || language === "ja" || language === "ko" || language === "zh" || language === "th" ? language : "th";
   const cleanText = text ? speechText(text) : "";
   if (!cleanText || cleanText.length > 5000) return NextResponse.json({ error: "Text is required and must be under 5000 characters" }, { status: 400 });
   const style = speechStyle(text ?? "");
