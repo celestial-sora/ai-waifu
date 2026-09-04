@@ -14,10 +14,11 @@ export async function POST(request: Request) {
   const form = new FormData();
   form.append("file", file, file.name || "vivian-recording");
   form.append("model_id", "scribe_v2");
-  // Thai is the app's primary language. Keeping the recognizer anchored to
-  // Thai prevents room noise from being hallucinated as Chinese/Spanish,
-  // while English names and short phrases can still appear in Thai speech.
-  form.append("language_code", "th");
+  const requestedLanguage = incoming.get("language");
+  const language = requestedLanguage === "en" || requestedLanguage === "ja" || requestedLanguage === "ko" || requestedLanguage === "th" ? requestedLanguage : "th";
+  // Anchor transcription to the language selected in the companion UI; this
+  // prevents the recognizer from guessing a different script from room noise.
+  form.append("language_code", language);
   form.append("num_speakers", "1");
   form.append("tag_audio_events", "false");
   let response: Response;

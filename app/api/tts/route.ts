@@ -49,7 +49,8 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "FISH_AUDIO_API_KEY is not configured" }, { status: 500 });
   if (!voiceId) return NextResponse.json({ error: "FISH_AUDIO_VOICE_ID is not configured" }, { status: 500 });
 
-  const { text, speed } = (await request.json()) as { text?: string; speed?: number };
+  const { text, speed, language } = (await request.json()) as { text?: string; speed?: number; language?: string };
+  const speechLanguage = language === "en" || language === "ja" || language === "ko" || language === "th" ? language : "th";
   const cleanText = text ? speechText(text) : "";
   if (!cleanText || cleanText.length > 5000) return NextResponse.json({ error: "Text is required and must be under 5000 characters" }, { status: 400 });
   const style = speechStyle(text ?? "");
@@ -102,6 +103,6 @@ export async function POST(request: Request) {
   }
   const audio = await response.arrayBuffer();
   const elapsedMs = Date.now() - startedAt;
-  console.info("Fish Audio TTS ready", { elapsedMs, textLength: cleanText.length, bytes: audio.byteLength });
+  console.info("Fish Audio TTS ready", { elapsedMs, textLength: cleanText.length, language: speechLanguage, bytes: audio.byteLength });
   return new NextResponse(audio, { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store", "Server-Timing": `fish;dur=${elapsedMs}` } });
 }

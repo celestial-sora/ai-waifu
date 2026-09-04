@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 
-type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound";
+type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -22,12 +22,20 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
     close: <path d="m6 6 12 12M18 6 6 18"/>,
     memory: <><path d="M20 12c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8 8 3.6 8 8Z"/><path d="M12 8v4l2.8 1.8"/></>,
     sound: <><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/></>,
+    language: <><path d="M4 5h9M8.5 3v2M6 5c.5 3 2 5.3 4.5 6.8M5 14h7M8.5 12v2"/><path d="M15 19l2.5-7 2.5 7M16 17h3"/></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
 type Message = { from: "me" | "vivian"; text: string; timestamp?: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
+type SpeechLanguage = "th" | "en" | "ja" | "ko";
+const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName: string }> = [
+  { code: "th", label: "Thai", nativeName: "ไทย" },
+  { code: "en", label: "English", nativeName: "EN" },
+  { code: "ja", label: "Japanese", nativeName: "JP" },
+  { code: "ko", label: "Korean", nativeName: "KR" },
+];
 const greetings = [
   "คิดถึงจังเลย~\nขอกอดหน่อยได้ไหม~",
 ];
@@ -96,6 +104,7 @@ export default function Home() {
   const lastActivityRef = useRef(Date.now());
   const idleBusyRef = useRef(false);
   const speechSpeedRef = useRef(.98);
+  const speechLanguageRef = useRef<SpeechLanguage>("th");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -120,6 +129,7 @@ export default function Home() {
   const [sending, setSending] = useState(false);
   const [sttPreview, setSttPreview] = useState<string | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(true);
@@ -131,12 +141,14 @@ export default function Home() {
   const [memoryDraft, setMemoryDraft] = useState("");
   const [backgroundMode, setBackgroundMode] = useState<keyof typeof BACKGROUNDS>("day");
   const [speechSpeed, setSpeechSpeed] = useState(.98);
+  const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("th");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
   sendingRef.current = sending;
   speechSpeedRef.current = speechSpeed;
+  speechLanguageRef.current = speechLanguage;
   companionRef.current = companion;
 
   useEffect(() => {
@@ -156,6 +168,8 @@ export default function Home() {
     // old cached selection.
     const storedModel = window.localStorage.getItem("vivian-model-v2");
     if (isModelKey(storedModel)) setSelectedModel(storedModel);
+    const storedLanguage = window.localStorage.getItem("vivian-speech-language");
+    if (LANGUAGE_OPTIONS.some((option) => option.code === storedLanguage)) setSpeechLanguage(storedLanguage as SpeechLanguage);
     setCustomInstructions(window.localStorage.getItem("vivian-custom-instructions") ?? "");
     const today = new Date().toISOString().slice(0, 10);
     const lastCheckIn = window.localStorage.getItem("vivian-checkin-date");
@@ -486,7 +500,7 @@ export default function Home() {
     try {
       await withTimeout(unlockAudio(), AUDIO_UNLOCK_MS, undefined);
       if (speakId !== speakIdRef.current) return false;
-      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text, speed: speechSpeedRef.current }) });
+      const response = await fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, signal: abort.signal, body: JSON.stringify({ text, speed: speechSpeedRef.current, language: speechLanguageRef.current }) });
       if (speakId !== speakIdRef.current) return false;
       if (!response.ok) {
         const error = await response.json().catch(() => null) as { error?: string; code?: string } | null;
@@ -583,6 +597,7 @@ export default function Home() {
           image: imageToSend ?? undefined,
           character: selectedModel,
           customInstructions,
+          language: speechLanguageRef.current,
         }),
       });
       const data = await withTimeout(response.json() as Promise<{ text?: string; error?: string; code?: string; memories?: Memory[]; companion?: CompanionState }>, 5000, null);
@@ -725,6 +740,7 @@ export default function Home() {
         const form = new FormData();
         form.append("file", new Blob(chunks, { type: actualMimeType }), `vivian-recording.${extension}`);
         try {
+          form.append("language", speechLanguageRef.current);
           const response = await fetch("/api/stt", { method: "POST", body: form, signal: abortAfter(STT_TIMEOUT_MS) });
           const data = await response.json() as { text?: string; error?: string };
           if (!response.ok) throw new Error(data.error ?? "STT failed");
@@ -1057,7 +1073,7 @@ export default function Home() {
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
       <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิด Config" title="Config"><Icon name="config"/></button>
-        <button type="button" onClick={() => setMemoryOpen(true)} aria-label="จัดการความทรงจำ"><Icon name="memory"/></button>
+        <button type="button" className="language-lock" onClick={() => setLanguageOpen(true)} aria-label={`ล็อกภาษา ${speechLanguage.toUpperCase()}`} title={`Language lock: ${speechLanguage.toUpperCase()}`}><Icon name="language"/><span>{speechLanguage === "ja" ? "JP" : speechLanguage === "ko" ? "KR" : speechLanguage.toUpperCase()}</span></button>
         <button type="button" onClick={() => setInfoOpen(true)} aria-label="ข้อมูลเวอร์ชัน" title="Info"><Icon name="info"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
       </aside>
@@ -1097,6 +1113,7 @@ export default function Home() {
       <div className="custom-instructions"><strong>Custom instructions</strong><p>บอก Vivian ว่าคุณอยากให้ตอบอย่างไร เช่น ภาษา โทนเสียง หรือสิ่งที่ควรหลีกเลี่ยง</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="เช่น เรียกฉันว่า... ตอบสั้น ๆ และใช้ภาษาไทยเป็นหลัก" /></div>
       <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
     </section>}
+    {languageOpen && <div className="chat-backdrop" role="presentation" onClick={() => setLanguageOpen(false)}><section className="info-sheet language-sheet" role="dialog" aria-modal="true" aria-label="ล็อกภาษาการพูด" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>LANGUAGE LOCK</small><h1>ภาษาการพูด</h1><p>ใช้ภาษาเดียวกันทั้งฟังเสียงและตอบด้วยเสียง</p></div><button type="button" onClick={() => setLanguageOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="language-options">{LANGUAGE_OPTIONS.map((option) => <button key={option.code} type="button" className={speechLanguage === option.code ? "is-selected" : ""} onClick={() => { setSpeechLanguage(option.code); window.localStorage.setItem("vivian-speech-language", option.code); setLanguageOpen(false); }}><strong>{option.nativeName}</strong><span>{option.label} · {option.code.toUpperCase()}</span></button>)}</div></section></div>}
     {infoOpen && <div className="chat-backdrop" role="presentation" onClick={() => setInfoOpen(false)}><section className="info-sheet" role="dialog" aria-modal="true" aria-label="ข้อมูลเวอร์ชัน" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>VIVIAN INFO</small><h1>ข้อมูลเวอร์ชัน</h1><p>ข้อมูลของ companion เวอร์ชันที่กำลังใช้งาน</p></div><button type="button" onClick={() => setInfoOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="info-list"><p><strong>App</strong>Vivian AI Companion</p><p><strong>Codename</strong>{APP_CODENAME}</p><p><strong>Version</strong>v1.0.0-stable</p><p><strong>Character</strong>Miss</p></div></section></div>}
   </main>;
 }

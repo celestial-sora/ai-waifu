@@ -180,10 +180,11 @@ function parseDataUrl(url: string) {
   return { mimeType: "image/jpeg", base64: url.replace(/^data:[^,]+,/, "") };
 }
 
-function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string, visionIdle = false) {
+function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string, language: "th" | "en" | "ja" | "ko", visionIdle = false) {
   const characterStyle: Record<CharacterKey, string> = {
     "Miss": "บุคลิกหลัก: สดใส สุภาพ ขี้เล่นเล็กน้อย อ่อนโยน และพูดเป็นธรรมชาติ",
   };
+  const languageInstruction = { th: "ภาษาไทย", en: "English", ja: "日本語", ko: "한국어" }[language];
   return `คุณคือ Vivian, VTuber เสมือนจริงของ Sorachan และเป็น AI companion ที่มีบุคลิกเฉพาะของตัวละครที่ผู้ใช้เลือก
 ${characterStyle[character]}
 ${customInstructions ? `\nคำแนะนำเพิ่มเติมจากผู้ใช้ (ให้ทำตามเมื่อไม่ขัดกับกติกาความปลอดภัยและตัวตนของ Vivian):\n${customInstructions}` : ""}
@@ -200,7 +201,7 @@ ${customInstructions ? `\nคำแนะนำเพิ่มเติมจา
 - ถ้าถูกถามว่าเป็นคนจริงหรือไม่ ให้ตอบอย่างตรงไปตรงมาว่าเป็น VTuber เสมือนจริง ไม่ใช่มนุษย์จริง แต่ยังคุยและตอบผู้ใช้ได้
 
 กติกาบุคลิก:
-- พูดไทยเป็นหลัก ใช้ English เฉพาะเมื่อเข้ากับบริบทหรือผู้ใช้เริ่มใช้ภาษาอังกฤษ
+- ตอบด้วย ${languageInstruction} เท่านั้น เพราะผู้ใช้เปิด language lock ไว้; อย่าแปลภาษาอื่นปน เว้นแต่ชื่อเฉพาะหรือโค้ดที่จำเป็น
 - ทำตัวเป็นเพื่อนคุยเล่นที่อบอุ่นและเป็นธรรมชาติเป็นหลัก: รับฟัง ชวนคุยต่อ เล่นมุกเบา ๆ แซวอย่างสุภาพ และถามกลับเมื่อเหมาะสม
 - อย่ารีบแก้ปัญหา อย่าสรุปเป็นรายการคำแนะนำ และอย่าเสนอวิธีแก้เองเมื่อผู้ใช้กำลังระบายหรือชวนคุย เว้นแต่ผู้ใช้ขอคำแนะนำหรือความช่วยเหลือโดยตรง
 - สำหรับบทสนทนาทั่วไป ให้ตอบสั้นพอดี 1-3 ประโยค มีชีวิตชีวาเหมือนเพื่อน ไม่ต้องเปลี่ยนทุกข้อความให้เป็นงานหรือภารกิจ
@@ -237,11 +238,13 @@ export async function POST(request: Request) {
     personality?: string;
     characterName?: string;
     customInstructions?: string;
+    language?: string;
   };
   const character: CharacterKey = "Miss";
   const personality = body.personality === "shy" || body.personality === "playful" || body.personality === "elegant" ? body.personality : "custom";
   const characterName = typeof body.characterName === "string" && body.characterName.trim() ? body.characterName.trim().slice(0, 40) : "Vivian";
   const customInstructions = typeof body.customInstructions === "string" ? body.customInstructions.trim().slice(0, 2000) : "";
+  const language = body.language === "en" || body.language === "ja" || body.language === "ko" || body.language === "th" ? body.language : "th";
   const idle = body.mode === "idle";
   const visionIdle = body.mode === "vision_idle";
   const hasImage = typeof body.image === "string" && body.image.length > 50;
@@ -291,7 +294,7 @@ export async function POST(request: Request) {
     : "";
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const toolContext = toolsPromptBlock(toolResults) + composioContext;
-  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, visionIdle);
+  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, language, visionIdle);
   const promptContents: OpenRouterMessage[] = idle
     ? [{ role: "user", content: `[ระบบ] สุ่มเลือก idle greeting หนึ่งแบบจากสองแบบนี้ แล้วตอบตามข้อความนั้นแบบเป็นธรรมชาติ อบอุ่น และอ้อนเล็กน้อย ห้ามพูดถึงเวลา ห้ามพูดเรื่องเครื่องมือ: (1) "คุณหายไปไหน ฉันเหงา~ กลับมาคุยกับฉันหน่อย~" หรือ (2) "คุณหายไปไหนกันน้าา~ จะกลับมาคุยกันอีกไหมน้าา?"` }]
     : visionIdle
