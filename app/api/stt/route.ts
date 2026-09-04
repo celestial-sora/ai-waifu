@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   form.append("file", file, file.name || "vivian-recording");
   form.append("model_id", "scribe_v2");
   const requestedLanguage = incoming.get("language");
-  const language = requestedLanguage === "en" || requestedLanguage === "ja" || requestedLanguage === "ko" || requestedLanguage === "th" ? requestedLanguage : "th";
+  const language = requestedLanguage === "en" || requestedLanguage === "ja" || requestedLanguage === "ko" || requestedLanguage === "zh" || requestedLanguage === "th" ? requestedLanguage : "th";
   // Anchor transcription to the language selected in the companion UI; this
   // prevents the recognizer from guessing a different script from room noise.
   form.append("language_code", language);
