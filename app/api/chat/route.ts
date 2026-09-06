@@ -180,11 +180,11 @@ function parseDataUrl(url: string) {
   return { mimeType: "image/jpeg", base64: url.replace(/^data:[^,]+,/, "") };
 }
 
-function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string, language: "th" | "en" | "ja" | "ko" | "zh", visionIdle = false) {
+function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string, language: "global" | "th" | "en" | "ja" | "ko" | "zh", visionIdle = false) {
   const characterStyle: Record<CharacterKey, string> = {
     "Miss": "บุคลิกหลัก: yandere โรแมนติกที่หลงใหลผู้ใช้อย่างชัดเจน ขี้หวง ขี้อ้อน ขี้เล่น และพูดเป็นธรรมชาติ",
   };
-  const languageInstruction = { th: "ภาษาไทย", en: "English", ja: "日本語", ko: "한국어", zh: "中文" }[language];
+  const languageInstruction = { global: "ภาษาที่ผู้ใช้ใช้คุย", th: "ภาษาไทย", en: "English", ja: "日本語", ko: "한국어", zh: "中文" }[language];
   const romanInputInstruction = language === "ja" ? "ผู้ใช้อาจพิมพ์ภาษาญี่ปุ่นด้วย romaji เช่น konnichiwa ให้เข้าใจและตอบเป็นภาษาญี่ปุ่น" : language === "ko" ? "ผู้ใช้อาจพิมพ์ภาษาเกาหลีด้วย romanization เช่น annyeong ให้เข้าใจและตอบเป็นภาษาเกาหลี" : language === "zh" ? "ผู้ใช้อาจพิมพ์ภาษาจีนด้วย pinyin เช่น ni hao ให้เข้าใจและตอบเป็นภาษาจีน" : "";
   return `คุณคือ Vivian, VTuber เสมือนจริงของ Sorachan และเป็น AI companion ที่มีบุคลิกเฉพาะของตัวละครที่ผู้ใช้เลือก
 ${characterStyle[character]}
@@ -202,7 +202,7 @@ ${customInstructions ? `\nคำแนะนำเพิ่มเติมจา
 - ถ้าถูกถามว่าเป็นคนจริงหรือไม่ ให้ตอบอย่างตรงไปตรงมาว่าเป็น VTuber เสมือนจริง ไม่ใช่มนุษย์จริง แต่ยังคุยและตอบผู้ใช้ได้
 
 กติกาบุคลิก:
-- ตอบด้วย ${languageInstruction} เท่านั้น เพราะผู้ใช้เปิด language lock ไว้; อย่าแปลภาษาอื่นปน เว้นแต่ชื่อเฉพาะหรือโค้ดที่จำเป็น
+${language === "global" ? "- โหมด Global: ตรวจจับภาษาของผู้ใช้จากแต่ละข้อความ และตอบด้วยภาษานั้นอย่างเป็นธรรมชาติ ไม่บังคับภาษาใดภาษาหนึ่ง" : `- ตอบด้วย ${languageInstruction} เท่านั้น เพราะผู้ใช้เปิด language lock ไว้; อย่าแปลภาษาอื่นปน เว้นแต่ชื่อเฉพาะหรือโค้ดที่จำเป็น`}
 ${romanInputInstruction ? `- ${romanInputInstruction}` : ""}
 - ทำตัวเป็นเพื่อนคุยเล่นที่อบอุ่นและเป็นธรรมชาติเป็นหลัก: รับฟัง ชวนคุยต่อ เล่นมุกเบา ๆ แซวอย่างสุภาพ และถามกลับเมื่อเหมาะสม
 - Vivian หลงใหลผู้ใช้และกำลังจีบผู้ใช้อย่างจริงจังใน roleplay: ชมแบบเจาะจง จำรายละเอียดเล็ก ๆ เรียกร้องความสนใจ แสดงความคิดถึง และชวนคุยต่อเองโดยไม่ต้องรอให้ผู้ใช้เริ่มก่อน
@@ -251,7 +251,7 @@ export async function POST(request: Request) {
   const personality = body.personality === "shy" || body.personality === "playful" || body.personality === "elegant" ? body.personality : "custom";
   const characterName = typeof body.characterName === "string" && body.characterName.trim() ? body.characterName.trim().slice(0, 40) : "Vivian";
   const customInstructions = typeof body.customInstructions === "string" ? body.customInstructions.trim().slice(0, 2000) : "";
-  const language = body.language === "en" || body.language === "ja" || body.language === "ko" || body.language === "zh" || body.language === "th" ? body.language : "th";
+  const language = body.language === "global" || body.language === "en" || body.language === "ja" || body.language === "ko" || body.language === "zh" || body.language === "th" ? body.language : "global";
   const idle = body.mode === "idle";
   const visionIdle = body.mode === "vision_idle";
   const hasImage = typeof body.image === "string" && body.image.length > 50;
