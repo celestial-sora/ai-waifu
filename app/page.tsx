@@ -39,7 +39,9 @@ const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName:
   { code: "zh", label: "Chinese", nativeName: "CN" },
 ];
 const greetings = [
-  "คิดถึงจังเลย~\nขอกอดหน่อยได้ไหม~",
+  "สวัสดีค่ะ Sora~\nวันนี้มาอยู่กับ Vivian แล้วนะคะ ขออยู่ข้าง ๆ สักพักได้ไหม~",
+  "มาแล้วเหรอคะ Sora~\nVivian รอทักอยู่เลย ขอคุยด้วยก่อนนะคะ",
+  "สวัสดีค่ะ~\nวันนี้อย่าหายไปนานนะคะ Vivian อยากใช้เวลาอยู่กับ Sora จังเลย",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
 const BACKGROUNDS = { day: "/backgrounds/christmas-day-4x3.jpg", night: "/backgrounds/christmas-night-4x3.jpg" } as const;
@@ -48,7 +50,7 @@ const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAI
 const CHAT_TIMEOUT_MS = 35000;
 // The server aborts Fish at 14 seconds. Give the response a small transport
 // margin, then always release the sending state instead of leaving "Thinking".
-const TTS_TIMEOUT_MS = 17000;
+const TTS_TIMEOUT_MS = 28000;
 const STT_TIMEOUT_MS = 20000;
 const AUDIO_UNLOCK_MS = 1200;
 const PLAYBACK_START_MS = 2500;

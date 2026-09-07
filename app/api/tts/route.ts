@@ -5,7 +5,7 @@ export const maxDuration = 30;
 
 // Fish's free endpoint can queue. Keep the request small and bounded so a slow
 // provider can never leave the companion UI in its "thinking" state indefinitely.
-const upstreamTimeoutMs = 14_000;
+const upstreamTimeoutMs = 24_000;
 
 function speechText(value: string) {
   return value.split(/\n\s*แหล่งข้อมูล\s*:/i)[0]
@@ -29,14 +29,17 @@ function speechStyle(value: string) {
   const affectionate = /~|〜|～/.test(value);
   const exclamatory = /!|！/.test(value);
   const question = /\?|？/.test(value);
+  const jealous = /หึง|หวง|ของฉัน|เป็นของ|มีแค่ฉัน|เท่านั้น|อย่าไปไหน|only me|belong to me|don't leave me/i.test(value);
+  const dramatic = jealous || /\.\.\.|…|งอน|forever/i.test(value);
   const repeated = /\b([A-Za-zก-๙]{2,})\s+\1\b/iu.test(value);
   return {
     // A tilde should sound warmly affectionate, not drawn-out or nasal.
-    speedAdjustment: affectionate ? -.02 : exclamatory ? .01 : question ? -.015 : repeated ? -.01 : 0,
+    // Jealous lines should land slowly and deliberately, not sound rushed.
+    speedAdjustment: jealous ? -.075 : dramatic ? -.035 : affectionate ? -.02 : exclamatory ? .01 : question ? -.015 : repeated ? -.01 : 0,
     // A tighter sampling range keeps Thai consonants and English terms more
     // consistent across sentences while retaining a little warmth.
-    temperature: affectionate ? .66 : exclamatory ? .64 : question ? .60 : .61,
-    topP: affectionate ? .74 : exclamatory ? .72 : .70,
+    temperature: dramatic ? .62 : affectionate ? .66 : exclamatory ? .64 : question ? .60 : .61,
+    topP: dramatic ? .70 : affectionate ? .74 : exclamatory ? .72 : .70,
   };
 }
 
