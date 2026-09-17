@@ -19,7 +19,7 @@ export const maxDuration = 60;
 
 const userKey = "default";
 const modelName = () => process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.3-70b-instruct";
-const cerebrasModelName = () => process.env.CEREBRAS_MODEL ?? "gpt-oss-120b";
+const cerebrasModelName = () => "qwen-3.8-27b";
 const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const groqVisionModel = () => process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
 const geminiPrimaryModel = () => {
@@ -409,9 +409,9 @@ export async function POST(request: Request) {
     }
   }
 
-  // 1. PRIMARY TEXT / TOOLS: Cerebras.
+  // 1. PRIMARY TEXT / TOOLS: Cerebras Qwen 3.8 27B.
   if (!generatedData && cerebrasApiKey && !hasImage && !shouldSearch) {
-    const cerebrasCandidates = Array.from(new Set([cerebrasModelName(), "gpt-oss-120b"]));
+    const cerebrasCandidates = [cerebrasModelName()];
 
     for (const cModel of cerebrasCandidates) {
       try {
