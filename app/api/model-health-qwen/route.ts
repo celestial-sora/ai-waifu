@@ -23,7 +23,7 @@ export async function GET() {
         model,
         messages: [{ role: "user", content: "Reply exactly with MODEL_TEST_OK" }],
         temperature: 0,
-        max_tokens: 16,
+        max_tokens: 256,
       }),
     });
 
@@ -34,6 +34,8 @@ export async function GET() {
       configuredModel: model,
       responseModel: data?.model ?? null,
       text: data?.choices?.[0]?.message?.content ?? null,
+      finishReason: data?.choices?.[0]?.finish_reason ?? null,
+      usage: data?.usage ?? null,
       error: response.ok ? null : (data?.message ?? data?.error?.message ?? "Cerebras request failed"),
     }, { status: response.ok ? 200 : 502 });
   } catch (error) {
