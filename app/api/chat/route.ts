@@ -19,6 +19,7 @@ export const maxDuration = 60;
 
 const userKey = "default";
 const modelName = () => process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.3-70b-instruct";
+const cerebrasModelName = () => process.env.CEREBRAS_MODEL ?? "gpt-oss-120b";
 const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const groqVisionModel = () => process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
 const geminiPrimaryModel = () => {
@@ -65,6 +66,30 @@ async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], option
       ...(!options.json ? { max_tokens: 2500 } : {}),
       ...(options.json ? { max_tokens: 280, response_format: { type: "json_object" } } : {}),
     }),
+  });
+}
+
+async function callCerebras(
+  apiKey: string,
+  messages: any[],
+  model = cerebrasModelName(),
+  options: { tools?: any[]; tool_choice?: string; timeoutMs?: number } = {}
+) {
+  const payload: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: 0.8,
+    max_tokens: 2500,
+  };
+  if (options.tools && options.tools.length > 0) {
+    payload.tools = options.tools;
+    payload.tool_choice = options.tool_choice ?? "auto";
+  }
+  return fetch("https://api.cerebras.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey.trim()}`, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(options.timeoutMs ?? providerTimeoutMs),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -232,9 +257,10 @@ export async function POST(request: Request) {
   const quota = rateLimit(request, "chat", 20);
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const apiKey = process.env.OPENROUTER_API_KEY;
+  const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
   const groqApiKey = process.env.GROQ_API_KEY;
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey && !groqApiKey && !geminiApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
+  if (!cerebrasApiKey && !groqApiKey && !geminiApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
 
   const body = (await request.json()) as {
     messages?: ChatMessage[];
@@ -310,14 +336,8 @@ export async function POST(request: Request) {
 
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
 
-  // Primary Provider: Groq (GPT-OSS-120B) is always primary when available
-  let provider: "groq" | "gemini" | "openrouter" = groqApiKey
-    ? "groq"
-    : shouldSearch || hasImage
-      ? "gemini"
-      : apiKey
-        ? "openrouter"
-        : "gemini";
+  // Text chat order: Cerebras -> Groq -> Gemini. Vision/search stay on Gemini because they require Gemini-specific capabilities.
+  let provider: "cerebras" | "groq" | "gemini" = "gemini";
 
   const buildGeminiContents = () => {
     return promptContents.map((item, index) => {
@@ -346,23 +366,6 @@ export async function POST(request: Request) {
     generationConfig: { temperature: (idle || visionIdle) ? .9 : .8, maxOutputTokens: 2500 },
   };
 
-  const openRouterMessages: OpenRouterTurn[] = [
-    { role: "system", content: systemPrompt },
-    ...promptContents.map((item, index) => {
-      const isLastUserTurn = item.role === "user" && index === promptContents.length - 1;
-      if (isLastUserTurn && hasImage) {
-        return {
-          role: "user" as const,
-          content: [
-            { type: "text" as const, text: item.content || "ช่วยดูภาพนี้ให้หน่อยค่ะ" },
-            { type: "image_url" as const, image_url: { url: body.image! } },
-          ],
-        };
-      }
-      return item;
-    }),
-  ];
-
   const groqMessages: OpenRouterTurn[] = hasImage
     ? [
         {
@@ -380,7 +383,7 @@ export async function POST(request: Request) {
 
   let generatedData: any = null;
 
-  // 1. PRIMARY FOR VISION: If image is provided, Gemini is always primary (native multimodal)
+  // Capability route: Gemini handles image input directly.
   if (hasImage && geminiApiKey) {
     const geminiVisionCandidates = Array.from(new Set([
       geminiPrimaryModel(),
@@ -406,7 +409,58 @@ export async function POST(request: Request) {
     }
   }
 
-  // 2. PRIMARY FOR TEXT / TOOLS: Groq (GPT-OSS-120B / Llama 3.3) for non-image text chat & Composio tool calls
+  // 1. PRIMARY TEXT / TOOLS: Cerebras.
+  if (!generatedData && cerebrasApiKey && !hasImage && !shouldSearch) {
+    const cerebrasCandidates = Array.from(new Set([cerebrasModelName(), "gpt-oss-120b"]));
+
+    for (const cModel of cerebrasCandidates) {
+      try {
+        const msgs = [{ role: "system" as const, content: systemPrompt }, ...promptContents];
+        const initialRes = await callCerebras(cerebrasApiKey, msgs, cModel, { tools: composioFunctions });
+        if (initialRes.ok) {
+          const initialData = await initialRes.json();
+          const choice = initialData.choices?.[0];
+
+          if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+            console.log("Cerebras requested Composio tool call:", choice.message.tool_calls);
+            const toolExecResults = [];
+            for (const tc of choice.message.tool_calls) {
+              const slug = tc.function.name;
+              let args = {};
+              try { args = JSON.parse(tc.function.arguments); } catch {}
+              const execRes = await executeComposioTool({ slug, arguments: args });
+              toolExecResults.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: execRes.content,
+              });
+            }
+            const secondTurnMessages = [
+              ...msgs,
+              choice.message,
+              ...toolExecResults,
+            ];
+            const followUpRes = await callCerebras(cerebrasApiKey, secondTurnMessages, cModel);
+            if (followUpRes.ok) {
+              generatedData = await followUpRes.json();
+              provider = "cerebras";
+              break;
+            }
+          } else {
+            generatedData = initialData;
+            provider = "cerebras";
+            break;
+          }
+        } else {
+          console.warn(`Cerebras (${cModel}) returned ${initialRes.status}`);
+        }
+      } catch (err) {
+        console.warn(`Cerebras (${cModel}) error`, err);
+      }
+    }
+  }
+
+  // 2. FALLBACK 1 TEXT / TOOLS: Groq.
   if (!generatedData && groqApiKey && !hasImage && !shouldSearch) {
     const groqCandidates = [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
@@ -459,7 +513,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 3. FALLBACK / SEARCH: Gemini (Google Search grounding or text fallback)
+  // 3. FALLBACK 2 / SEARCH / VISION: Gemini.
   if (!generatedData && geminiApiKey) {
     const geminiCandidates = Array.from(new Set([
       geminiPrimaryModel(),
@@ -485,32 +539,6 @@ export async function POST(request: Request) {
     }
   }
 
-  // 4. FALLBACK: OpenRouter (paid stable pool)
-  if (!generatedData && apiKey) {
-    const openRouterCandidates = Array.from(new Set([
-      hasImage ? "openai/gpt-4o-mini" : modelName(),
-      hasImage ? "google/gemini-2.0-flash-001" : "meta-llama/llama-3.3-70b-instruct",
-      "openai/gpt-4o-mini",
-      "google/gemini-2.0-flash-001",
-      "deepseek/deepseek-chat",
-      "anthropic/claude-haiku-3-5",
-    ]));
-
-    for (const orModel of openRouterCandidates) {
-      try {
-        const res = await callOpenRouter(apiKey, openRouterMessages, { model: orModel, timeoutMs: hasImage ? visionTimeoutMs : providerTimeoutMs });
-        if (res.ok) {
-          generatedData = await res.json();
-          provider = "openrouter";
-          break;
-        }
-        console.warn(`OpenRouter (${orModel}) returned ${res.status}`);
-      } catch (err) {
-        console.warn(`OpenRouter (${orModel}) network error`, err);
-      }
-    }
-  }
-
   if (!generatedData) {
     console.error("All chat providers failed");
     return NextResponse.json({ error: "ผู้ให้บริการตอบช้าหรือไม่พร้อมใช้งาน ลองใหม่อีกครั้งนะคะ" }, { status: 504 });
@@ -528,7 +556,7 @@ export async function POST(request: Request) {
     .filter((source: { uri: string }, index: number, all: { uri: string }[]) => all.findIndex((item) => item.uri === source.uri) === index)
     .slice(0, 3);
   const text = removeEmoji(sources.length ? `${generatedText}\n\nแหล่งข้อมูล:\n${sources.map((source: { title: string; uri: string }) => `- ${source.title}: ${source.uri}`).join("\n")}` : generatedText);
-  if (!text) return NextResponse.json({ error: "OpenRouter returned no text" }, { status: 502 });
+  if (!text) return NextResponse.json({ error: "Chat provider returned no text" }, { status: 502 });
 
   const nextState = applyConversationTurn(state, lastUserText, text, idle);
   nextState.conversationSummary = state.conversationSummary;
