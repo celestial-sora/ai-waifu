@@ -65,6 +65,52 @@ export async function weatherTool(userText: string): Promise<ToolResult> {
   }
 }
 
+type TavilySearchResponse = {
+  answer?: string;
+  results?: Array<{ title?: string; url?: string; content?: string; score?: number }>;
+};
+
+export async function webSearchTool(userText: string): Promise<ToolResult> {
+  const apiKey = process.env.TAVILY_API_KEY?.trim();
+  if (!apiKey) return { name: "web_search", ok: false, content: "TAVILY_API_KEY is not configured" };
+
+  try {
+    const response = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(8000),
+      body: JSON.stringify({
+        query: userText,
+        search_depth: "basic",
+        max_results: 5,
+        include_answer: false,
+        include_raw_content: false,
+        include_images: false,
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Tavily returned ${response.status}`);
+    const data = await response.json() as TavilySearchResponse;
+    const results = (data.results ?? [])
+      .filter((item) => item.title && item.url && item.content)
+      .slice(0, 5);
+
+    if (!results.length) return { name: "web_search", ok: true, content: "Tavily ไม่พบผลการค้นหาที่เกี่ยวข้อง" };
+
+    const content = results.map((item, index) =>
+      `[${index + 1}] ${item.title}\nURL: ${item.url}\n${item.content?.slice(0, 900)}`
+    ).join("\n\n");
+
+    return { name: "web_search", ok: true, content: `ผลค้นหาจาก Tavily:\n${content}` };
+  } catch (error) {
+    console.warn("Tavily search failed", error);
+    return { name: "web_search", ok: false, content: "ค้นเว็บผ่าน Tavily ไม่สำเร็จ กรุณาตอบโดยไม่แต่งข้อมูลล่าสุดขึ้นเอง" };
+  }
+}
+
 function extractExpression(userText: string) {
   const match = userText.replace(/x/gi, "*").replace(/×/g, "*").replace(/÷/g, "/").match(/[\d.+\-*/() ]{3,}/);
   return match?.[0]?.trim() ?? "";
@@ -93,6 +139,7 @@ export async function runTools(userText: string, memories: { memory: string; cat
   const names = detectTools(userText);
   const results: ToolResult[] = [];
   for (const name of names) {
+    if (name === "web_search") results.push(await webSearchTool(userText));
     if (name === "time") results.push(timeTool());
     if (name === "weather") results.push(await weatherTool(userText));
     if (name === "calculator") results.push(calculatorTool(userText));
