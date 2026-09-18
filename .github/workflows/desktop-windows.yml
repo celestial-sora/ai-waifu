@@ -73,7 +73,7 @@ jobs:
           node --check desktop/smoke-standalone.mjs
 
       - name: Build Next.js standalone server
-        run: npm run build
+        run: npm run desktop:build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
