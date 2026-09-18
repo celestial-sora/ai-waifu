@@ -1,0 +1,40 @@
+name: Refresh Desktop Lockfile
+
+on:
+  push:
+    branches:
+      - feature/desktop-pet-local
+    paths:
+      - "package.json"
+      - ".github/workflows/refresh-desktop-lock.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vivian-desktop-lock-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Refresh package lock
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Upload refreshed lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-refreshed-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
