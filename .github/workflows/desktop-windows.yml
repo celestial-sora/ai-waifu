@@ -108,11 +108,16 @@ jobs:
       - name: Smoke test packaged Electron app
         shell: pwsh
         run: |
+          $env:VIVIAN_SMOKE_LOG = "$PWD/vivian-smoke.log"
+          Remove-Item $env:VIVIAN_SMOKE_LOG -ErrorAction SilentlyContinue
           $process = Start-Process -FilePath "dist/win-unpacked/Vivian.exe" -ArgumentList "--smoke-test" -PassThru
           if (-not $process.WaitForExit(45000)) {
             taskkill /PID $process.Id /T /F | Out-Null
             Write-Error "Packaged Vivian.exe smoke test timed out."
             exit 1
+          }
+          if (Test-Path $env:VIVIAN_SMOKE_LOG) {
+            Get-Content $env:VIVIAN_SMOKE_LOG
           }
           if ($process.ExitCode -ne 0) {
             Write-Error "Packaged Vivian.exe smoke test exited with code $($process.ExitCode)."
