@@ -5,6 +5,7 @@ const { startPackagedNextServer } = require("./server.cjs");
 
 const HOST = "127.0.0.1";
 const DEV_PORT = Number.parseInt(process.env.VIVIAN_DESKTOP_PORT || "3210", 10);
+const SMOKE_TEST = process.argv.includes("--smoke-test");
 
 app.setName("Vivian");
 app.commandLine.appendSwitch("ozone-platform-hint", "auto");
@@ -108,14 +109,44 @@ function createWindow() {
     if (!isLocalVivianUrl(url)) event.preventDefault();
   });
 
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  mainWindow.once("ready-to-show", () => {
+    if (!SMOKE_TEST) mainWindow?.show();
+  });
+
+  mainWindow.webContents.once("did-finish-load", async () => {
+    if (!SMOKE_TEST || !mainWindow) return;
+
+    try {
+      const healthy = await mainWindow.webContents.executeJavaScript(
+        `Boolean(document.querySelector(".desktop-pet-shell") && document.querySelector("canvas.live2d-canvas"))`,
+      );
+
+      if (!healthy) throw new Error("Desktop Pet shell did not render");
+
+      console.log("[vivian-smoke] Packaged Electron renderer loaded successfully");
+      app.quit();
+    } catch (error) {
+      console.error("[vivian-smoke] Packaged Electron renderer validation failed", error);
+      app.exit(1);
+    }
+  });
+
+  mainWindow.webContents.once("did-fail-load", (_event, errorCode, errorDescription) => {
+    if (!SMOKE_TEST) return;
+    console.error(`[vivian-smoke] Renderer failed to load: ${errorCode} ${errorDescription}`);
+    app.exit(1);
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
 
   void mainWindow.loadURL(`${desktopOrigin}/desktop`).catch((error) => {
-    dialog.showErrorBox("Vivian Desktop Pet", `Failed to load Vivian desktop UI.\n\n${error.message}`);
-    app.quit();
+    if (!SMOKE_TEST) {
+      dialog.showErrorBox("Vivian Desktop Pet", `Failed to load Vivian desktop UI.\n\n${error.message}`);
+    }
+    console.error("[vivian-desktop] Failed to load desktop UI", error);
+    app.exit(1);
   });
 }
 
@@ -150,8 +181,11 @@ app.whenReady().then(async () => {
     createWindow();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    dialog.showErrorBox("Vivian Desktop Pet", `Failed to start Vivian.\n\n${message}`);
-    app.quit();
+    if (!SMOKE_TEST) {
+      dialog.showErrorBox("Vivian Desktop Pet", `Failed to start Vivian.\n\n${message}`);
+    }
+    console.error("[vivian-desktop] Failed to start Vivian", error);
+    app.exit(1);
     return;
   }
 
