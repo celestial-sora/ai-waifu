@@ -5,12 +5,13 @@ electronVersion: 44.4.1
 asar: true
 
 directories:
+  app: desktop
   output: dist
 
 files:
-  - desktop/electron.cjs
-  - desktop/preload.cjs
-  - desktop/server.cjs
+  - electron.cjs
+  - preload.cjs
+  - server.cjs
   - package.json
 
 extraResources:
