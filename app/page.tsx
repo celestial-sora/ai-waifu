@@ -77,7 +77,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T) {
   ]).finally(() => { if (timer) window.clearTimeout(timer); });
 }
 
-export default function Home() {
+export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pixiAppRef = useRef<any>(null);
   const modelRef = useRef<any>(null);
@@ -1038,8 +1038,15 @@ export default function Home() {
     setEditingMemoryId(null);
   }
 
-  return <main className="companion-shell">
-    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
+  return <main className={`companion-shell ${desktopMode ? "desktop-pet-shell" : ""}`}>
+    {desktopMode && <div className="desktop-pet-chrome" aria-label="Desktop pet window controls">
+      <div className="desktop-drag-region"><span>Vivian</span></div>
+      <div className="desktop-window-actions">
+        <button type="button" onClick={() => (window as Window & { vivianDesktop?: { minimize?: () => void } }).vivianDesktop?.minimize?.()} aria-label="ย่อหน้าต่าง" title="Minimize">−</button>
+        <button type="button" onClick={() => (window as Window & { vivianDesktop?: { close?: () => void } }).vivianDesktop?.close?.()} aria-label="ปิด Desktop Pet" title="Close">×</button>
+      </div>
+    </div>}
+    <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${desktopMode ? "desktop-pet-stage" : ""} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
       <div className="scene-background" style={{ backgroundImage: `url("${BACKGROUNDS[backgroundMode]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
@@ -1118,4 +1125,9 @@ export default function Home() {
     {languageOpen && <div className="chat-backdrop" role="presentation" onClick={() => setLanguageOpen(false)}><section className="info-sheet language-sheet" role="dialog" aria-modal="true" aria-label="ล็อกภาษาการพูด" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>LANGUAGE LOCK</small><h1>ภาษาการพูด</h1><p>ใช้ภาษาเดียวกันทั้งฟังเสียงและตอบด้วยเสียง</p></div><button type="button" onClick={() => setLanguageOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="language-options">{LANGUAGE_OPTIONS.map((option) => <button key={option.code} type="button" className={speechLanguage === option.code ? "is-selected" : ""} onClick={() => { setSpeechLanguage(option.code); window.localStorage.setItem("vivian-speech-language", option.code); setLanguageOpen(false); }}><strong>{option.nativeName}</strong><span>{option.label} · {option.code.toUpperCase()}</span></button>)}</div></section></div>}
     {infoOpen && <div className="chat-backdrop" role="presentation" onClick={() => setInfoOpen(false)}><section className="info-sheet" role="dialog" aria-modal="true" aria-label="ข้อมูลเวอร์ชัน" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>VIVIAN INFO</small><h1>ข้อมูลเวอร์ชัน</h1><p>ข้อมูลของ companion เวอร์ชันที่กำลังใช้งาน</p></div><button type="button" onClick={() => setInfoOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="info-list"><p><strong>App</strong>Vivian AI Companion</p><p><strong>Codename</strong>{APP_CODENAME}</p><p><strong>Version</strong>v1.0.0-stable</p><p><strong>Character</strong>Miss</p></div></section></div>}
   </main>;
+}
+
+
+export default function Home() {
+  return <CompanionApp />;
 }
