@@ -31,7 +31,6 @@ extraResources:
 
 win:
   executableName: Vivian
-  icon: public/favicon.ico
   target:
     - target: nsis
       arch:
