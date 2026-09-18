@@ -56,6 +56,14 @@ jobs:
       - name: Install application dependencies
         run: npm ci
 
+      - name: Check desktop Node entrypoints
+        shell: pwsh
+        run: |
+          node --check desktop/electron.cjs
+          node --check desktop/preload.cjs
+          node --check desktop/server.cjs
+          node --check desktop/smoke-standalone.mjs
+
       - name: Build Next.js standalone server
         run: npm run build
         env:
