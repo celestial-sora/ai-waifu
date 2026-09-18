@@ -71,6 +71,7 @@ jobs:
           node --check desktop/preload.cjs
           node --check desktop/server.cjs
           node --check desktop/smoke-standalone.mjs
+          node --check desktop/after-pack.cjs
 
       - name: Build Next.js standalone server
         run: npm run desktop:build
@@ -130,6 +131,7 @@ jobs:
           $required = @(
             "dist/vivian-socute.exe",
             "dist/win-unpacked/resources/standalone/server.js",
+            "dist/win-unpacked/resources/standalone/node_modules/next/package.json",
             "dist/win-unpacked/resources/standalone/public/live2d/live2dcubismcore.min.js"
           )
 
