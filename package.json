@@ -9,7 +9,8 @@
     "lint": "eslint",
     "desktop:dev": "node desktop/run.mjs",
     "desktop:pack": "npx --yes electron-builder@26.16.1 --config electron-builder.yml --win --x64 --dir",
-    "desktop:dist": "npx --yes electron-builder@26.16.1 --config electron-builder.yml --win nsis --x64"
+    "desktop:dist": "npx --yes electron-builder@26.16.1 --config electron-builder.yml --win nsis --x64",
+    "desktop:build": "next build --webpack"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
