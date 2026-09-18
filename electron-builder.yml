@@ -13,6 +13,7 @@ files:
   - preload.cjs
   - server.cjs
   - package.json
+  - "!node_modules/**/*"
 
 extraResources:
   - from: .next/standalone
@@ -30,6 +31,7 @@ extraResources:
 
 win:
   executableName: Vivian
+  icon: public/favicon.ico
   target:
     - target: nsis
       arch:
