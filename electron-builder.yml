@@ -3,6 +3,7 @@ productName: Vivian
 artifactName: vivian-socute.${ext}
 electronVersion: 44.4.1
 asar: true
+afterPack: ./desktop/after-pack.cjs
 
 directories:
   app: desktop
@@ -14,20 +15,6 @@ files:
   - server.cjs
   - package.json
   - "!node_modules/**/*"
-
-extraResources:
-  - from: .next/standalone
-    to: standalone
-    filter:
-      - "**/*"
-  - from: .next/static
-    to: standalone/.next/static
-    filter:
-      - "**/*"
-  - from: public
-    to: standalone/public
-    filter:
-      - "**/*"
 
 win:
   executableName: Vivian
