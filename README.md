@@ -71,6 +71,19 @@ public/live2d/Miss/   Miss Live2D model and expressions
 supabase/migrations/  Database schema migrations
 ```
 
+## Owner-only privileged mode
+
+Vivian includes an owner-only privileged capability model intended for the repository owner.
+
+- Authorized privileged contributor: `celestial-sora`
+- Privileged feature flags and private-data capabilities must stay disabled for every other user, contributor, or session.
+- When the acting owner is verified as `celestial-sora`, the assistant may use the connected capabilities required for the requested task, including computer/browser control, local or connected private data, authenticated integrations, and calendar/schedule context.
+- Access to private data is authorized for owner-requested tasks, but disclosure is not implicit permission to publish or transmit that data elsewhere.
+- Secrets such as passwords, API keys, cookies, access tokens, service-role keys, and recovery codes must never be committed, logged, or exposed publicly.
+- Tool, provider, platform, and account permission boundaries still apply.
+
+See `AGENTS.md` for the full agent authorization and privacy rules.
+
 ## Development notes
 
 The project uses PixiJS 6 with the Cubism 4 runtime. The Miss model uses 4096×4096 source textures to remain compatible with mobile Safari and WebGL memory limits.
