@@ -126,12 +126,22 @@ async function startPackagedNextServer({
     },
   });
 
-  child.stdout?.on("data", (chunk) => {
-    process.stdout.write(`[vivian-next] ${chunk}`);
-  });
-  child.stderr?.on("data", (chunk) => {
-    process.stderr.write(`[vivian-next] ${chunk}`);
-  });
+  const smokeLogPath = process.env.VIVIAN_SMOKE_LOG || "";
+
+  function logChildOutput(kind, chunk) {
+    const text = `[vivian-next:${kind}] ${chunk}`;
+    if (kind === "stderr") process.stderr.write(text);
+    else process.stdout.write(text);
+
+    if (smokeLogPath) {
+      try {
+        fs.appendFileSync(smokeLogPath, text, "utf8");
+      } catch {}
+    }
+  }
+
+  child.stdout?.on("data", (chunk) => logChildOutput("stdout", chunk));
+  child.stderr?.on("data", (chunk) => logChildOutput("stderr", chunk));
 
   await waitForDesktopRoute(origin, child);
 
