@@ -1,0 +1,164 @@
+name: Vivian Desktop Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/desktop-pet-local
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "lib/**"
+      - "public/**"
+      - "proxy.ts"
+      - "next.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "electron-builder.yml"
+      - ".github/workflows/desktop-windows.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "lib/**"
+      - "public/**"
+      - "proxy.ts"
+      - "next.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "electron-builder.yml"
+      - ".github/workflows/desktop-windows.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vivian-desktop-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout desktop branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Verify patched transitive versions
+        shell: pwsh
+        run: |
+          node -e "const g=require('./node_modules/gh-pages/package.json').version; const q=require('./node_modules/qs/package.json').version; if(g!=='6.3.0'||q!=='6.16.0'){throw new Error('Unexpected patched dependency versions: gh-pages='+g+', qs='+q)}; console.log('Patched dependency versions OK:', g, q)"
+
+      - name: Check desktop Node entrypoints
+        shell: pwsh
+        run: |
+          node --check desktop/electron.cjs
+          node --check desktop/preload.cjs
+          node --check desktop/server.cjs
+          node --check desktop/smoke-standalone.mjs
+          node --check desktop/after-pack.cjs
+
+      - name: Build Next.js standalone server
+        run: npm run desktop:build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Reject bundled environment files
+        shell: pwsh
+        run: |
+          $envFiles = Get-ChildItem ".next/standalone" -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like ".env*" -or $_.Extension -eq ".pem" }
+          if ($envFiles) {
+            $envFiles | ForEach-Object { Write-Error "Sensitive config must not be bundled: $($_.FullName)" }
+            exit 1
+          }
+
+      - name: Smoke test standalone desktop runtime
+        run: node desktop/smoke-standalone.mjs
+
+      - name: Build NSIS installer
+        run: npm run desktop:dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify packaged shell excludes root node_modules
+        shell: pwsh
+        run: |
+          $asarEntries = npx --yes @electron/asar@4.0.0 list "dist/win-unpacked/resources/app.asar"
+          $nodeModules = $asarEntries | Where-Object { $_ -match '(^|\\)node_modules(\\|/)' }
+          if ($nodeModules) {
+            $nodeModules | Select-Object -First 20 | ForEach-Object { Write-Error "Unexpected shell dependency bundled: $_" }
+            exit 1
+          }
+
+      - name: Smoke test packaged Electron app
+        shell: pwsh
+        run: |
+          $env:VIVIAN_SMOKE_LOG = "$PWD/vivian-smoke.log"
+          Remove-Item $env:VIVIAN_SMOKE_LOG -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath "dist/win-unpacked/Vivian.exe" -ArgumentList "--smoke-test" -PassThru
+          if (-not $process.WaitForExit(45000)) {
+            taskkill /PID $process.Id /T /F | Out-Null
+            Write-Error "Packaged Vivian.exe smoke test timed out."
+            exit 1
+          }
+          if (Test-Path $env:VIVIAN_SMOKE_LOG) {
+            Get-Content $env:VIVIAN_SMOKE_LOG
+          }
+          if ($process.ExitCode -ne 0) {
+            Write-Error "Packaged Vivian.exe smoke test exited with code $($process.ExitCode)."
+            exit $process.ExitCode
+          }
+
+      - name: Verify packaged runtime and installer
+        shell: pwsh
+        run: |
+          $required = @(
+            "dist/vivian-socute.exe",
+            "dist/win-unpacked/resources/standalone/server.js",
+            "dist/win-unpacked/resources/standalone/node_modules/next/package.json",
+            "dist/win-unpacked/resources/standalone/public/live2d/live2dcubismcore.min.js"
+          )
+
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              Write-Error "Missing packaged runtime asset: $path"
+              exit 1
+            }
+          }
+
+          $staticFiles = Get-ChildItem "dist/win-unpacked/resources/standalone/.next/static" -Recurse -File -ErrorAction SilentlyContinue
+          if (-not $staticFiles) {
+            Write-Error "Packaged Next static assets are missing."
+            exit 1
+          }
+
+          $envFiles = Get-ChildItem "dist/win-unpacked" -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like ".env*" -or $_.Extension -eq ".pem" }
+          if ($envFiles) {
+            $envFiles | ForEach-Object { Write-Error "Sensitive config leaked into packaged app: $($_.FullName)" }
+            exit 1
+          }
+
+      - name: Upload Vivian installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: vivian-socute-windows-x64
+          path: dist/vivian-socute.exe
+          if-no-files-found: error
+          retention-days: 14
