@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const fs = require("node:fs");
 const path = require("node:path");
 const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
 const { startPackagedNextServer } = require("./server.cjs");
@@ -6,6 +7,18 @@ const { startPackagedNextServer } = require("./server.cjs");
 const HOST = "127.0.0.1";
 const DEV_PORT = Number.parseInt(process.env.VIVIAN_DESKTOP_PORT || "3210", 10);
 const SMOKE_TEST = process.argv.includes("--smoke-test");
+const SMOKE_LOG_PATH = process.env.VIVIAN_SMOKE_LOG || "";
+
+function smokeLog(message) {
+  const line = `[${new Date().toISOString()}] ${message}`;
+  console.log(line);
+
+  if (SMOKE_TEST && SMOKE_LOG_PATH) {
+    try {
+      fs.appendFileSync(SMOKE_LOG_PATH, `${line}\n`, "utf8");
+    } catch {}
+  }
+}
 
 app.setName("Vivian");
 app.commandLine.appendSwitch("ozone-platform-hint", "auto");
@@ -77,6 +90,7 @@ function configureSessionSecurity() {
 
 function createWindow() {
   if (!desktopOrigin) throw new Error("Vivian desktop origin is not ready");
+  smokeLog(`Creating BrowserWindow for ${desktopOrigin}/desktop`);
 
   mainWindow = new BrowserWindow({
     width: 460,
@@ -114,6 +128,7 @@ function createWindow() {
   });
 
   mainWindow.webContents.once("did-finish-load", async () => {
+    smokeLog("Renderer did-finish-load");
     if (!SMOKE_TEST || !mainWindow) return;
 
     try {
@@ -123,17 +138,17 @@ function createWindow() {
 
       if (!healthy) throw new Error("Desktop Pet shell did not render");
 
-      console.log("[vivian-smoke] Packaged Electron renderer loaded successfully");
+      smokeLog("Packaged Electron renderer DOM validation passed");
       app.quit();
     } catch (error) {
-      console.error("[vivian-smoke] Packaged Electron renderer validation failed", error);
+      smokeLog(`Packaged Electron renderer validation failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
       app.exit(1);
     }
   });
 
-  mainWindow.webContents.once("did-fail-load", (_event, errorCode, errorDescription) => {
-    if (!SMOKE_TEST) return;
-    console.error(`[vivian-smoke] Renderer failed to load: ${errorCode} ${errorDescription}`);
+  mainWindow.webContents.once("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    smokeLog(`Renderer did-fail-load: code=${errorCode} mainFrame=${isMainFrame} url=${validatedURL} ${errorDescription}`);
+    if (!SMOKE_TEST || !isMainFrame || errorCode === -3) return;
     app.exit(1);
   });
 
@@ -151,6 +166,7 @@ function createWindow() {
 }
 
 async function prepareRuntime() {
+  smokeLog(`Preparing runtime packaged=${app.isPackaged} resources=${process.resourcesPath}`);
   if (!app.isPackaged) {
     desktopOrigin = `http://${HOST}:${DEV_PORT}`;
     return;
@@ -165,6 +181,7 @@ async function prepareRuntime() {
     preferredPort: 3210,
   });
   desktopOrigin = desktopServer.origin;
+  smokeLog(`Packaged Next server ready at ${desktopOrigin}`);
 
   desktopServer.child.once("exit", (code, signal) => {
     if (quitting) return;
@@ -175,6 +192,7 @@ async function prepareRuntime() {
 }
 
 app.whenReady().then(async () => {
+  smokeLog("Electron app ready");
   try {
     await prepareRuntime();
     configureSessionSecurity();
@@ -184,7 +202,7 @@ app.whenReady().then(async () => {
     if (!SMOKE_TEST) {
       dialog.showErrorBox("Vivian Desktop Pet", `Failed to start Vivian.\n\n${message}`);
     }
-    console.error("[vivian-desktop] Failed to start Vivian", error);
+    smokeLog(`Failed to start Vivian: ${error instanceof Error ? error.stack || error.message : String(error)}`);
     app.exit(1);
     return;
   }
