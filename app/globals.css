@@ -103,3 +103,193 @@ button { cursor: pointer; }
 @media (max-width: 800px) { .companion-stage.vivian-bg { background: radial-gradient(ellipse 95% 54% at 50% 36%, #76506d 0%, #3b304e 34%, #202238 68%, #0e111d 100%); }.companion-stage.witch-bg { background: radial-gradient(ellipse 95% 54% at 50% 36%, #704f9b 0%, #34234f 35%, #171027 70%, #10091d 100%); }.side-tools { top: max(116px, calc(env(safe-area-inset-top) + 92px)); right: 14px; gap: 9px; }.side-tools button { width: 43px; height: 43px; }.side-tools .tool-expand { margin-top: 6px; }.model-menu { top: max(116px, calc(env(safe-area-inset-top) + 92px)); right: 66px; }.companion-input { width: calc(100% - 22px); bottom: max(12px, env(safe-area-inset-bottom)); gap: 6px; min-height: 59px; padding: 6px; }.circle-control { width: 45px; height: 45px; }.send-text { width: 45px; height: 45px; }.companion-input input { font-size: 16px; }.text-send { min-width: 105px; height: 47px; padding: 0 15px; font-size: 17px; }.vivian-speech { bottom: calc(max(77px, env(safe-area-inset-bottom)) + 53px); max-width: 72vw; font-size: 14px; }.speech-preview { bottom: calc(max(77px, env(safe-area-inset-bottom)) + 103px); max-width: 70vw; font-size: 13px; } .attachment-preview { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 65px); } .camera-pip { width: clamp(180px, 38vw, 260px); } }
 @media (max-width: 520px) { .companion-brand { left: 23px; font-size: 28px; }.brand-mark { width: 30px; height: 30px; border-width: 2.5px; }.side-tools { top: max(122px, calc(env(safe-area-inset-top) + 96px)); }.companion-input { left: 9px; width: calc(100% - 18px); transform: none; gap: 4px; padding: 5px; }.circle-control { width: 38px; height: 38px; }.send-text { width: 38px; height: 38px; }.text-send { min-width: 82px; height: 40px; padding: 0 10px; font-size: 15px; }.vivian-speech { border-radius: 15px; padding: 8px 13px; }.memory-sheet { max-height: 78dvh; }.camera-pip { top: max(60px, calc(env(safe-area-inset-top) + 42px)); left: 14px; right: auto; width: clamp(160px, 44vw, 220px); } }
 @media (orientation: landscape) and (max-height: 650px) { .companion-brand { top: 17px; }.side-tools { top: 90px; }.side-tools button { width: 45px; height: 45px; }.companion-input { bottom: max(10px, env(safe-area-inset-bottom)); min-height: 54px; }.circle-control { width: 41px; height: 41px; }.text-send { height: 43px; }.vivian-speech { bottom: 82px; }.speech-preview { bottom: 128px; } .attachment-preview { bottom: 62px; } }
+
+
+/* Desktop Pet local presentation layer */
+html.desktop-pet-document,
+html.desktop-pet-document body,
+body.desktop-pet-body,
+body:has(.desktop-pet-shell) {
+  background: transparent !important;
+}
+
+.desktop-pet-shell {
+  background: transparent;
+  color: #fff;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.desktop-pet-shell .desktop-pet-stage {
+  background: transparent !important;
+  border-radius: 28px;
+}
+
+.desktop-pet-shell .desktop-pet-stage::before,
+.desktop-pet-shell .scene-background,
+.desktop-pet-shell .companion-brand {
+  display: none;
+}
+
+.desktop-pet-shell .live2d-canvas {
+  pointer-events: none;
+}
+
+.desktop-pet-chrome {
+  position: fixed;
+  z-index: 60;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 42px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 7px 8px 0 12px;
+  opacity: 0;
+  transition: opacity .18s ease;
+  pointer-events: none;
+}
+
+.desktop-pet-shell:hover .desktop-pet-chrome,
+.desktop-pet-shell:focus-within .desktop-pet-chrome {
+  opacity: 1;
+}
+
+.desktop-drag-region {
+  flex: 1;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  color: rgb(255 255 255 / .64);
+  font: 600 10px/1 Arial, sans-serif;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  -webkit-app-region: drag;
+  pointer-events: auto;
+}
+
+.desktop-window-actions {
+  display: flex;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.desktop-window-actions button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / .18);
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(20 12 31 / .52);
+  box-shadow: 0 4px 14px rgb(0 0 0 / .26);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  -webkit-app-region: no-drag;
+}
+
+.desktop-pet-shell .side-tools {
+  top: 52px;
+  right: 10px;
+  gap: 7px;
+  transform: scale(.82);
+  transform-origin: top right;
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+
+.desktop-pet-shell:hover .side-tools,
+.desktop-pet-shell:focus-within .side-tools {
+  opacity: .88;
+}
+
+.desktop-pet-shell .vivian-speech {
+  bottom: 86px;
+  max-width: calc(100% - 34px);
+  padding: 7px 12px;
+  border-radius: 14px;
+  background: rgb(20 12 31 / .52);
+  font-size: 15px;
+  opacity: .92;
+}
+
+.desktop-pet-shell .speech-preview {
+  bottom: 132px;
+  max-width: calc(100% - 34px);
+}
+
+.desktop-pet-shell .companion-input {
+  bottom: 10px;
+  width: calc(100% - 20px);
+  min-height: 56px;
+  padding: 5px 7px;
+  gap: 7px;
+  border-radius: 28px;
+  opacity: 0;
+  transform: translate(-50%, 10px) scale(.98);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease, box-shadow .2s ease;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-pet-shell:hover .companion-input,
+.desktop-pet-shell:focus-within .companion-input {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+  pointer-events: auto;
+}
+
+.desktop-pet-shell .circle-control,
+.desktop-pet-shell .send-text {
+  width: 42px;
+  height: 42px;
+}
+
+.desktop-pet-shell .text-send {
+  min-width: 78px;
+  height: 44px;
+  padding: 0 13px;
+  font-size: 15px;
+}
+
+.desktop-pet-shell .text-send span {
+  display: none;
+}
+
+.desktop-pet-shell .camera-pip {
+  top: 48px;
+  left: 10px;
+  width: min(210px, 46vw);
+}
+
+.desktop-pet-shell .attachment-preview {
+  bottom: 72px;
+  max-width: calc(100% - 24px);
+}
+
+.desktop-pet-shell .chat-backdrop,
+.desktop-pet-shell + .chat-backdrop {
+  border-radius: 28px;
+}
+
+@media (max-height: 600px) {
+  .desktop-pet-shell .vivian-speech {
+    bottom: 76px;
+    font-size: 13px;
+  }
+
+  .desktop-pet-shell .companion-input {
+    min-height: 50px;
+  }
+
+  .desktop-pet-shell .circle-control,
+  .desktop-pet-shell .send-text {
+    width: 38px;
+    height: 38px;
+  }
+}
