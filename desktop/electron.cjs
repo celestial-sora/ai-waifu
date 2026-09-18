@@ -26,6 +26,17 @@ function isLocalVivianUrl(value) {
   }
 }
 
+function isLocalVivianApiUrl(value) {
+  if (!desktopOrigin) return false;
+
+  try {
+    const url = new URL(value);
+    return url.origin === desktopOrigin && (url.pathname === "/api" || url.pathname.startsWith("/api/"));
+  } catch {
+    return false;
+  }
+}
+
 function configureSessionSecurity() {
   const ses = session.defaultSession;
 
@@ -47,7 +58,14 @@ function configureSessionSecurity() {
     (details, callback) => {
       const requestHeaders = { ...details.requestHeaders };
 
-      if (desktopToken && isLocalVivianUrl(details.url)) {
+      const trustedRendererRequest =
+        desktopToken &&
+        mainWindow &&
+        details.webContentsId === mainWindow.webContents.id &&
+        details.initiatorOrigin === desktopOrigin &&
+        isLocalVivianApiUrl(details.url);
+
+      if (trustedRendererRequest) {
         requestHeaders["X-Vivian-Desktop-Token"] = desktopToken;
       }
 
