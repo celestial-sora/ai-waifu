@@ -59,6 +59,9 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=critical
 
+      - name: Verify patched transitive versions
+        run: node -e "const g=require('./node_modules/gh-pages/package.json').version; const q=require('./node_modules/qs/package.json').version; if(g!=='6.3.0'||q!=='6.16.0'){throw new Error('Unexpected patched dependency versions: gh-pages='+g+', qs='+q)}; console.log('Patched dependency versions OK:', g, q)"
+
       - name: Check desktop Node entrypoints
         shell: pwsh
         run: |
