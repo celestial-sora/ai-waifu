@@ -7,6 +7,12 @@ on:
     paths:
       - "package.json"
       - ".github/workflows/refresh-desktop-lock.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "package.json"
+      - ".github/workflows/refresh-desktop-lock.yml"
 
 permissions:
   contents: read
