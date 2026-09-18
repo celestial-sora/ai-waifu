@@ -95,6 +95,30 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
+      - name: Verify packaged shell excludes root node_modules
+        shell: pwsh
+        run: |
+          $asarEntries = npx --yes @electron/asar@4.0.0 list "dist/win-unpacked/resources/app.asar"
+          $nodeModules = $asarEntries | Where-Object { $_ -match '(^|\\)node_modules(\\|/)' }
+          if ($nodeModules) {
+            $nodeModules | Select-Object -First 20 | ForEach-Object { Write-Error "Unexpected shell dependency bundled: $_" }
+            exit 1
+          }
+
+      - name: Smoke test packaged Electron app
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "dist/win-unpacked/Vivian.exe" -ArgumentList "--smoke-test" -PassThru
+          if (-not $process.WaitForExit(45000)) {
+            taskkill /PID $process.Id /T /F | Out-Null
+            Write-Error "Packaged Vivian.exe smoke test timed out."
+            exit 1
+          }
+          if ($process.ExitCode -ne 0) {
+            Write-Error "Packaged Vivian.exe smoke test exited with code $($process.ExitCode)."
+            exit $process.ExitCode
+          }
+
       - name: Verify packaged runtime and installer
         shell: pwsh
         run: |
