@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { CompanionApp } from "../page";
+import { CompanionApp } from "../CompanionApp";
 
 export default function DesktopPetPage() {
   useEffect(() => {
