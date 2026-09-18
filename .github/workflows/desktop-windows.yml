@@ -16,6 +16,20 @@ on:
       - "package-lock.json"
       - "electron-builder.yml"
       - ".github/workflows/desktop-windows.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "lib/**"
+      - "public/**"
+      - "proxy.ts"
+      - "next.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "electron-builder.yml"
+      - ".github/workflows/desktop-windows.yml"
 
 permissions:
   contents: read
