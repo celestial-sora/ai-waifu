@@ -1,0 +1,46 @@
+appId: dev.celestialsora.vivian
+productName: Vivian
+artifactName: vivian-socute.${ext}
+electronVersion: 44.4.1
+asar: true
+
+directories:
+  output: dist
+
+files:
+  - desktop/electron.cjs
+  - desktop/preload.cjs
+  - desktop/server.cjs
+  - package.json
+
+extraResources:
+  - from: .next/standalone
+    to: standalone
+    filter:
+      - "**/*"
+  - from: .next/static
+    to: standalone/.next/static
+    filter:
+      - "**/*"
+  - from: public
+    to: standalone/public
+    filter:
+      - "**/*"
+
+win:
+  executableName: Vivian
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Vivian
+  uninstallDisplayName: Vivian Desktop Pet
+
+publish: null
