@@ -4,5 +4,6 @@
   "private": true,
   "description": "Vivian Desktop Pet local Electron shell",
   "main": "electron.cjs",
-  "author": "celestial-sora"
+  "author": "celestial-sora",
+  "license": "UNLICENSED"
 }
