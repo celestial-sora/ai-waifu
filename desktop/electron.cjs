@@ -1,29 +1,36 @@
+const crypto = require("node:crypto");
 const path = require("node:path");
-const { app, BrowserWindow, ipcMain, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
+const { startPackagedNextServer } = require("./server.cjs");
 
-const HOST = process.env.VIVIAN_DESKTOP_HOST || "127.0.0.1";
-const PORT = process.env.VIVIAN_DESKTOP_PORT || "3210";
-const DESKTOP_URL = `http://${HOST}:${PORT}/desktop`;
-const ALLOWED_ORIGIN = `http://${HOST}:${PORT}`;
+const HOST = "127.0.0.1";
+const DEV_PORT = Number.parseInt(process.env.VIVIAN_DESKTOP_PORT || "3210", 10);
 
+app.setName("Vivian");
 app.commandLine.appendSwitch("ozone-platform-hint", "auto");
 
 let mainWindow = null;
+let desktopServer = null;
+let desktopOrigin = null;
+let desktopToken = null;
+let quitting = false;
 
 function isLocalVivianUrl(value) {
+  if (!desktopOrigin) return false;
+
   try {
     const url = new URL(value);
-    return url.origin === ALLOWED_ORIGIN;
+    return url.origin === desktopOrigin;
   } catch {
     return false;
   }
 }
 
-function configurePermissions() {
+function configureSessionSecurity() {
   const ses = session.defaultSession;
 
   ses.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
-    if (requestingOrigin !== ALLOWED_ORIGIN) return false;
+    if (requestingOrigin !== desktopOrigin) return false;
     return permission === "media" || permission === "camera" || permission === "microphone";
   });
 
@@ -34,9 +41,24 @@ function configurePermissions() {
       (permission === "media" || permission === "camera" || permission === "microphone");
     callback(allowed);
   });
+
+  ses.webRequest.onBeforeSendHeaders(
+    { urls: ["http://127.0.0.1/*"] },
+    (details, callback) => {
+      const requestHeaders = { ...details.requestHeaders };
+
+      if (desktopToken && isLocalVivianUrl(details.url)) {
+        requestHeaders["X-Vivian-Desktop-Token"] = desktopToken;
+      }
+
+      callback({ requestHeaders });
+    },
+  );
 }
 
 function createWindow() {
+  if (!desktopOrigin) throw new Error("Vivian desktop origin is not ready");
+
   mainWindow = new BrowserWindow({
     width: 460,
     height: 720,
@@ -73,16 +95,56 @@ function createWindow() {
     mainWindow = null;
   });
 
-  mainWindow.loadURL(DESKTOP_URL);
+  void mainWindow.loadURL(`${desktopOrigin}/desktop`).catch((error) => {
+    dialog.showErrorBox("Vivian Desktop Pet", `Failed to load Vivian desktop UI.\n\n${error.message}`);
+    app.quit();
+  });
 }
 
-app.whenReady().then(() => {
-  configurePermissions();
-  createWindow();
+async function prepareRuntime() {
+  if (!app.isPackaged) {
+    desktopOrigin = `http://${HOST}:${DEV_PORT}`;
+    return;
+  }
+
+  desktopToken = crypto.randomBytes(32).toString("hex");
+  desktopServer = await startPackagedNextServer({
+    resourcesPath: process.resourcesPath,
+    userDataPath: app.getPath("userData"),
+    desktopToken,
+    host: HOST,
+    preferredPort: 3210,
+  });
+  desktopOrigin = desktopServer.origin;
+
+  desktopServer.child.once("exit", (code, signal) => {
+    if (quitting) return;
+    const reason = signal ? `signal ${signal}` : `code ${code ?? "unknown"}`;
+    dialog.showErrorBox("Vivian Desktop Pet", `Vivian local server stopped unexpectedly (${reason}).`);
+    app.quit();
+  });
+}
+
+app.whenReady().then(async () => {
+  try {
+    await prepareRuntime();
+    configureSessionSecurity();
+    createWindow();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    dialog.showErrorBox("Vivian Desktop Pet", `Failed to start Vivian.\n\n${message}`);
+    app.quit();
+    return;
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on("before-quit", () => {
+  quitting = true;
+  desktopServer?.stop();
 });
 
 app.on("window-all-closed", () => {
