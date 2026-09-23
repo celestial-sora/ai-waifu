@@ -82,6 +82,11 @@ jobs:
             exit 1
           fi
 
+      - name: Configure unpacked Chromium sandbox for CI
+        run: |
+          sudo chown root:root dist/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 dist/linux-unpacked/chrome-sandbox
+
       - name: Smoke test packaged Electron app
         run: xvfb-run -a timeout 60s dist/linux-unpacked/Vivian --smoke-test
 
