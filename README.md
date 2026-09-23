@@ -22,21 +22,11 @@ cp .env.example .env.local
 
 บน Windows PowerShell ใช้ `Copy-Item .env.example .env.local` แทนคำสั่ง `cp`
 
-เปิด `.env.local` แล้วใส่ API key ของผู้ให้บริการแชตอย่างน้อยหนึ่งราย: `CEREBRAS_API_KEY`, `GROQ_API_KEY` หรือ `GEMINI_API_KEY` (เพิ่มบรรทัดเองได้หากไม่มีในไฟล์ตัวอย่าง) ต้องตั้งค่า `GEMINI_API_KEY` หากจะใช้ภาพหรือการค้นหาที่อาศัย Gemini ส่วน Supabase, เสียง และบริการเชื่อมต่ออื่น ๆ ตั้งค่าเพิ่มตามฟีเจอร์ที่ต้องการในหัวข้อด้านล่าง
+เปิด `.env.local` และตั้งค่า API key ก่อนเริ่มเว็บ โดยเลือกผู้ให้บริการแชตอย่างน้อยหนึ่งราย หากไฟล์ตัวอย่างยังไม่มีชื่อตัวแปรที่ต้องใช้ ให้เพิ่มบรรทัดนั้นเอง:
 
-```bash
-npm run dev
-```
+### ตั้งค่า `.env.local`
 
-เปิด [http://localhost:3000](http://localhost:3000) ในเบราว์เซอร์เพื่อคุยกับ Vivian ผ่านหน้าเว็บ หากต้องการพูดหรือใช้กล้อง ให้กดอนุญาตไมโครโฟน/กล้องในเบราว์เซอร์และตั้งค่าบริการเสียงที่เกี่ยวข้อง กด `Ctrl+C` ใน Terminal เพื่อหยุดเซิร์ฟเวอร์
-
-สำหรับการตรวจโปรเจกต์ ใช้ `npm run lint`, `npx tsc --noEmit` และ `npm run build`
-
-## Environment variables
-
-Copy `.env.example` to `.env.local`, then configure the services you want to use.
-
-### Chat providers
+#### ผู้ให้บริการแชต
 
 At least one normal chat provider must be configured:
 
@@ -55,7 +45,7 @@ GEMINI_MODEL=gemini-2.5-flash
 
 Gemini is required for the current vision/search route.
 
-### Memory / context processing
+#### ความจำและบริบท
 
 ```env
 SUPABASE_URL=
@@ -67,14 +57,14 @@ OPENROUTER_MODEL=
 
 Supabase provides persistence. OpenRouter is optional for normal chat but enables the current memory-extraction and older-context compression flow.
 
-### Search and tools
+#### ค้นหาและเครื่องมือ
 
 ```env
 TAVILY_API_KEY=
 COMPOSIO_API_KEY=
 ```
 
-### Voice
+#### เสียง
 
 ```env
 ELEVENLABS_API_KEY=
@@ -85,6 +75,16 @@ FISH_AUDIO_MODEL=s2.1-pro-free
 ```
 
 Never place provider secrets in `NEXT_PUBLIC_*`, client code, committed source files, screenshots, or logs.
+
+### เริ่มใช้งาน
+
+```bash
+npm run dev
+```
+
+เปิด [http://localhost:3000](http://localhost:3000) ในเบราว์เซอร์เพื่อคุยกับ Vivian ผ่านหน้าเว็บ หากต้องการพูดหรือใช้กล้อง ให้กดอนุญาตไมโครโฟน/กล้องในเบราว์เซอร์และตั้งค่าบริการเสียงที่เกี่ยวข้อง กด `Ctrl+C` ใน Terminal เพื่อหยุดเซิร์ฟเวอร์
+
+สำหรับการตรวจโปรเจกต์ ใช้ `npm run lint`, `npx tsc --noEmit` และ `npm run build`
 
 ## Current status
 
