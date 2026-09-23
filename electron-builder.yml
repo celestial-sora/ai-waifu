@@ -23,6 +23,14 @@ win:
       arch:
         - x64
 
+linux:
+  executableName: Vivian
+  category: Utility
+  target:
+    - target: AppImage
+      arch:
+        - x64
+
 nsis:
   oneClick: false
   perMachine: false
