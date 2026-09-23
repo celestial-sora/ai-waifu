@@ -22,13 +22,13 @@ cp .env.example .env.local
 
 บน Windows PowerShell ใช้ `Copy-Item .env.example .env.local` แทนคำสั่ง `cp`
 
-เปิด `.env.local` และตั้งค่า API key ก่อนเริ่มเว็บ โดยเลือกผู้ให้บริการแชตอย่างน้อยหนึ่งราย หากไฟล์ตัวอย่างยังไม่มีชื่อตัวแปรที่ต้องใช้ ให้เพิ่มบรรทัดนั้นเอง:
-
 ### ตั้งค่า `.env.local`
+
+เปิดไฟล์แล้วใส่ API key ของผู้ให้บริการแชตอย่างน้อยหนึ่งราย หากไฟล์ตัวอย่างยังไม่มีชื่อตัวแปรที่ต้องใช้ ให้เพิ่มบรรทัดนั้นเอง
 
 #### ผู้ให้บริการแชต
 
-At least one normal chat provider must be configured:
+เลือกตั้งค่าอย่างน้อยหนึ่งราย:
 
 ```env
 CEREBRAS_API_KEY=
@@ -36,14 +36,14 @@ GROQ_API_KEY=
 GEMINI_API_KEY=
 ```
 
-Optional model overrides:
+ปรับรุ่นโมเดลได้ (ไม่บังคับ):
 
 ```env
 GROQ_MODEL=openai/gpt-oss-120b
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Gemini is required for the current vision/search route.
+หากต้องการใช้ภาพหรือการค้นหาผ่าน Gemini ให้ตั้งค่า `GEMINI_API_KEY`
 
 #### ความจำและบริบท
 
@@ -55,7 +55,7 @@ OPENROUTER_API_KEY=
 OPENROUTER_MODEL=
 ```
 
-Supabase provides persistence. OpenRouter is optional for normal chat but enables the current memory-extraction and older-context compression flow.
+Supabase ใช้เก็บความจำถาวร ส่วน OpenRouter ไม่จำเป็นสำหรับแชตทั่วไป แต่ใช้สกัดความจำและสรุปบทสนทนาเก่า
 
 #### ค้นหาและเครื่องมือ
 
@@ -74,7 +74,7 @@ FISH_AUDIO_VOICE_ID=
 FISH_AUDIO_MODEL=s2.1-pro-free
 ```
 
-Never place provider secrets in `NEXT_PUBLIC_*`, client code, committed source files, screenshots, or logs.
+เก็บ API key ไว้ใน `.env.local` เท่านั้น อย่าใส่ในตัวแปร `NEXT_PUBLIC_*` โค้ดฝั่งเบราว์เซอร์ ภาพหน้าจอ หรือไฟล์ที่ commit ขึ้น GitHub
 
 ### เริ่มใช้งาน
 
