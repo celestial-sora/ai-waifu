@@ -275,8 +275,9 @@ Windows target:
 
 - NSIS
 - x64
-- per-user install
-- selectable install directory
+- one-click per-user install (no administrator prompt by default)
+- automatic install location under the user profile
+- launch Vivian after installation
 - Desktop shortcut
 - Start Menu shortcut
 
