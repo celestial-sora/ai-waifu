@@ -9,6 +9,83 @@ Vivian is a mobile-first **Live2D AI companion** focused on natural conversation
 
 > This README reflects the current implementation on `main` as of September 18, 2026.
 
+## ใช้งานบนเครื่อง (localhost)
+
+ต้องมี Git และ Node.js พร้อม npm ก่อนเริ่มต้น จากนั้นเปิด Terminal แล้วรัน:
+
+```bash
+git clone https://github.com/celestial-sora/ai-waifu.git
+cd ai-waifu
+npm ci
+cp .env.example .env.local
+```
+
+บน Windows PowerShell ใช้ `Copy-Item .env.example .env.local` แทนคำสั่ง `cp`
+
+เปิด `.env.local` แล้วใส่ API key ของผู้ให้บริการแชตอย่างน้อยหนึ่งราย: `CEREBRAS_API_KEY`, `GROQ_API_KEY` หรือ `GEMINI_API_KEY` (เพิ่มบรรทัดเองได้หากไม่มีในไฟล์ตัวอย่าง) ต้องตั้งค่า `GEMINI_API_KEY` หากจะใช้ภาพหรือการค้นหาที่อาศัย Gemini ส่วน Supabase, เสียง และบริการเชื่อมต่ออื่น ๆ ตั้งค่าเพิ่มตามฟีเจอร์ที่ต้องการในหัวข้อด้านล่าง
+
+```bash
+npm run dev
+```
+
+เปิด [http://localhost:3000](http://localhost:3000) ในเบราว์เซอร์เพื่อคุยกับ Vivian ผ่านหน้าเว็บ หากต้องการพูดหรือใช้กล้อง ให้กดอนุญาตไมโครโฟน/กล้องในเบราว์เซอร์และตั้งค่าบริการเสียงที่เกี่ยวข้อง กด `Ctrl+C` ใน Terminal เพื่อหยุดเซิร์ฟเวอร์
+
+สำหรับการตรวจโปรเจกต์ ใช้ `npm run lint`, `npx tsc --noEmit` และ `npm run build`
+
+## Environment variables
+
+Copy `.env.example` to `.env.local`, then configure the services you want to use.
+
+### Chat providers
+
+At least one normal chat provider must be configured:
+
+```env
+CEREBRAS_API_KEY=
+GROQ_API_KEY=
+GEMINI_API_KEY=
+```
+
+Optional model overrides:
+
+```env
+GROQ_MODEL=openai/gpt-oss-120b
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+Gemini is required for the current vision/search route.
+
+### Memory / context processing
+
+```env
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=
+```
+
+Supabase provides persistence. OpenRouter is optional for normal chat but enables the current memory-extraction and older-context compression flow.
+
+### Search and tools
+
+```env
+TAVILY_API_KEY=
+COMPOSIO_API_KEY=
+```
+
+### Voice
+
+```env
+ELEVENLABS_API_KEY=
+
+FISH_AUDIO_API_KEY=
+FISH_AUDIO_VOICE_ID=
+FISH_AUDIO_MODEL=s2.1-pro-free
+```
+
+Never place provider secrets in `NEXT_PUBLIC_*`, client code, committed source files, screenshots, or logs.
+
 ## Current status
 
 The project is now beyond a basic chat + Live2D prototype. The current build includes:
@@ -192,116 +269,6 @@ External AI/services currently used by the codebase include:
 - Composio
 - Open-Meteo
 
-## Environment variables
-
-Create `.env.local` and configure the services you want to use.
-
-### Chat providers
-
-At least one normal chat provider must be configured:
-
-```env
-CEREBRAS_API_KEY=
-GROQ_API_KEY=
-GEMINI_API_KEY=
-```
-
-Optional model overrides:
-
-```env
-GROQ_MODEL=openai/gpt-oss-120b
-GEMINI_MODEL=gemini-2.5-flash
-```
-
-Gemini is required for the current vision/search route.
-
-### Memory / context processing
-
-```env
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=
-```
-
-Supabase provides persistence. OpenRouter is optional for normal chat but enables the current memory-extraction and older-context compression flow.
-
-### Search and tools
-
-```env
-TAVILY_API_KEY=
-COMPOSIO_API_KEY=
-```
-
-### Voice
-
-```env
-ELEVENLABS_API_KEY=
-
-FISH_AUDIO_API_KEY=
-FISH_AUDIO_VOICE_ID=
-FISH_AUDIO_MODEL=s2.1-pro-free
-```
-
-Never place provider secrets in `NEXT_PUBLIC_*`, client code, committed source files, screenshots, or logs.
-
-## Run locally
-
-```bash
-git clone https://github.com/celestial-sora/ai-waifu.git
-cd ai-waifu
-npm install
-```
-
-Create `.env.local`, then run:
-
-```bash
-npm run dev
-```
-
-Open:
-
-```text
-http://localhost:3000
-```
-
-Useful checks:
-
-```bash
-npm run lint
-npm run build
-npx tsc --noEmit
-```
-
-## Project structure
-
-```text
-app/
-  page.tsx              Main Live2D companion UI
-  api/
-    chat/               LLM routing, tools, vision, memory-context orchestration
-    memory/             Memory + conversation CRUD
-    stt/                ElevenLabs speech-to-text
-    tts/                Fish Audio text-to-speech
-
-lib/
-  companion.ts          Relationship, mood and yandere-agency state
-  companion-store.ts    Companion-state persistence
-  composio.ts           Connected-app tools
-  models.ts             Live2D model configuration
-  tools.ts              Search, weather, time, calculator, memory tools
-  rate-limit.ts         API request throttling
-  supabase-admin.ts     Server-side Supabase client
-
-public/
-  live2d/Miss/          Current Live2D model/assets
-  backgrounds/          Day/night scene assets
-
-supabase/
-  migrations/           Database schema migrations
-```
-
 ## Current limitations
 
 The current production architecture is still a **personal single-user project** rather than a multi-user platform.
@@ -342,3 +309,31 @@ Private-data access for an owner-requested task does not automatically authorize
 Live2D Credit: **Cai Cat**
 
 This repository contains a personal AI companion project and its application code. Model/assets may have separate usage terms from the source code.
+
+## Project structure
+
+```text
+app/
+  page.tsx              Main Live2D companion UI
+  api/
+    chat/               LLM routing, tools, vision, memory-context orchestration
+    memory/             Memory + conversation CRUD
+    stt/                ElevenLabs speech-to-text
+    tts/                Fish Audio text-to-speech
+
+lib/
+  companion.ts          Relationship, mood and yandere-agency state
+  companion-store.ts    Companion-state persistence
+  composio.ts           Connected-app tools
+  models.ts             Live2D model configuration
+  tools.ts              Search, weather, time, calculator, memory tools
+  rate-limit.ts         API request throttling
+  supabase-admin.ts     Server-side Supabase client
+
+public/
+  live2d/Miss/          Current Live2D model/assets
+  backgrounds/          Day/night scene assets
+
+supabase/
+  migrations/           Database schema migrations
+```
