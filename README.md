@@ -9,9 +9,9 @@ Vivian is a mobile-first **Live2D AI companion** focused on natural conversation
 
 > This README reflects the current implementation on `main` as of September 18, 2026.
 
-## ใช้งานบนเครื่อง (localhost)
+## Run locally
 
-ต้องมี Git และ Node.js พร้อม npm ก่อนเริ่มต้น จากนั้นเปิด Terminal แล้วรัน:
+Requires Git, Node.js, and npm.
 
 ```bash
 git clone https://github.com/celestial-sora/ai-waifu.git
@@ -20,71 +20,33 @@ npm ci
 cp .env.example .env.local
 ```
 
-บน Windows PowerShell ใช้ `Copy-Item .env.example .env.local` แทนคำสั่ง `cp`
+On Windows PowerShell, use `Copy-Item .env.example .env.local` for the last command.
 
-### ตั้งค่า `.env.local`
+### Configure `.env.local`
 
-เปิดไฟล์แล้วใส่ API key ของผู้ให้บริการแชตอย่างน้อยหนึ่งราย หากไฟล์ตัวอย่างยังไม่มีชื่อตัวแปรที่ต้องใช้ ให้เพิ่มบรรทัดนั้นเอง
+Add a key for **at least one** chat provider: `CEREBRAS_API_KEY`, `GROQ_API_KEY`, or `GEMINI_API_KEY`. Add the variable to the file if it is missing from the example. Gemini is also needed for vision and Gemini-backed search.
 
-#### ผู้ให้บริการแชต
+Other features are optional:
 
-เลือกตั้งค่าอย่างน้อยหนึ่งราย:
+| Feature | Environment variables |
+| --- | --- |
+| Persistent memory | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Memory extraction and context compression | `OPENROUTER_API_KEY` (optional `OPENROUTER_MODEL`) |
+| Search and connected apps | `TAVILY_API_KEY`, `COMPOSIO_API_KEY` |
+| Speech input | `ELEVENLABS_API_KEY` |
+| Speech output | `FISH_AUDIO_API_KEY`, `FISH_AUDIO_VOICE_ID` (optional `FISH_AUDIO_MODEL`) |
 
-```env
-CEREBRAS_API_KEY=
-GROQ_API_KEY=
-GEMINI_API_KEY=
-```
+Optional chat model overrides: `GROQ_MODEL` and `GEMINI_MODEL`. Keep keys in `.env.local`; never expose them through `NEXT_PUBLIC_*` or commit them.
 
-ปรับรุ่นโมเดลได้ (ไม่บังคับ):
-
-```env
-GROQ_MODEL=openai/gpt-oss-120b
-GEMINI_MODEL=gemini-2.5-flash
-```
-
-หากต้องการใช้ภาพหรือการค้นหาผ่าน Gemini ให้ตั้งค่า `GEMINI_API_KEY`
-
-#### ความจำและบริบท
-
-```env
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=
-```
-
-Supabase ใช้เก็บความจำถาวร ส่วน OpenRouter ไม่จำเป็นสำหรับแชตทั่วไป แต่ใช้สกัดความจำและสรุปบทสนทนาเก่า
-
-#### ค้นหาและเครื่องมือ
-
-```env
-TAVILY_API_KEY=
-COMPOSIO_API_KEY=
-```
-
-#### เสียง
-
-```env
-ELEVENLABS_API_KEY=
-
-FISH_AUDIO_API_KEY=
-FISH_AUDIO_VOICE_ID=
-FISH_AUDIO_MODEL=s2.1-pro-free
-```
-
-เก็บ API key ไว้ใน `.env.local` เท่านั้น อย่าใส่ในตัวแปร `NEXT_PUBLIC_*` โค้ดฝั่งเบราว์เซอร์ ภาพหน้าจอ หรือไฟล์ที่ commit ขึ้น GitHub
-
-### เริ่มใช้งาน
+### Start
 
 ```bash
 npm run dev
 ```
 
-เปิด [http://localhost:3000](http://localhost:3000) ในเบราว์เซอร์เพื่อคุยกับ Vivian ผ่านหน้าเว็บ หากต้องการพูดหรือใช้กล้อง ให้กดอนุญาตไมโครโฟน/กล้องในเบราว์เซอร์และตั้งค่าบริการเสียงที่เกี่ยวข้อง กด `Ctrl+C` ใน Terminal เพื่อหยุดเซิร์ฟเวอร์
+Open [http://localhost:3000](http://localhost:3000). Allow microphone or camera access in your browser if you use those features. Press `Ctrl+C` to stop the server.
 
-สำหรับการตรวจโปรเจกต์ ใช้ `npm run lint`, `npx tsc --noEmit` และ `npm run build`
+Checks: `npm run lint`, `npx tsc --noEmit`, `npm run build`.
 
 ## Current status
 
