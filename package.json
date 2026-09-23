@@ -10,6 +10,7 @@
     "desktop:dev": "node desktop/run.mjs",
     "desktop:pack": "npx --yes electron-builder@26.16.1 --config electron-builder.yml --win --x64 --dir",
     "desktop:dist": "npx --yes electron-builder@26.16.1 --config electron-builder.yml --win nsis --x64",
+    "desktop:dist:linux": "npx --yes electron-builder@26.16.1 --config electron-builder.yml --linux AppImage --x64",
     "desktop:build": "next build --webpack"
   },
   "dependencies": {
