@@ -8,11 +8,24 @@ This document provides instructions for AI agents (GitHub Copilot, Claude, etc.)
 
 ## 📋 Project Context
 
-**Project:** Vivian AI Companion Web App  
+**Project:** Vivian AI Companion  
 **Stack:** Next.js 16.3.3 + React 19 + TypeScript + Tailwind CSS v4  
-**Architecture:** Client-side React component (Live2D + chat) + multiple API routes (LLM, voice, memory)  
+**Architecture:** Shared Vivian backend/AI systems with separate Web, Desktop, iOS, and Android clients  
 **Database:** Supabase PostgreSQL (optional, gracefully degraded if unavailable)  
-**Deployment:** Vercel  
+**Deployment:** Vercel for Web; native mobile build/distribution is branch-specific  
+
+### Active platform branches
+- `main` — Vivian Web App / production source of truth
+- `feature/desktop-pet-local` — Vivian Desktop Pet
+- `feature/native-ios` — Native iOS client
+- `feature/native-android` — Native Android client
+
+### Native mobile rules
+- iOS and Android must reuse Vivian's existing backend, AI, memory, chat, voice, and account contracts where practical.
+- Do not turn either native app into a WebView wrapper of the website.
+- Keep platform-specific UI and OS integrations inside their respective native branches.
+- Preserve one shared Vivian identity and cloud memory across Web, Desktop, iOS, and Android.
+- Never duplicate or expose provider API keys in native client code.
 
 ---
 
@@ -275,7 +288,7 @@ This section is the current source of truth for continuing work. Read it before 
 - Codename: Columbina
 - Production URL: https://vivian-chan.vercel.app
 - Repository: https://github.com/celestial-sora/ai-waifu
-- Git branch: `main`
+- Git branches: `main` (Web), `feature/desktop-pet-local` (Desktop), `feature/native-ios` (iOS), `feature/native-android` (Android)
 - Latest committed version: `6808570` (`feat: auto-capture camera frame on vision queries, prioritize Gemini for image recognition, and scrub meta system phrases`)
 - Latest production deployment: `Ready in 41s (https://vivian-chan.vercel.app)`
 
