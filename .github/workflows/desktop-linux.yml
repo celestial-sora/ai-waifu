@@ -1,0 +1,94 @@
+name: Vivian Desktop Linux AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/desktop-pet-local
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "lib/**"
+      - "public/**"
+      - "proxy.ts"
+      - "next.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "electron-builder.yml"
+      - ".github/workflows/desktop-linux.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vivian-desktop-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux-appimage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout desktop branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check desktop entrypoints
+        run: |
+          node --check desktop/electron.cjs
+          node --check desktop/preload.cjs
+          node --check desktop/server.cjs
+          node --check desktop/after-pack.cjs
+          node --check desktop/smoke-standalone.mjs
+
+      - name: Build Next.js standalone server
+        run: npm run desktop:build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Reject bundled environment files
+        run: |
+          if find .next/standalone -type f \( -name '.env*' -o -name '*.pem' \) | grep -q .; then
+            echo "Sensitive configuration found in standalone output"
+            exit 1
+          fi
+
+      - name: Smoke test standalone desktop runtime
+        run: node desktop/smoke-standalone.mjs
+
+      - name: Build Linux AppImage
+        run: npm run desktop:dist:linux
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify packaged runtime and AppImage
+        run: |
+          test -s dist/vivian-socute.AppImage
+          test -f dist/linux-unpacked/resources/standalone/server.js
+          test -f dist/linux-unpacked/resources/standalone/node_modules/next/package.json
+          test -f dist/linux-unpacked/resources/standalone/public/live2d/live2dcubismcore.min.js
+          find dist/linux-unpacked/resources/standalone/.next/static -type f | grep -q .
+          if find dist/linux-unpacked -type f \( -name '.env*' -o -name '*.pem' \) | grep -q .; then
+            echo "Sensitive configuration found in packaged app"
+            exit 1
+          fi
+
+      - name: Smoke test packaged Electron app
+        run: xvfb-run -a timeout 60s dist/linux-unpacked/Vivian --smoke-test
+
+      - name: Upload Vivian AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: vivian-socute-linux-x64
+          path: dist/vivian-socute.AppImage
+          if-no-files-found: error
+          retention-days: 14
