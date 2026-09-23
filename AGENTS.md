@@ -27,6 +27,33 @@ This document provides instructions for AI agents (GitHub Copilot, Claude, etc.)
 - Preserve one shared Vivian identity and cloud memory across Web, Desktop, iOS, and Android.
 - Never duplicate or expose provider API keys in native client code.
 
+### Store release targets
+
+#### iOS
+- Branch: `feature/native-ios`
+- Bundle ID: `com.celestialsora.vivian`
+- Distribution stages: Development → TestFlight → App Store
+- Keep signing certificates, provisioning profiles, and App Store credentials out of the repository.
+- Configure native permission descriptions for microphone, camera, photos, notifications, and background audio only when those capabilities are used.
+- App Privacy disclosures must match the actual data collected by Vivian and all third-party SDKs.
+
+#### Android
+- Branch: `feature/native-android`
+- Package name: `com.celestialsora.vivian`
+- Distribution stages: Internal Testing → Closed Testing → Google Play Production
+- Release artifacts must be signed Android App Bundles (`.aab`) for Play distribution.
+- Keep keystores, signing passwords, service-account credentials, and Play Console secrets out of the repository.
+- Data Safety declarations and runtime permissions must match the actual app behavior.
+
+#### Shared store release rules
+- Privacy Policy and Terms of Service are required before public store release.
+- Users must have a clear way to delete their Vivian account and associated cloud data when account creation is supported.
+- Never embed OpenRouter, Gemini, ElevenLabs, Fish Audio, Supabase service-role, or any other privileged provider secret in iOS or Android binaries.
+- Native clients call Vivian's secured backend over HTTPS; provider credentials remain server-side.
+- Store metadata, screenshots, age/content ratings, privacy disclosures, and permission descriptions must be reviewed before submission.
+- Keep Vivian memory identity shared across Web, Desktop, iOS, and Android unless a platform-specific privacy constraint requires otherwise.
+- Test voice, camera/vision, notifications, auth, memory sync, account deletion, and degraded-network behavior before every store release.
+
 ---
 
 ## 🎯 Key Constraints & Requirements
