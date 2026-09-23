@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 exports.default = async function afterPack(context) {
-  if (context.electronPlatformName !== "win32") return;
+  if (!["win32", "linux"].includes(context.electronPlatformName)) return;
 
   const projectRoot = path.resolve(__dirname, "..");
   const resourcesDir = path.join(context.appOutDir, "resources");
