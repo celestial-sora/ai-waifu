@@ -1,0 +1,9 @@
+{
+  "name": "vivian-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vivian Desktop Pet local Electron shell",
+  "main": "electron.cjs",
+  "author": "celestial-sora",
+  "license": "UNLICENSED"
+}
