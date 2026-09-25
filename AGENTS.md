@@ -79,9 +79,8 @@ import { Container } from "pixi-live2d-display";
 #### `/api/chat` — LLM Proxy
 - **Input:** `{ messages: ChatMessage[], userId?: string }`
 - **Behavior:**
-  - Try OpenRouter first (cheaper)
-  - Fall back to Gemini if OpenRouter fails or unavailable
-  - Fall back to cached response if both fail
+  - Try Groq first for normal text chat
+  - Fall back to Cerebras, then Gemini when configured
   - Detect search intents ("search", "news", "latest", etc.) → use Gemini + google_search tool
 - **Output:** `{ content: string, sources?: { title, url }[] }`
 - **Side Effects:**
@@ -107,10 +106,12 @@ import { Container } from "pixi-live2d-display";
 ### Environment Variables
 
 **Required:**
-- `OPENROUTER_API_KEY` — Primary LLM provider
+- `GROQ_API_KEY` — Primary LLM provider
 
 **Optional but Important:**
-- `GEMINI_API_KEY` — Fallback LLM + web search capability
+- `CEREBRAS_API_KEY` — Text chat fallback
+- `GEMINI_API_KEY` — Fallback LLM + vision and web search capability
+- `OPENROUTER_API_KEY` — Background memory extraction and conversation compression
 - `ELEVENLABS_API_KEY` — Speech-to-Text
 - `FISH_AUDIO_API_KEY`, `FISH_AUDIO_VOICE_ID` — Text-to-Speech
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Memory persistence
@@ -136,7 +137,7 @@ import { Container } from "pixi-live2d-display";
 - **System Prompt:** Inject personality + memory context
 - **Memory Loading:** Fetch top 8 memories before sending to LLM
 - **Search Detection:** Regex patterns in `searchKeywords` array
-- **Provider Logic:** Modify `providerChain` array to adjust fallback order
+- **Provider Logic:** Modify the provider blocks in `app/api/chat/route.ts` to adjust fallback order
 
 ### Implementing New Live2D Animations
 **Location:** `app/page.tsx` (client component)
@@ -324,8 +325,8 @@ This section is the current source of truth for continuing work. Read it before 
 1. User types or holds the microphone button.
 2. Microphone audio is sent to `POST /api/stt`.
 3. The transcript is shown in the STT preview bubble and auto-submitted to `POST /api/chat`.
-4. `/api/chat` loads durable memory from Supabase, then calls OpenRouter as the primary LLM.
-5. If OpenRouter fails or times out, `/api/chat` falls back to Gemini 3 Flash when configured.
+4. `/api/chat` loads durable memory from Supabase, then calls Groq as the primary LLM for normal text chat.
+5. If Groq fails or times out, `/api/chat` falls back to Cerebras and then Gemini when configured.
 6. Provider requests have a 25-second timeout; the browser chat request has a 35-second timeout.
 7. The response is sent to `POST /api/tts` using Fish Audio.
 8. The UI waits for audio playback to start, then shows Vivian's response bubble so text and speech are synchronized.
@@ -361,7 +362,7 @@ This section is the current source of truth for continuing work. Read it before 
 - Provider secrets belong only in Vercel environment variables.
 - Do not add authentication, multi-user behavior, a home server, Python backend, self-hosted LLM, or GPU infrastructure unless explicitly requested.
 - TTS and Live2D failures must never prevent text chat from completing.
-- Search requests use Gemini Google Search grounding; normal chat uses OpenRouter first and Gemini fallback.
+- Search and vision requests use Gemini; normal text chat uses Groq first, then Cerebras and Gemini as fallbacks.
 
 ### Safe continuation workflow
 
