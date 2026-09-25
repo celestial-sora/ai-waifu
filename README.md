@@ -7,7 +7,7 @@ Vivian is a mobile-first **Live2D AI companion** focused on natural conversation
 **Repository:** https://github.com/celestial-sora/ai-waifu  
 **Primary branch:** `main`
 
-> This README reflects the current implementation on `main` as of September 18, 2026.
+> This README reflects the current implementation on `main` as of September 25, 2026.
 
 ## Run locally
 
@@ -24,7 +24,7 @@ On Windows PowerShell, use `Copy-Item .env.example .env.local` for the last comm
 
 ### Configure `.env.local`
 
-Add a key for **at least one** chat provider: `CEREBRAS_API_KEY`, `GROQ_API_KEY`, or `GEMINI_API_KEY`. Add the variable to the file if it is missing from the example. Gemini is also needed for vision and Gemini-backed search.
+Set `GROQ_API_KEY` for the primary chat provider. `CEREBRAS_API_KEY` and `GEMINI_API_KEY` provide chat fallbacks. Gemini is also needed for vision and Gemini-backed search.
 
 Other features are optional:
 
@@ -89,8 +89,8 @@ The yandere behavior is intentionally treated as **character flavor inside the c
 
 Normal text chat currently uses this provider order:
 
-1. **Cerebras** — `qwen-3.8-27b`
-2. **Groq** — default `openai/gpt-oss-120b`
+1. **Groq** — default `openai/gpt-oss-120b`
+2. **Cerebras** — `qwen-3.8-27b`
 3. **Gemini** — default `gemini-2.5-flash`
 
 Vision and search requests are routed through Gemini because they depend on Gemini-specific multimodal/search capabilities.

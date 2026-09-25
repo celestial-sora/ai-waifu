@@ -336,7 +336,7 @@ export async function POST(request: Request) {
 
   if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
 
-  // Text chat order: Cerebras -> Groq -> Gemini. Vision/search stay on Gemini because they require Gemini-specific capabilities.
+  // Text chat order: Groq -> Cerebras -> Gemini. Vision/search stay on Gemini because they require Gemini-specific capabilities.
   let provider: "cerebras" | "groq" | "gemini" = "gemini";
 
   const buildGeminiContents = () => {
@@ -409,58 +409,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 1. PRIMARY TEXT / TOOLS: Cerebras Qwen 3.8 27B.
-  if (!generatedData && cerebrasApiKey && !hasImage && !shouldSearch) {
-    const cerebrasCandidates = [cerebrasModelName()];
-
-    for (const cModel of cerebrasCandidates) {
-      try {
-        const msgs = [{ role: "system" as const, content: systemPrompt }, ...promptContents];
-        const initialRes = await callCerebras(cerebrasApiKey, msgs, cModel, { tools: composioFunctions });
-        if (initialRes.ok) {
-          const initialData = await initialRes.json();
-          const choice = initialData.choices?.[0];
-
-          if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
-            console.log("Cerebras requested Composio tool call:", choice.message.tool_calls);
-            const toolExecResults = [];
-            for (const tc of choice.message.tool_calls) {
-              const slug = tc.function.name;
-              let args = {};
-              try { args = JSON.parse(tc.function.arguments); } catch {}
-              const execRes = await executeComposioTool({ slug, arguments: args });
-              toolExecResults.push({
-                role: "tool",
-                tool_call_id: tc.id,
-                content: execRes.content,
-              });
-            }
-            const secondTurnMessages = [
-              ...msgs,
-              choice.message,
-              ...toolExecResults,
-            ];
-            const followUpRes = await callCerebras(cerebrasApiKey, secondTurnMessages, cModel);
-            if (followUpRes.ok) {
-              generatedData = await followUpRes.json();
-              provider = "cerebras";
-              break;
-            }
-          } else {
-            generatedData = initialData;
-            provider = "cerebras";
-            break;
-          }
-        } else {
-          console.warn(`Cerebras (${cModel}) returned ${initialRes.status}`);
-        }
-      } catch (err) {
-        console.warn(`Cerebras (${cModel}) error`, err);
-      }
-    }
-  }
-
-  // 2. FALLBACK 1 TEXT / TOOLS: Groq.
+  // 1. PRIMARY TEXT / TOOLS: Groq.
   if (!generatedData && groqApiKey && !hasImage && !shouldSearch) {
     const groqCandidates = [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
@@ -513,7 +462,58 @@ export async function POST(request: Request) {
     }
   }
 
-  // 3. FALLBACK 2 / SEARCH / VISION: Gemini.
+  // 2. FALLBACK TEXT / TOOLS: Cerebras Qwen 3.8 27B.
+  if (!generatedData && cerebrasApiKey && !hasImage && !shouldSearch) {
+    const cerebrasCandidates = [cerebrasModelName()];
+
+    for (const cModel of cerebrasCandidates) {
+      try {
+        const msgs = [{ role: "system" as const, content: systemPrompt }, ...promptContents];
+        const initialRes = await callCerebras(cerebrasApiKey, msgs, cModel, { tools: composioFunctions });
+        if (initialRes.ok) {
+          const initialData = await initialRes.json();
+          const choice = initialData.choices?.[0];
+
+          if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+            console.log("Cerebras requested Composio tool call:", choice.message.tool_calls);
+            const toolExecResults = [];
+            for (const tc of choice.message.tool_calls) {
+              const slug = tc.function.name;
+              let args = {};
+              try { args = JSON.parse(tc.function.arguments); } catch {}
+              const execRes = await executeComposioTool({ slug, arguments: args });
+              toolExecResults.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: execRes.content,
+              });
+            }
+            const secondTurnMessages = [
+              ...msgs,
+              choice.message,
+              ...toolExecResults,
+            ];
+            const followUpRes = await callCerebras(cerebrasApiKey, secondTurnMessages, cModel);
+            if (followUpRes.ok) {
+              generatedData = await followUpRes.json();
+              provider = "cerebras";
+              break;
+            }
+          } else {
+            generatedData = initialData;
+            provider = "cerebras";
+            break;
+          }
+        } else {
+          console.warn(`Cerebras (${cModel}) returned ${initialRes.status}`);
+        }
+      } catch (err) {
+        console.warn(`Cerebras (${cModel}) error`, err);
+      }
+    }
+  }
+
+  // 3. FALLBACK / SEARCH / VISION: Gemini.
   if (!generatedData && geminiApiKey) {
     const geminiCandidates = Array.from(new Set([
       geminiPrimaryModel(),
