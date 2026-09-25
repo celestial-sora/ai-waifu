@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 
-type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language" | "gallery" | "scene" | "plus" | "search";
+type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language" | "gallery" | "scene" | "plus" | "search" | "sun" | "moon";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -27,6 +27,8 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
     scene: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 15 5-4 4 3 4-5 5 5"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
     search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></>,
+    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,
+    moon: <path d="M20.5 13.1A8.5 8.5 0 0 1 10.9 3.5 8.5 8.5 0 1 0 20.5 13.1Z"/>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -619,7 +621,7 @@ export default function Home() {
     if (speakingRef.current) stopSpeech();
     markActivity();
     if (!idle && !visionIdle) interactedRef.current = true;
-    const displayText = text || (imageToSend ? "📷 [ส่งรูปภาพ]" : "");
+    const displayText = text || (imageToSend ? "[ส่งรูปภาพ]" : "");
     const nextMessages = (idle || visionIdle) ? messagesRef.current : [...messagesRef.current, { from: "me" as const, text: displayText }];
     if (!idle && !visionIdle) {
       setMessages(nextMessages);
@@ -1113,7 +1115,7 @@ export default function Home() {
       <button className="floating-menu-trigger" type="button" onClick={() => { setPanel(null); setSidebarOpen((value) => !value); }} aria-label={sidebarOpen ? "Close Vivian menu" : "Open Vivian menu"} aria-expanded={sidebarOpen}><Icon name={sidebarOpen ? "close" : "config"} size={21}/></button>
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       <div className="scene-quick-controls">
-        <button type="button" onClick={() => setBackgroundMode((mode) => mode === "day" ? "night" : "day")} aria-label="Toggle day and night scene" title="Day / Night">{backgroundMode === "day" ? "☾" : "☀"}</button>
+        <button type="button" onClick={() => setBackgroundMode((mode) => mode === "day" ? "night" : "day")} aria-label="Toggle day and night scene" title="Day / Night"><Icon name={backgroundMode === "day" ? "moon" : "sun"} size={20}/></button>
         <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? "Unmute Vivian" : "Mute Vivian"} title="Voice"><Icon name="sound" size={20}/></button>
         <button type="button" onClick={() => document.documentElement.requestFullscreen?.()} aria-label="Fullscreen" title="Fullscreen"><Icon name="focus" size={20}/></button>
       </div>
