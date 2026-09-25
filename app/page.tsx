@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 
-type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language";
+type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language" | "gallery" | "scene" | "plus" | "search";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -23,12 +23,19 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
     memory: <><path d="M20 12c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8 8 3.6 8 8Z"/><path d="M12 8v4l2.8 1.8"/></>,
     sound: <><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/></>,
     language: <><path d="M4 5h9M8.5 3v2M6 5c.5 3 2 5.3 4.5 6.8M5 14h7M8.5 12v2"/><path d="M15 19l2.5-7 2.5 7M16 17h3"/></>,
+    gallery: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1"/><path d="m4 17 5-5 3 3 3-4 5 6"/></>,
+    scene: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 15 5-4 4 3 4-5 5 5"/></>,
+    plus: <path d="M12 5v14M5 12h14"/>,
+    search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
 type Message = { from: "me" | "vivian"; text: string; timestamp?: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
+type Panel = "conversations" | "memories" | "character" | "scenes" | "voice" | "gallery" | "settings";
+type Conversation = { id: string; title: string; updatedAt: number; messages: Message[] };
+const CONVERSATIONS_KEY = "vivian-conversations-v1";
 type SpeechLanguage = "global" | "th" | "en" | "ja" | "ko" | "zh";
 const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName: string }> = [
   { code: "global", label: "ทุกภาษา", nativeName: "Global" },
@@ -130,11 +137,14 @@ export default function Home() {
   const [muted, setMuted] = useState(false);
   const [sending, setSending] = useState(false);
   const [sttPreview, setSttPreview] = useState<string | null>(null);
-  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState("daily-talk");
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [characterTab, setCharacterTab] = useState<"outfit" | "expression" | "pose">("outfit");
   const [languageOpen, setLanguageOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(true);
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
@@ -159,10 +169,41 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!chatOpen) return;
+    if (!sidebarOpen || panel !== "conversations") return;
     const refresh = window.setInterval(() => { void loadMemory(); }, 3000);
     return () => window.clearInterval(refresh);
-  }, [chatOpen]);
+  }, [sidebarOpen, panel]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(CONVERSATIONS_KEY) ?? "[]");
+      const valid: Conversation[] = Array.isArray(saved) ? saved.filter((item) => typeof item.id === "string" && Array.isArray(item.messages)) : [];
+      setConversations(valid);
+      const active = window.localStorage.getItem("vivian-active-conversation");
+      if (active) {
+        setActiveConversationId(active);
+        const previous = valid.find((item) => item.id === active);
+        if (previous?.messages.length) setMessages(previous.messages);
+      }
+    } catch { /* Corrupt local history must not block Vivian. */ }
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
+    setConversations((current) => {
+      const existing = current.find((item) => item.id === activeConversationId);
+      const next = [{ id: activeConversationId, title: existing?.title === "Daily Talk" ? messages.find((item) => item.from === "me")?.text.slice(0, 42) ?? existing.title : existing?.title ?? messages.find((item) => item.from === "me")?.text.slice(0, 42) ?? "Daily Talk", updatedAt: Date.now(), messages }, ...current.filter((item) => item.id !== activeConversationId)].slice(0, 30);
+      try { window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(next)); } catch { /* Private mode or storage quota. */ }
+      return next;
+    });
+  }, [messages, activeConversationId, preferencesReady]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setPanel(null); setSidebarOpen(false); } };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [sidebarOpen]);
 
   useEffect(() => {
     // Bump the preference key so users who previously had Miss selected
@@ -282,7 +323,6 @@ export default function Home() {
           resizeTimeout = window.setTimeout(resizeModel, 240);
         };
         handleOrientationChange = () => {
-          setToolsOpen(true);
           queueResize();
         };
         queueResize();
@@ -1038,11 +1078,46 @@ export default function Home() {
     setEditingMemoryId(null);
   }
 
+  function openPanel(next: Panel) { setPanel(next); setSidebarOpen(true); }
+  function selectConversation(conversation: Conversation) {
+    if (sending) return;
+    setActiveConversationId(conversation.id);
+    window.localStorage.setItem("vivian-active-conversation", conversation.id);
+    setMessages(conversation.messages);
+    setPanel(null);
+    setSidebarOpen(false);
+  }
+  function newConversation() {
+    if (sending) return;
+    const id = crypto.randomUUID();
+    setActiveConversationId(id);
+    window.localStorage.setItem("vivian-active-conversation", id);
+    setMessages([greeting()]);
+    setPanel(null);
+    setSidebarOpen(false);
+  }
+  const navigation: Array<{ key: Panel; label: string; icon: IconName }> = [
+    { key: "conversations", label: "Conversations", icon: "message" },
+    { key: "memories", label: "Memories", icon: "memory" },
+    { key: "character", label: "Character", icon: "wardrobe" },
+    { key: "scenes", label: "Scenes", icon: "scene" },
+    { key: "voice", label: "Voice", icon: "sound" },
+    { key: "gallery", label: "Gallery", icon: "gallery" },
+    { key: "settings", label: "Settings", icon: "config" },
+  ];
+
   return <main className="companion-shell">
     <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
       <div className="scene-background" style={{ backgroundImage: `url("${BACKGROUNDS[backgroundMode]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
+      <button className="floating-menu-trigger" type="button" onClick={() => { setPanel(null); setSidebarOpen((value) => !value); }} aria-label={sidebarOpen ? "Close Vivian menu" : "Open Vivian menu"} aria-expanded={sidebarOpen}><Icon name={sidebarOpen ? "close" : "config"} size={21}/></button>
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
+      <div className="scene-quick-controls">
+        <button type="button" onClick={() => setBackgroundMode((mode) => mode === "day" ? "night" : "day")} aria-label="Toggle day and night scene" title="Day / Night">{backgroundMode === "day" ? "☾" : "☀"}</button>
+        <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? "Unmute Vivian" : "Mute Vivian"} title="Voice"><Icon name="sound" size={20}/></button>
+        <button type="button" onClick={() => document.documentElement.requestFullscreen?.()} aria-label="Fullscreen" title="Fullscreen"><Icon name="focus" size={20}/></button>
+      </div>
+      <div className="vivian-status"><span className="status-avatar">V</span> Vivian <span className="status-dot"/> Online</div>
       <div className="camera-pip" style={{ display: cameraActive ? "flex" : "none" }} aria-label="Live Camera Vision">
         <div className="camera-pip-header">
           <div className="live-badge">
@@ -1073,12 +1148,6 @@ export default function Home() {
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
-      <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
-        <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิด Config" title="Config"><Icon name="config"/></button>
-        <button type="button" className="language-lock" onClick={() => setLanguageOpen(true)} aria-label={`เลือกภาษา ${speechLanguage.toUpperCase()}`} title={`Language: ${speechLanguage.toUpperCase()}`}><Icon name="language"/><span>{speechLanguage === "global" ? "ALL" : speechLanguage === "ja" ? "JP" : speechLanguage === "ko" ? "KR" : speechLanguage === "zh" ? "CN" : speechLanguage.toUpperCase()}</span></button>
-        <button type="button" onClick={() => setInfoOpen(true)} aria-label="ข้อมูลเวอร์ชัน" title="Info"><Icon name="info"/></button>
-        <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
-      </aside>
       {attachedImage && (
         <div className="attachment-preview" aria-label="รูปภาพที่แนบ">
           <img src={attachedImage} alt="Attachment preview" />
@@ -1093,28 +1162,45 @@ export default function Home() {
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} tabIndex={-1} />
         <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : cameraActive ? "กล้อง Live กำลังทำงาน... พิมพ์คุยได้" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
         <button className="send-text" type="submit" disabled={sending || (!message.trim() && !attachedImage)} aria-label="ส่งข้อความ"><Icon name="send" size={22}/></button>
-        <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>
+        <button className="text-send" type="button" onClick={() => openPanel("conversations")}><Icon name="message" size={23}/><span>Chat</span></button>
       </form>
     </section>
-    {chatOpen && <div className="chat-backdrop" role="presentation" onClick={() => setChatOpen(false)}>
-      <section className="chat-sheet" role="dialog" aria-modal="true" aria-label="ประวัติแชตกับ Vivian" onClick={(event) => event.stopPropagation()}>
-        <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
-        <div className="chat-history">{[...historyMessages, ...messages].sort((a, b) => (b.timestamp ? Date.parse(b.timestamp) : 0) - (a.timestamp ? Date.parse(a.timestamp) : 0)).map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.timestamp ?? "current"}-${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><time dateTime={item.timestamp}>{item.timestamp ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.timestamp)) : "ตอนนี้"}</time><p>{item.text}</p></div>)}</div>
-      </section>
-    </div>}
-    {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
-      <div className="memory-sheet-head"><div><small>VIVIAN MEMORY</small><h1>ความทรงจำ</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
-      <div className="bond-panel" aria-label="ความสัมพันธ์กับ Vivian">
-        <p><strong>Daily check-in</strong> ติดต่อกัน {streak} วัน</p>
-        <p><strong>อารมณ์พื้นฐาน</strong>{moodLabel(companion.mood)}</p>
-        {[["ความสนิท", companion.affinity], ["ความไว้ใจ", companion.trust], ["ความคุ้นเคย", companion.familiarity]].map(([label, value]) => (
-          <div key={String(label)}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><em>{value}</em></div>
-        ))}
+    <div className={`floating-overlay ${sidebarOpen ? "is-visible" : ""}`} aria-hidden={!sidebarOpen}>
+      <button className="floating-scrim" type="button" tabIndex={sidebarOpen ? 0 : -1} onClick={() => { setPanel(null); setSidebarOpen(false); }} aria-label="Close sidebar" />
+      <div className="floating-workspace">
+        <nav className="floating-sidebar" aria-label="Vivian navigation" inert={!sidebarOpen}>
+          <div className="floating-sidebar-head"><span className="brand-mark" aria-hidden="true"/> Vivian <button type="button" onClick={() => { setPanel(null); setSidebarOpen(false); }} aria-label="Close sidebar"><Icon name="close" size={18}/></button></div>
+          <button type="button" className="floating-new-chat" onClick={newConversation}><Icon name="plus" size={17}/> New Chat</button>
+          {navigation.map((item) => <button key={item.key} type="button" className={`floating-nav-item ${panel === item.key ? "is-selected" : ""}`} onClick={() => openPanel(item.key)}><Icon name={item.icon} size={18}/>{item.label}</button>)}
+        </nav>
+        {panel && <section className="floating-panel" role="dialog" aria-modal="true" aria-label={navigation.find((item) => item.key === panel)?.label}>
+          <div className="floating-panel-head"><div><small>VIVIAN / {panel.toUpperCase()}</small><h2>{navigation.find((item) => item.key === panel)?.label}</h2></div><button type="button" onClick={() => setPanel(null)} aria-label="Close panel"><Icon name="close" size={18}/></button></div>
+          <div className="floating-panel-body">
+            {panel === "conversations" && <>
+              <label className="floating-search"><Icon name="search" size={17}/><input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search conversations" /></label>
+              <div className="conversation-list">{conversations.filter((item) => item.title.toLowerCase().includes(conversationSearch.toLowerCase()) || item.messages.some((entry) => entry.text.toLowerCase().includes(conversationSearch.toLowerCase()))).sort((a, b) => b.updatedAt - a.updatedAt).map((conversation) => <button key={conversation.id} type="button" className={conversation.id === activeConversationId ? "is-selected" : ""} onClick={() => selectConversation(conversation)}><span className="conversation-avatar">V</span><span><strong>{conversation.title}</strong><small>{conversation.messages.at(-1)?.text ?? "Start chatting with Vivian"}</small></span><time>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(conversation.updatedAt)}</time></button>)}</div>
+              {historyMessages.length > 0 && <details className="cloud-history"><summary>Earlier messages · {historyMessages.length}</summary><div className="chat-history">{historyMessages.map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.timestamp ?? "past"}-${index}`}><small>{item.from === "me" ? "You" : "Vivian"}</small><p>{item.text}</p></div>)}</div></details>}
+              {!conversations.length && <p className="floating-empty">Your conversations will appear here.</p>}
+              <p className="floating-note">Recent conversations are saved on this device. Vivian’s existing cloud memory continues to work across chats.</p>
+            </>}
+            {panel === "memories" && <>
+              <div className="bond-panel"><p><strong>Daily check-in</strong> {streak} days together</p><p><strong>Mood</strong>{moodLabel(companion.mood)}</p>{[["Affinity", companion.affinity], ["Trust", companion.trust], ["Familiarity", companion.familiarity]].map(([label, value]) => <div key={String(label)}><span>{label}</span><i><b style={{ width: `${value}%` }}/></i><em>{value}</em></div>)}</div>
+              <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/>{editingMemoryId === memory.id ? <div className="memory-edit"><textarea value={memoryDraft} maxLength={500} onChange={(event) => setMemoryDraft(event.target.value)}/><div><button type="button" onClick={() => void saveMemory(memory)}>Save</button><button type="button" onClick={() => setEditingMemoryId(null)}>Cancel</button></div></div> : <><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" className="memory-edit-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryDraft(memory.memory); }}>Edit</button></>}</article>) : <p className="floating-empty">Vivian will remember the important things you share.</p>}</div>
+            </>}
+            {panel === "character" && <>
+              <div className="floating-tabs">{(["outfit", "expression", "pose"] as const).map((tab) => <button key={tab} type="button" className={characterTab === tab ? "is-selected" : ""} onClick={() => setCharacterTab(tab)}>{tab}</button>)}</div>
+              {characterTab === "outfit" && <><div className="character-preview"><span className="character-preview-mark">V</span><strong>Vivian · Miss</strong><small>Original outfit</small></div><p className="floating-note">The current Vivian model includes one outfit. More outfits will appear here when their Live2D assets are available.</p></>}
+              {characterTab === "expression" && <div className="expression-grid">{MODEL_CONFIG[selectedModel].expressions.map((expression) => <button type="button" key={expression} onClick={() => { void modelRef.current?.expression(expression); }}>{expression.trim()}</button>)}</div>}
+              {characterTab === "pose" && <><button type="button" className="floating-option" onClick={() => resetReaction()}>Reset to idle pose</button><p className="floating-note">Additional poses depend on the motions supplied with the Live2D model.</p></>}
+            </>}
+            {panel === "scenes" && <div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" className={backgroundMode === scene ? "is-selected" : ""} onClick={() => setBackgroundMode(scene)}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div>}
+            {panel === "voice" && <><button type="button" className="floating-option" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/> Vivian voice <strong>{muted ? "Off" : "On"}</strong></button><label className="floating-range">Speaking speed <span>{speechSpeed.toFixed(2)}×</span><input type="range" min="0.8" max="1.2" step="0.02" value={speechSpeed} onChange={(event) => setSpeechSpeed(Number(event.target.value))}/></label><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Speech language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={toggleRecording}><Icon name="mic" size={18}/> Microphone <strong>{recording ? "Listening" : "Start"}</strong></button></>}
+            {panel === "gallery" && <><p className="floating-note">Explore the scenes available in Vivian.</p><div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" onClick={() => { setBackgroundMode(scene); setPanel(null); }}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div><button type="button" className="floating-option" onClick={() => fileInputRef.current?.click()}><Icon name="clip" size={18}/> Attach a photo to chat</button></>}
+            {panel === "settings" && <><div className="custom-instructions"><strong>Custom instructions</strong><p>How should Vivian speak with you?</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="Call me… Speak in Thai…"/></div><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={() => setInfoOpen(true)}><Icon name="info" size={18}/> About Vivian</button></>}
+          </div>
+        </section>}
       </div>
-      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/>{editingMemoryId === memory.id ? <div className="memory-edit"><textarea value={memoryDraft} maxLength={500} onChange={(event) => setMemoryDraft(event.target.value)} /><div><button type="button" onClick={() => void saveMemory(memory)}>บันทึก</button><button type="button" onClick={() => setEditingMemoryId(null)}>ยกเลิก</button></div></div> : <><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" className="memory-edit-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryDraft(memory.memory); }} aria-label="แก้ไขความจำ">แก้ไข</button></>}</article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
-      <div className="custom-instructions"><strong>Custom instructions</strong><p>บอก Vivian ว่าคุณอยากให้ตอบอย่างไร เช่น ภาษา โทนเสียง หรือสิ่งที่ควรหลีกเลี่ยง</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="เช่น เรียกฉันว่า... ตอบสั้น ๆ และใช้ภาษาไทยเป็นหลัก" /></div>
-      <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
-    </section>}
+    </div>
     {languageOpen && <div className="chat-backdrop" role="presentation" onClick={() => setLanguageOpen(false)}><section className="info-sheet language-sheet" role="dialog" aria-modal="true" aria-label="ล็อกภาษาการพูด" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>LANGUAGE LOCK</small><h1>ภาษาการพูด</h1><p>ใช้ภาษาเดียวกันทั้งฟังเสียงและตอบด้วยเสียง</p></div><button type="button" onClick={() => setLanguageOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="language-options">{LANGUAGE_OPTIONS.map((option) => <button key={option.code} type="button" className={speechLanguage === option.code ? "is-selected" : ""} onClick={() => { setSpeechLanguage(option.code); window.localStorage.setItem("vivian-speech-language", option.code); setLanguageOpen(false); }}><strong>{option.nativeName}</strong><span>{option.label} · {option.code.toUpperCase()}</span></button>)}</div></section></div>}
     {infoOpen && <div className="chat-backdrop" role="presentation" onClick={() => setInfoOpen(false)}><section className="info-sheet" role="dialog" aria-modal="true" aria-label="ข้อมูลเวอร์ชัน" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>VIVIAN INFO</small><h1>ข้อมูลเวอร์ชัน</h1><p>ข้อมูลของ companion เวอร์ชันที่กำลังใช้งาน</p></div><button type="button" onClick={() => setInfoOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="info-list"><p><strong>App</strong>Vivian AI Companion</p><p><strong>Codename</strong>{APP_CODENAME}</p><p><strong>Version</strong>v1.0.0-stable</p><p><strong>Character</strong>Miss</p></div></section></div>}
   </main>;
