@@ -54,6 +54,7 @@ The project is now beyond a basic chat + Live2D prototype. The current build inc
 
 - Live2D Cubism 4 rendering with the **Miss** model
 - Proactive yandere companion behavior with relationship state and conversational agency
+- Fresh AI-generated greetings when the app opens or a new chat starts, with a local fallback when providers are unavailable
 - Multi-provider LLM routing with fallback
 - Persistent memories, editable memory management, and conversation history
 - Voice input and voice output with lip sync

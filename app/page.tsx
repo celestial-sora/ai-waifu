@@ -48,9 +48,12 @@ const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName:
   { code: "zh", label: "Chinese", nativeName: "CN" },
 ];
 const greetings = [
-  "คิดถึงจังเลย~\nขอกอดหน่อยได้ไหม~",
+  "มาแล้วเหรอคะ Vivian กำลังรอฟังเรื่องของคุณอยู่เลย~",
+  "วันนี้อยากชวน Vivian คุยเรื่องอะไรเป็นพิเศษไหมคะ?",
+  "แวะมาหา Vivian แล้วสินะ เล่าอะไรสนุก ๆ ให้ฟังหน่อยสิคะ~",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
+const GREETING_PENDING = "Vivian กำลังคิดคำทักทายให้คุณ...";
 const BACKGROUNDS = { day: "/backgrounds/christmas-day-4x3.jpg", night: "/backgrounds/christmas-night-4x3.jpg" } as const;
 const APP_CODENAME = "Sandrome";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -106,9 +109,14 @@ export default function Home() {
   const lipSyncFrameRef = useRef<number | null>(null);
   const speakIdRef = useRef(0);
   const greetingSpokenRef = useRef(false);
+  const greetingRequestRef = useRef<AbortController | null>(null);
+  const greetingGenerationRef = useRef(0);
+  const greetingTextRef = useRef<string | null>(null);
+  const audioUnlockedByUserRef = useRef(false);
   const ttsAbortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
   const speakingRef = useRef(false);
+  const mutedRef = useRef(false);
   const recordingRef = useRef(false);
   const micEnabledRef = useRef(false);
   const interactedRef = useRef(false);
@@ -126,9 +134,8 @@ export default function Home() {
   const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   cameraActiveRef.current = cameraActive;
-  // Keep the first server/client render identical; rotate greetings after the
-  // session is hydrated instead of letting Math.random() cause a mismatch.
-  const initialGreeting = useRef<Message>({ from: "vivian", text: greetings[0] });
+  // Keep the first server/client render identical while the greeting loads.
+  const initialGreeting = useRef<Message>({ from: "vivian", text: GREETING_PENDING });
   const messagesRef = useRef<Message[]>([initialGreeting.current]);
   const companionRef = useRef<CompanionState>(defaultCompanionState());
   const [message, setMessage] = useState("");
@@ -143,6 +150,8 @@ export default function Home() {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState("daily-talk");
+  const [greetingTrigger, setGreetingTrigger] = useState(0);
+  const activeConversationRef = useRef("daily-talk");
   const [conversationSearch, setConversationSearch] = useState("");
   const [characterTab, setCharacterTab] = useState<"outfit" | "expression" | "pose">("outfit");
   const [languageOpen, setLanguageOpen] = useState(false);
@@ -160,7 +169,9 @@ export default function Home() {
   const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
+  activeConversationRef.current = activeConversationId;
   sendingRef.current = sending;
+  mutedRef.current = muted;
   speechSpeedRef.current = speechSpeed;
   speechLanguageRef.current = speechLanguage;
   companionRef.current = companion;
@@ -201,6 +212,52 @@ export default function Home() {
   }, [messages, activeConversationId, preferencesReady]);
 
   useEffect(() => {
+    if (!preferencesReady) return;
+    const conversationId = activeConversationId;
+    const requestId = ++greetingGenerationRef.current;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, CHAT_TIMEOUT_MS);
+    greetingRequestRef.current = controller;
+    greetingTextRef.current = null;
+    greetingSpokenRef.current = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({ mode: "greeting", messages: [], character: selectedModel, customInstructions, language: speechLanguageRef.current }),
+        });
+        if (!response.ok) throw new Error("Greeting unavailable");
+        const data = await response.json() as { text?: string };
+        const text = data.text?.trim();
+        if (!text) throw new Error("Empty greeting");
+        if (requestId !== greetingGenerationRef.current || activeConversationRef.current !== conversationId) return;
+        greetingTextRef.current = text;
+        setMessages((current) => current.length === 1 && current[0].from === "vivian" ? [{ from: "vivian", text }] : [...current, { from: "vivian", text }]);
+        if (audioUnlockedByUserRef.current && !mutedRef.current && !greetingSpokenRef.current) {
+          greetingSpokenRef.current = true;
+          void speak(text);
+        }
+      } catch {
+        if ((timedOut || !controller.signal.aborted) && requestId === greetingGenerationRef.current && activeConversationRef.current === conversationId) {
+          const fallback = greeting();
+          setMessages((current) => current.length === 1 && current[0].text === GREETING_PENDING ? [fallback] : [...current, fallback]);
+          if (audioUnlockedByUserRef.current && !mutedRef.current && !greetingSpokenRef.current) {
+            greetingSpokenRef.current = true;
+            void speak(fallback.text);
+          }
+        }
+      } finally {
+        window.clearTimeout(timeout);
+        if (greetingRequestRef.current === controller) greetingRequestRef.current = null;
+      }
+    })();
+    return () => controller.abort();
+  }, [preferencesReady, greetingTrigger]);
+
+  useEffect(() => {
     if (!sidebarOpen) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setPanel(null); setSidebarOpen(false); } };
     window.addEventListener("keydown", onKeyDown);
@@ -234,10 +291,11 @@ export default function Home() {
 
   useEffect(() => {
     const unlock = () => {
+      audioUnlockedByUserRef.current = true;
       void unlockAudio();
-      if (!greetingSpokenRef.current && !muted) {
+      if (greetingTextRef.current && !greetingSpokenRef.current && !mutedRef.current) {
         greetingSpokenRef.current = true;
-        void speak(initialGreeting.current.text);
+        void speak(greetingTextRef.current);
       }
     };
     window.addEventListener("pointerdown", unlock, { once: true });
@@ -534,7 +592,7 @@ export default function Home() {
     lipSyncFrameRef.current = requestAnimationFrame(update);
   }
   async function speak(text: string): Promise<boolean> {
-    if (muted) return false;
+    if (mutedRef.current) return false;
     const speakId = ++speakIdRef.current;
     const abort = new AbortController();
     ttsAbortRef.current = abort;
@@ -612,6 +670,11 @@ export default function Home() {
     }
     if (sendingRef.current) return;
     if (!idle && !visionIdle && !text && !imageToSend) return;
+    if (!idle && !visionIdle) {
+      greetingGenerationRef.current += 1;
+      greetingRequestRef.current?.abort();
+      greetingTextRef.current = null;
+    }
     if (!idle && !visionIdle && text && await handleExpressionCommand(text)) {
       setMessage("");
       setAttachedImage(null);
@@ -622,7 +685,7 @@ export default function Home() {
     markActivity();
     if (!idle && !visionIdle) interactedRef.current = true;
     const displayText = text || (imageToSend ? "[ส่งรูปภาพ]" : "");
-    const nextMessages = (idle || visionIdle) ? messagesRef.current : [...messagesRef.current, { from: "me" as const, text: displayText }];
+    const nextMessages = (idle || visionIdle) ? messagesRef.current : [...messagesRef.current.filter((item) => item.text !== GREETING_PENDING), { from: "me" as const, text: displayText }];
     if (!idle && !visionIdle) {
       setMessages(nextMessages);
       setMessage("");
@@ -1083,6 +1146,9 @@ export default function Home() {
   function openPanel(next: Panel) { setPanel(next); setSidebarOpen(true); }
   function selectConversation(conversation: Conversation) {
     if (sending) return;
+    greetingGenerationRef.current += 1;
+    greetingRequestRef.current?.abort();
+    greetingTextRef.current = null;
     setActiveConversationId(conversation.id);
     window.localStorage.setItem("vivian-active-conversation", conversation.id);
     setMessages(conversation.messages);
@@ -1091,10 +1157,15 @@ export default function Home() {
   }
   function newConversation() {
     if (sending) return;
+    greetingGenerationRef.current += 1;
+    greetingRequestRef.current?.abort();
+    greetingTextRef.current = null;
+    greetingSpokenRef.current = false;
     const id = crypto.randomUUID();
     setActiveConversationId(id);
     window.localStorage.setItem("vivian-active-conversation", id);
-    setMessages([greeting()]);
+    setMessages([{ from: "vivian", text: GREETING_PENDING }]);
+    setGreetingTrigger((value) => value + 1);
     setPanel(null);
     setSidebarOpen(false);
   }
