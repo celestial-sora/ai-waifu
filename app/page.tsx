@@ -212,6 +212,14 @@ export default function Home() {
 
   useEffect(() => {
     if (!preferencesReady) return;
+    if (messagesRef.current.length !== 1 || messagesRef.current[0].text !== GREETING_PENDING) return;
+    const previousSession = conversations
+      .filter((item) => item.id !== activeConversationId && item.messages.some((entry) => entry.from === "me"))
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    const previousMessages = previousSession?.messages
+      .filter((item) => item.text !== GREETING_PENDING && item.text !== "[ส่งรูปภาพ]")
+      .slice(-6)
+      .map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text.slice(0, 500) })) ?? [];
     const conversationId = activeConversationId;
     const requestId = ++greetingGenerationRef.current;
     const controller = new AbortController();
@@ -226,13 +234,13 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
-          body: JSON.stringify({ mode: "greeting", messages: [], character: selectedModel, customInstructions, language: speechLanguageRef.current }),
+          body: JSON.stringify({ mode: "greeting", messages: previousMessages, character: selectedModel, customInstructions, language: speechLanguageRef.current }),
         });
         if (!response.ok) throw new Error("Greeting unavailable");
         const data = await response.json() as { text?: string };
         const text = data.text?.trim();
         if (!text) throw new Error("Empty greeting");
-        if (requestId !== greetingGenerationRef.current || activeConversationRef.current !== conversationId) return;
+        if (requestId !== greetingGenerationRef.current || activeConversationRef.current !== conversationId || messagesRef.current[0]?.text !== GREETING_PENDING) return;
         greetingTextRef.current = text;
         setMessages((current) => current.length === 1 && current[0].from === "vivian" ? [{ from: "vivian", text }] : [...current, { from: "vivian", text }]);
         if (audioUnlockedByUserRef.current && !mutedRef.current && !greetingSpokenRef.current) {
@@ -240,7 +248,7 @@ export default function Home() {
           void speak(text);
         }
       } catch {
-        if ((timedOut || !controller.signal.aborted) && requestId === greetingGenerationRef.current && activeConversationRef.current === conversationId) {
+        if ((timedOut || !controller.signal.aborted) && requestId === greetingGenerationRef.current && activeConversationRef.current === conversationId && messagesRef.current[0]?.text === GREETING_PENDING) {
           const fallback = greeting();
           setMessages((current) => current.length === 1 && current[0].text === GREETING_PENDING ? [fallback] : [...current, fallback]);
           if (audioUnlockedByUserRef.current && !mutedRef.current && !greetingSpokenRef.current) {
@@ -699,7 +707,7 @@ export default function Home() {
         signal: abortAfter(CHAT_TIMEOUT_MS),
         body: JSON.stringify({
           mode: visionIdle ? "vision_idle" : idle ? "idle" : "chat",
-          messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
+          messages: nextMessages.filter((item) => item.text !== GREETING_PENDING).map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
           image: imageToSend ?? undefined,
           character: selectedModel,
           customInstructions,
