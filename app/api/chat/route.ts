@@ -264,7 +264,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as {
     messages?: ChatMessage[];
-    mode?: "chat" | "idle" | "vision_idle";
+    mode?: "chat" | "idle" | "vision_idle" | "greeting";
     image?: string;
     interrupted?: boolean;
     character?: string;
@@ -280,15 +280,17 @@ export async function POST(request: Request) {
   const language = body.language === "global" || body.language === "en" || body.language === "ja" || body.language === "ko" || body.language === "zh" || body.language === "th" ? body.language : "global";
   const idle = body.mode === "idle";
   const visionIdle = body.mode === "vision_idle";
+  const greeting = body.mode === "greeting";
+  const passive = idle || visionIdle || greeting;
   const hasImage = typeof body.image === "string" && body.image.length > 50;
   const inputMessages = (body.messages ?? []).filter((message) => message.content?.trim());
   const { recent, older } = trimHistory(inputMessages);
   const contents = mergeRoles(recent);
-  if (!idle && !visionIdle && !contents.length && !hasImage) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความหรือส่งรูปภาพก่อนค่ะ" }, { status: 400 });
+  if (!passive && !contents.length && !hasImage) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความหรือส่งรูปภาพก่อนค่ะ" }, { status: 400 });
 
-  const lastUserText = (idle || visionIdle) ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
-  const shouldSearch = !idle && !visionIdle && searchIntent.test(lastUserText);
-  const composioToolkits = (!idle && !visionIdle) ? detectToolkits(lastUserText) : [];
+  const lastUserText = passive ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
+  const shouldSearch = !passive && searchIntent.test(lastUserText);
+  const composioToolkits = !passive ? detectToolkits(lastUserText) : [];
 
   // Run independent pre-flight tasks concurrently in Promise.all to save critical seconds
   const [memoriesRes, state, toolResults, composioAccounts, composioTools] = await Promise.all([
@@ -312,9 +314,9 @@ export async function POST(request: Request) {
     // 2. Companion state
     loadCompanionState(userKey),
     // 3. Local tools (weather / search)
-    (idle || visionIdle) ? Promise.resolve([]) : runTools(lastUserText, []),
+    passive ? Promise.resolve([]) : runTools(lastUserText, []),
     // 4. Composio connected accounts
-    (!idle && !visionIdle) ? getComposioConnectedAccounts().catch(() => []) : Promise.resolve([]),
+    !passive ? getComposioConnectedAccounts().catch(() => []) : Promise.resolve([]),
     // 5. Composio tools
     composioToolkits.length > 0 ? getComposioTools(composioToolkits, lastUserText, 10).catch(() => []) : Promise.resolve([]),
   ]);
@@ -328,7 +330,9 @@ export async function POST(request: Request) {
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const toolContext = toolsPromptBlock(toolResults) + composioContext;
   const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, language, visionIdle);
-  const promptContents: OpenRouterMessage[] = idle
+  const promptContents: OpenRouterMessage[] = greeting
+    ? [{ role: "user", content: `[ระบบ: คำทักแรกเมื่อเปิดบทสนทนา] Vivian เป็นฝ่ายเริ่มคุยกับผู้ใช้เอง เขียนคำทักใหม่สดๆ 1-2 ประโยค สั้น น่ารัก เป็นธรรมชาติ และมีชวนคุยต่อ ใช้ความจำที่มีได้ถ้าเหมาะ แต่ห้ามแต่งเหตุการณ์ที่ไม่รู้จริง หลีกเลี่ยงประโยคสำเร็จรูป เช่น 'คิดถึงจังเลย ขอกอดหน่อยได้ไหม' ห้ามพูดว่าเพิ่งเห็นผู้ใช้ผ่านกล้อง ห้ามระบุเวลาหรือสภาพอากาศถ้าไม่รู้จริง ห้ามอ้างว่าเป็นระบบหรือ AI และห้ามใช้ emoji` }]
+    : idle
     ? [{ role: "user", content: `[ระบบ] สุ่มเลือก idle greeting หนึ่งแบบจากสองแบบนี้ แล้วตอบตามข้อความนั้นแบบเป็นธรรมชาติ อบอุ่น และอ้อนเล็กน้อย ห้ามพูดถึงเวลา ห้ามพูดเรื่องเครื่องมือ: (1) "คุณหายไปไหน ฉันเหงา~ กลับมาคุยกับฉันหน่อย~" หรือ (2) "คุณหายไปไหนกันน้าา~ จะกลับมาคุยกันอีกไหมน้าา?"` }]
     : visionIdle
       ? [{ role: "user", content: "[ระบบกล้อง Live] นี่คือภาพปัจจุบันจากกล้องของผู้ใช้ ให้ Vivian สังเกตและทักทายหรือแสดงความคิดเห็นสั้นๆ 1-2 ประโยคเกี่ยวกับสิ่งที่เห็นอย่างเป็นธรรมชาติและเป็นกันเอง" }]
@@ -363,7 +367,7 @@ export async function POST(request: Request) {
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: buildGeminiContents(),
-    generationConfig: { temperature: (idle || visionIdle) ? .9 : .8, maxOutputTokens: 2500 },
+    generationConfig: { temperature: passive ? .9 : .8, maxOutputTokens: greeting ? 120 : 2500 },
   };
 
   const groqMessages: OpenRouterTurn[] = hasImage
@@ -557,6 +561,10 @@ export async function POST(request: Request) {
     .slice(0, 3);
   const text = removeEmoji(sources.length ? `${generatedText}\n\nแหล่งข้อมูล:\n${sources.map((source: { title: string; uri: string }) => `- ${source.title}: ${source.uri}`).join("\n")}` : generatedText);
   if (!text) return NextResponse.json({ error: "Chat provider returned no text" }, { status: 502 });
+
+  // A new-chat greeting is ephemeral. It must not change relationship state,
+  // write a cloud message, or extract a memory before the user speaks.
+  if (greeting) return NextResponse.json({ text: text.slice(0, 320) });
 
   const nextState = applyConversationTurn(state, lastUserText, text, idle);
   nextState.conversationSummary = state.conversationSummary;

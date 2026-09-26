@@ -322,6 +322,7 @@ This section is the current source of truth for continuing work. Read it before 
 
 ### Actual runtime flow
 
+0. Opening the app or starting a new conversation requests `mode: "greeting"` from `/api/chat`; the reply uses Vivian's personality and memory context but does not alter cloud relationship state or write cloud history. If generation fails, the client uses a short local greeting. An in-flight greeting is cancelled when the user sends a message or switches conversations.
 1. User types or holds the microphone button.
 2. Microphone audio is sent to `POST /api/stt`.
 3. The transcript is shown in the STT preview bubble and auto-submitted to `POST /api/chat`.
