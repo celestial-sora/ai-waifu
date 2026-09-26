@@ -343,7 +343,7 @@ This section is the current source of truth for continuing work. Read it before 
 ### Current UI direction
 
 - Full-screen Live2D companion UI optimized for iPhone/iPad portrait and landscape.
-- One bottom input pill, speech bubble above Vivian, and collapsible right-side controls.
+- Keep the bottom input pill and full-screen scene. Vivian's speech and STT preview are frameless text above the composer; each new line rises and sharpens into view. Thinking uses animated text/dots, with reduced-motion support. The menu opens as a floating overlay without resizing the scene.
 - Latest UI polish adds smoother hover/active transitions, SVG feedback, focus glow, and the Memory icon.
 - Keep the purple witch model and existing layout direction. Do not replace the model or redesign the structure without explicit approval.
 - On orientation change, Live2D re-measures the real stage bounds, resizes the renderer for device pixel ratio, and re-centers the model.

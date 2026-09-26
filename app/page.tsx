@@ -1218,8 +1218,14 @@ export default function Home() {
           }}
         />
       </div>
-      {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
-      <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
+      <div className="speech-stack">
+        {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
+        <output className={`vivian-speech ${sending ? "is-thinking" : ""}`} aria-live="polite">
+          {sending
+            ? <span className="speech-transition" key="thinking"><span>Vivian กำลังคิด</span><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span></span>
+            : <span className="speech-transition" key={lastVivianMessage}>{lastVivianMessage}</span>}
+        </output>
+      </div>
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
       {attachedImage && (
         <div className="attachment-preview" aria-label="รูปภาพที่แนบ">
