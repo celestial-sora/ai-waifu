@@ -10,7 +10,6 @@ function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
   const iconUrl = `/icons/${name}.svg`;
   return <span className="app-icon" style={{ width: size, height: size, maskImage: `url("${iconUrl}")`, WebkitMaskImage: `url("${iconUrl}")` }} aria-hidden="true" />;
 }
-}
 
 type Message = { from: "me" | "vivian"; text: string; timestamp?: string };
 type Memory = { id: number; memory: string; category: string; importance: number };
