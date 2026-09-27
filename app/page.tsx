@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
+import { loadCustomScenes, removeCustomScene, saveCustomScene, type CustomScene } from "@/lib/custom-scenes";
 
 type IconName = "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language" | "gallery" | "scene" | "plus" | "search" | "sun" | "moon";
 
@@ -33,6 +34,7 @@ const greetings = [
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
 const GREETING_PENDING = "Vivian กำลังคิดคำทักทายให้คุณ...";
 const BACKGROUNDS = { day: "/backgrounds/christmas-day-4x3.jpg", night: "/backgrounds/christmas-night-4x3.jpg" } as const;
+const ACTIVE_SCENE_KEY = "vivian-active-custom-scene";
 const APP_CODENAME = "Sandrome";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 const CHAT_TIMEOUT_MS = 35000;
@@ -105,6 +107,7 @@ export default function Home() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const sceneInputRef = useRef<HTMLInputElement | null>(null);
   const cameraActiveRef = useRef(false);
   const lastVisionTriggerRef = useRef(0);
   const visionTimerRef = useRef<number | null>(null);
@@ -141,6 +144,9 @@ export default function Home() {
   const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
   const [backgroundMode, setBackgroundMode] = useState<keyof typeof BACKGROUNDS>("day");
+  const [customScenes, setCustomScenes] = useState<CustomScene[]>([]);
+  const [activeCustomSceneId, setActiveCustomSceneId] = useState<string | null>(null);
+  const [sceneSaving, setSceneSaving] = useState(false);
   const [speechSpeed, setSpeechSpeed] = useState(.98);
   const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("th");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -158,6 +164,83 @@ export default function Home() {
     const hour = new Date().getHours();
     setBackgroundMode(hour >= 6 && hour < 18 ? "day" : "night");
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCustomScenes().then((saved) => {
+      if (cancelled) return;
+      setCustomScenes(saved);
+      const selected = window.localStorage.getItem(ACTIVE_SCENE_KEY);
+      if (selected && saved.some((scene) => scene.id === selected)) setActiveCustomSceneId(selected);
+      else window.localStorage.removeItem(ACTIVE_SCENE_KEY);
+    }).catch(() => {
+      if (!cancelled) setErrorNotice("Could not load saved scenes on this device.");
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  function selectPresetScene(scene: keyof typeof BACKGROUNDS) {
+    setBackgroundMode(scene);
+    setActiveCustomSceneId(null);
+    window.localStorage.removeItem(ACTIVE_SCENE_KEY);
+  }
+
+  function selectCustomScene(id: string) {
+    setActiveCustomSceneId(id);
+    window.localStorage.setItem(ACTIVE_SCENE_KEY, id);
+  }
+
+  async function deleteCustomScene(id: string) {
+    try {
+      await removeCustomScene(id);
+      setCustomScenes((scenes) => scenes.filter((scene) => scene.id !== id));
+      if (activeCustomSceneId === id) {
+        setActiveCustomSceneId(null);
+        window.localStorage.removeItem(ACTIVE_SCENE_KEY);
+      }
+    } catch {
+      setErrorNotice("Could not delete this scene. Please try again.");
+    }
+  }
+
+  async function handleSceneUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type) || file.size > 12 * 1024 * 1024) {
+      setErrorNotice("Choose a JPG, PNG, WebP or AVIF image under 12 MB.");
+      return;
+    }
+    setSceneSaving(true);
+    try {
+      // Ask for durable browser storage from the user's upload gesture when supported.
+      try { await navigator.storage?.persist?.(); } catch { /* Storage still works if persistence is unavailable. */ }
+      const image = await createImageBitmap(file);
+      try {
+        const scale = Math.min(1, 1920 / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas unavailable");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const scene: CustomScene = {
+          id: crypto.randomUUID(),
+          name: file.name.replace(/\.[^.]+$/, "").slice(0, 50) || "My scene",
+          image: canvas.toDataURL("image/jpeg", 0.82),
+        };
+        await saveCustomScene(scene);
+        setCustomScenes((scenes) => [...scenes, scene]);
+        selectCustomScene(scene.id);
+      } finally {
+        image.close();
+      }
+    } catch {
+      setErrorNotice("Could not save this scene. Check your browser storage and try again.");
+    } finally {
+      setSceneSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!sidebarOpen || panel !== "conversations") return;
@@ -1167,12 +1250,12 @@ export default function Home() {
 
   return <main className="companion-shell">
     <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
-      <div className="scene-background" style={{ backgroundImage: `url("${BACKGROUNDS[backgroundMode]}")` }} aria-hidden="true" />
+      <div className="scene-background" style={{ backgroundImage: `url("${customScenes.find((scene) => scene.id === activeCustomSceneId)?.image ?? BACKGROUNDS[backgroundMode]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       <button className="floating-menu-trigger" type="button" onClick={() => { setPanel(null); setSidebarOpen((value) => !value); }} aria-label={sidebarOpen ? "Close Vivian menu" : "Open Vivian menu"} aria-expanded={sidebarOpen}><Icon name={sidebarOpen ? "close" : "config"} size={21}/></button>
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       <div className="scene-quick-controls">
-        <button type="button" onClick={() => setBackgroundMode((mode) => mode === "day" ? "night" : "day")} aria-label="Toggle day and night scene" title="Day / Night"><Icon name={backgroundMode === "day" ? "moon" : "sun"} size={20}/></button>
+        <button type="button" onClick={() => selectPresetScene(backgroundMode === "day" ? "night" : "day")} aria-label="Toggle day and night scene" title="Day / Night"><Icon name={backgroundMode === "day" ? "moon" : "sun"} size={20}/></button>
       </div>
       <div className="vivian-status"><span className="status-avatar">V</span> Vivian <span className="status-dot"/> Online</div>
       <div className="camera-pip" style={{ display: cameraActive ? "flex" : "none" }} aria-label="Live Camera Vision">
@@ -1256,9 +1339,14 @@ export default function Home() {
               {characterTab === "expression" && <div className="expression-grid">{MODEL_CONFIG[selectedModel].expressions.map((expression) => <button type="button" key={expression} onClick={() => { void modelRef.current?.expression(expression); }}>{expression.trim()}</button>)}</div>}
               {characterTab === "pose" && <><button type="button" className="floating-option" onClick={() => resetReaction()}>Reset to idle pose</button><p className="floating-note">Additional poses depend on the motions supplied with the Live2D model.</p></>}
             </>}
-            {panel === "scenes" && <div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" className={backgroundMode === scene ? "is-selected" : ""} onClick={() => setBackgroundMode(scene)}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div>}
+            {panel === "scenes" && <><div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" className={!activeCustomSceneId && backgroundMode === scene ? "is-selected" : ""} onClick={() => selectPresetScene(scene)}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div>{customScenes.length > 0 && <><p className="floating-note">Your scenes</p><div className="scene-grid">{customScenes.map((scene) => <button key={scene.id} type="button" className={activeCustomSceneId === scene.id ? "is-selected" : ""} onClick={() => selectCustomScene(scene.id)}><span style={{ backgroundImage: `url("${scene.image}")` }}/><strong>{scene.name}</strong></button>)}</div></>}</>}
             {panel === "voice" && <><button type="button" className="floating-option" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/> Vivian voice <strong>{muted ? "Off" : "On"}</strong></button><label className="floating-range">Speaking speed <span>{speechSpeed.toFixed(2)}×</span><input type="range" min="0.8" max="1.2" step="0.02" value={speechSpeed} onChange={(event) => setSpeechSpeed(Number(event.target.value))}/></label><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Speech language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={toggleRecording}><Icon name="mic" size={18}/> Microphone <strong>{recording ? "Listening" : "Start"}</strong></button></>}
-            {panel === "gallery" && <><p className="floating-note">Explore the scenes available in Vivian.</p><div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" onClick={() => { setBackgroundMode(scene); setPanel(null); }}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div><button type="button" className="floating-option" onClick={() => fileInputRef.current?.click()}><Icon name="clip" size={18}/> Attach a photo to chat</button></>}
+            {panel === "gallery" && <>
+              <p className="floating-note">Upload a background for your Vivian scene. Saved scenes stay on this device until you delete them.</p>
+              <input ref={sceneInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/avif" hidden onChange={(event) => void handleSceneUpload(event)}/>
+              <button type="button" className="floating-option scene-upload" disabled={sceneSaving} onClick={() => sceneInputRef.current?.click()}><Icon name="plus" size={18}/>{sceneSaving ? "Saving scene…" : "Upload a custom scene"}</button>
+              {customScenes.length ? <div className="custom-scene-grid">{customScenes.map((scene) => <article className={activeCustomSceneId === scene.id ? "is-selected" : ""} key={scene.id}><button type="button" className="custom-scene-select" onClick={() => selectCustomScene(scene.id)}><span className="custom-scene-image" style={{ backgroundImage: `url("${scene.image}")` }}/><strong>{scene.name}</strong><small>{activeCustomSceneId === scene.id ? "Current scene" : "Use scene"}</small></button><button type="button" className="custom-scene-delete" onClick={() => void deleteCustomScene(scene.id)} aria-label={`Delete ${scene.name}`} title="Delete scene"><Icon name="close" size={14}/></button></article>)}</div> : <p className="floating-empty">Your custom scenes will appear here.</p>}
+            </>}
             {panel === "settings" && <><div className="custom-instructions"><strong>Custom instructions</strong><p>How should Vivian speak with you?</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="Call me… Speak in Thai…"/></div><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={() => setInfoOpen(true)}><Icon name="info" size={18}/> About Vivian</button></>}
           </div>
         </section>}
