@@ -7,29 +7,9 @@ import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
 type IconName = "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language" | "gallery" | "scene" | "plus" | "search" | "sun" | "moon";
 
 function Icon({ name, size = 24 }: { name: IconName; size?: number }) {
-  const paths: Record<IconName, React.ReactNode> = {
-    config: <><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="18" r="2"/></>,
-    info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></>,
-    wardrobe: <><path d="M12 3a3 3 0 0 1 3 3c0 1.4-1.1 2.3-2.4 2.8L4 14.2A2 2 0 0 0 5.1 18h13.8a2 2 0 0 0 1.1-3.8l-8.6-5.4"/><path d="M9 18v2M15 18v2"/></>,
-    chevron: <path d="m5 9 7 7 7-7"/>,
-    mic: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></>,
-    micOff: <><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6M4 4l16 16"/></>,
-    video: <><rect x="3" y="6" width="12" height="12" rx="3"/><path d="m15 10 5-3v10l-5-3"/></>,
-    clip: <path d="m8.5 12.5 5.9-5.9a3.5 3.5 0 0 1 5 5l-7.8 7.8a5 5 0 0 1-7.1-7.1l7.3-7.3"/>,
-    message: <path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.5 8.5 0 0 1-3.6-.8L4 20l1.3-4A7.2 7.2 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z"/>,
-    send: <><path d="m4 4 16 8-16 8 3.2-8L4 4Z"/><path d="M7.2 12H20"/></>,
-    close: <path d="m6 6 12 12M18 6 6 18"/>,
-    memory: <><path d="M20 12c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8 8 3.6 8 8Z"/><path d="M12 8v4l2.8 1.8"/></>,
-    sound: <><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M16 9a4 4 0 0 1 0 6"/></>,
-    language: <><path d="M4 5h9M8.5 3v2M6 5c.5 3 2 5.3 4.5 6.8M5 14h7M8.5 12v2"/><path d="M15 19l2.5-7 2.5 7M16 17h3"/></>,
-    gallery: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1"/><path d="m4 17 5-5 3 3 3-4 5 6"/></>,
-    scene: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 15 5-4 4 3 4-5 5 5"/></>,
-    plus: <path d="M12 5v14M5 12h14"/>,
-    search: <><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></>,
-    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,
-    moon: <path d="M20.5 13.1A8.5 8.5 0 0 1 10.9 3.5 8.5 8.5 0 1 0 20.5 13.1Z"/>,
-  };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+  const iconUrl = `/icons/${name}.svg`;
+  return <span className="app-icon" style={{ width: size, height: size, maskImage: `url("${iconUrl}")`, WebkitMaskImage: `url("${iconUrl}")` }} aria-hidden="true" />;
+}
 }
 
 type Message = { from: "me" | "vivian"; text: string; timestamp?: string };
