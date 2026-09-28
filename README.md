@@ -248,9 +248,11 @@ Never place provider secrets in `NEXT_PUBLIC_*`, client code, committed source f
 
 ### Desktop Pet
 
-The Desktop Pet has a transparent floating window. Hover over Vivian to reveal the compact menu, then select Chat to open the composer or Settings to manage memory and API keys. On each launch, Vivian creates a fresh greeting using recent local turns and available cloud memory; if providers are unavailable, she uses a short local greeting.
+The Linux Desktop Pet is packaged as Sorasocute and opens in a transparent floating window. Hover over Vivian to reveal the compact menu. Hover over the three-dot control above the character to expand microphone, camera, and image attachment tools; click to keep the tools expanded. Drag the thin strip above the dots to move the window. Chat has a text-only composer. Settings are split into Memory, API keys, and Preferences pages; Esc returns to the previous settings page. Popup speech uses the rising frameless text and animated thinking dots from `main`.
 
 In the installed Desktop app, Settings saves API keys to the current user's Vivian app-data `.env` file and restarts the app so the local server reads them. Existing values are never shown in the UI. Leaving a field blank keeps its current value; use **Remove** to delete a locally saved value. In `desktop:dev`, restart the development launcher after saving settings. Keep this app-data file private and do not copy it into the repository or installer.
+
+When Supabase credentials are absent, the Desktop Pet stores memories and up to 100 recent chat messages locally in `memory.json` under the current user's Vivian app-data directory. Add, edit, and delete memories in Settings; they are included in chat context. With Supabase configured, Desktop continues to use shared cloud memory. To preview the Linux UI without the Next.js development indicator, run `npm run desktop:preview:linux`.
 
 ## Run locally
 

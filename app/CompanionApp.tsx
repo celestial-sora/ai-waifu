@@ -147,18 +147,35 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
   const [greetingTrigger, setGreetingTrigger] = useState(0);
   const [toolsOpen, setToolsOpen] = useState(true);
   const [desktopComposerOpen, setDesktopComposerOpen] = useState(false);
+  const [desktopToolsOpen, setDesktopToolsOpen] = useState(false);
+  const [desktopSettingsSection, setDesktopSettingsSection] = useState<"home" | "memory" | "keys" | "preferences">("home");
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [customInstructions, setCustomInstructions] = useState("");
   const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
+  const [newMemoryDraft, setNewMemoryDraft] = useState("");
   const [backgroundMode, setBackgroundMode] = useState<keyof typeof BACKGROUNDS>("day");
   const [speechSpeed, setSpeechSpeed] = useState(.98);
 
   useEffect(() => {
     if (desktopMode && desktopComposerOpen) messageInputRef.current?.focus();
   }, [desktopMode, desktopComposerOpen]);
+
+  useEffect(() => {
+    if (!desktopMode) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (memoryOpen) desktopSettingsSection !== "home" ? setDesktopSettingsSection("home") : setMemoryOpen(false);
+      else if (languageOpen) setLanguageOpen(false);
+      else if (chatOpen) setChatOpen(false);
+      else if (desktopToolsOpen) setDesktopToolsOpen(false);
+      else if (desktopComposerOpen) setDesktopComposerOpen(false);
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [desktopMode, memoryOpen, desktopSettingsSection, languageOpen, chatOpen, desktopToolsOpen, desktopComposerOpen]);
   const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("th");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
@@ -1118,6 +1135,22 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
     setEditingMemoryId(null);
   }
 
+  async function addMemory(): Promise<void> {
+    const value = newMemoryDraft.trim();
+    if (!value) return;
+    const response = await fetch("/api/memory", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ memory: value }) });
+    if (!response.ok) return setErrorNotice("บันทึกความจำไม่สำเร็จค่ะ");
+    const data = await response.json() as { memory?: Memory };
+    if (data.memory) setMemories((current) => [data.memory!, ...current.filter((item) => item.id !== data.memory!.id)]);
+    setNewMemoryDraft("");
+  }
+
+  async function removeMemory(id: number): Promise<void> {
+    const response = await fetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "memory", id }) });
+    if (!response.ok) return setErrorNotice("ลบความจำไม่สำเร็จค่ะ");
+    setMemories((current) => current.filter((item) => item.id !== id));
+  }
+
   function startNewConversation(): void {
     greetingGenerationRef.current += 1;
     greetingRequestRef.current?.abort();
@@ -1138,10 +1171,18 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
       <canvas className="live2d-canvas" ref={canvasRef} />
       {desktopMode && <div className="desktop-pet-interaction" tabIndex={0} aria-label="Vivian Desktop Pet กด Tab เพื่อเปิดเมนู">
         <div className="desktop-pet-drag-handle" title="ลากเพื่อย้าย Vivian" />
+        <div className={`desktop-pet-tools-group ${desktopToolsOpen ? "is-open" : ""}`}>
+          <button className="desktop-pet-tools-trigger" type="button" onClick={() => setDesktopToolsOpen((open) => !open)} aria-expanded={desktopToolsOpen} aria-label="เครื่องมือเพิ่มเติม" title="เครื่องมือเพิ่มเติม">•••</button>
+          <nav className="desktop-pet-tools" aria-label="เครื่องมือ Desktop Pet">
+            <button type="button" onClick={toggleRecording} aria-pressed={recording}><Icon name={recording ? "mic" : "micOff"} size={18}/>{recording ? "ปิดไมค์" : "เปิดไมค์"}</button>
+            <button type="button" onClick={toggleCamera} aria-pressed={cameraActive}><Icon name="video" size={18}/>{cameraActive ? "ปิดกล้อง" : "เปิดกล้อง"}</button>
+            <button type="button" onClick={() => attachedImage ? setAttachedImage(null) : fileInputRef.current?.click()} aria-pressed={Boolean(attachedImage)}><Icon name="clip" size={18}/>{attachedImage ? "เอารูปออก" : "แนบรูปภาพ"}</button>
+          </nav>
+        </div>
         <nav className="desktop-pet-menu" aria-label="เมนู Desktop Pet">
           <button type="button" onClick={() => setDesktopComposerOpen((open) => !open)} aria-label={desktopComposerOpen ? "ปิดช่องแชต" : "เปิดช่องแชต"} title="แชต"><Icon name="message" size={19}/></button>
-          <button type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "ปิดไมค์" : "เปิดไมค์"} title={recording ? "ปิดไมค์" : "เปิดไมค์"}><Icon name={recording ? "mic" : "micOff"} size={19}/></button>
-          <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิดตั้งค่าและความทรงจำ" title="ตั้งค่า"><Icon name="config" size={19}/></button>
+          <button type="button" onClick={() => setChatOpen(true)} aria-label="ประวัติแชต" title="ประวัติแชต"><Icon name="memory" size={19}/></button>
+          <button type="button" onClick={() => { setDesktopSettingsSection("home"); setMemoryOpen(true); }} aria-label="เปิดตั้งค่า" title="ตั้งค่า"><Icon name="config" size={19}/></button>
           <button type="button" onClick={() => setLanguageOpen(true)} aria-label="เลือกภาษา" title="ภาษา"><Icon name="language" size={19}/></button>
           <span className="desktop-pet-menu-divider" aria-hidden="true" />
           <button type="button" onClick={() => (window as Window & { vivianDesktop?: { minimize?: () => void } }).vivianDesktop?.minimize?.()} aria-label="ย่อหน้าต่าง" title="ย่อ">−</button>
@@ -1176,8 +1217,10 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
           }}
         />
       </div>
-      {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
-      <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
+      <div className="speech-stack">
+        {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
+        <output className={`vivian-speech ${sending ? "is-thinking" : ""}`} aria-live="polite">{sending ? <span className="speech-transition" key="thinking"><span>Vivian กำลังคิด</span><span className="thinking-dots" aria-hidden="true"><i/><i/><i/></span></span> : <span className="speech-transition" key={lastVivianMessage}>{lastVivianMessage}</span>}</output>
+      </div>
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
       {!desktopMode && <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิด Config" title="Config"><Icon name="config"/></button>
@@ -1192,15 +1235,13 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
           <button type="button" onClick={() => setAttachedImage(null)} aria-label="ลบรูปภาพ">×</button>
         </div>
       )}
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} tabIndex={-1} />
       <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }} onKeyDown={(event) => { if (desktopMode && event.key === "Escape") setDesktopComposerOpen(false); }}>
         {desktopMode && <button className="desktop-composer-close" type="button" onClick={() => setDesktopComposerOpen(false)} aria-label="ปิดช่องแชต"><Icon name="close" size={17}/></button>}
-        <button className={`circle-control ${recording ? "is-recording" : "is-muted"}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Microphone muted, click to unmute"}><Icon name={recording ? "mic" : "micOff"}/></button>
-        <button className={`circle-control ${cameraActive ? "is-active is-camera-active" : ""}`} type="button" onClick={toggleCamera} aria-pressed={cameraActive} aria-label={cameraActive ? "ปิดกล้อง Live" : "เปิดกล้อง Live"}><Icon name="video"/></button>
-        <button className={`circle-control ${attachedImage ? "is-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()} aria-label="แนบรูปภาพ"><Icon name="clip"/></button>
-        <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} tabIndex={-1} />
+        {!desktopMode && <><button className={`circle-control ${recording ? "is-recording" : "is-muted"}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Microphone muted, click to unmute"}><Icon name={recording ? "mic" : "micOff"}/></button><button className={`circle-control ${cameraActive ? "is-active is-camera-active" : ""}`} type="button" onClick={toggleCamera} aria-pressed={cameraActive} aria-label={cameraActive ? "ปิดกล้อง Live" : "เปิดกล้อง Live"}><Icon name="video"/></button><button className={`circle-control ${attachedImage ? "is-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()} aria-label="แนบรูปภาพ"><Icon name="clip"/></button></>}
         <input ref={messageInputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : cameraActive ? "กล้อง Live กำลังทำงาน... พิมพ์คุยได้" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
         <button className="send-text" type="submit" disabled={sending || (!message.trim() && !attachedImage)} aria-label="ส่งข้อความ"><Icon name="send" size={22}/></button>
-        <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>
+        {!desktopMode && <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>}
       </form>
     </section>
     {chatOpen && <div className="chat-backdrop" role="presentation" onClick={() => setChatOpen(false)}>
@@ -1210,8 +1251,14 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
       </section>
     </div>}
     {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label={desktopMode ? "ตั้งค่า Desktop Pet" : "ความทรงจำของ Vivian"}>
-      <div className="memory-sheet-head"><div><small>{desktopMode ? "VIVIAN DESKTOP" : "VIVIAN MEMORY"}</small><h1>{desktopMode ? "ตั้งค่า" : "ความทรงจำ"}</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
-      {desktopMode && <DesktopApiKeySettings />}
+      <div className="memory-sheet-head"><div><small>{desktopMode ? "SORASOCUTE · DESKTOP" : "VIVIAN MEMORY"}</small><h1>{desktopMode ? ({ home: "ตั้งค่า", memory: "ความทรงจำ", keys: "API keys", preferences: "การตอบและเสียง" } as const)[desktopSettingsSection] : "ความทรงจำ"}</h1><p>{desktopMode ? "กด Esc เพื่อกลับ" : "สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง"}</p></div><button type="button" onClick={() => { if (desktopMode && desktopSettingsSection !== "home") setDesktopSettingsSection("home"); else setMemoryOpen(false); }} aria-label={desktopMode && desktopSettingsSection !== "home" ? "กลับไปหน้าตั้งค่า" : "ปิด"}>{desktopMode && desktopSettingsSection !== "home" ? "←" : <Icon name="close"/>}</button></div>
+      {desktopMode && desktopSettingsSection === "home" && <nav className="desktop-settings-home" aria-label="หมวดตั้งค่า">
+        <button type="button" onClick={() => setDesktopSettingsSection("memory")}><Icon name="memory" size={22}/><span><strong>ความทรงจำ</strong><small>เพิ่มและจัดการเรื่องที่ Vivian จำ</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" onClick={() => setDesktopSettingsSection("keys")}><Icon name="config" size={22}/><span><strong>API keys</strong><small>ตั้งค่าบริการ AI เฉพาะเครื่องนี้</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" onClick={() => setDesktopSettingsSection("preferences")}><Icon name="sound" size={22}/><span><strong>การตอบและเสียง</strong><small>โทนและภาษาของ Vivian</small></span><span aria-hidden="true">›</span></button>
+      </nav>}
+      {desktopMode && desktopSettingsSection === "keys" && <DesktopApiKeySettings />}
+      {(!desktopMode || desktopSettingsSection === "memory") && <>
       <div className="bond-panel" aria-label="ความสัมพันธ์กับ Vivian">
         <p><strong>Daily check-in</strong> ติดต่อกัน {streak} วัน</p>
         <p><strong>อารมณ์พื้นฐาน</strong>{moodLabel(companion.mood)}</p>
@@ -1219,9 +1266,13 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
           <div key={String(label)}><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><em>{value}</em></div>
         ))}
       </div>
-      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/>{editingMemoryId === memory.id ? <div className="memory-edit"><textarea value={memoryDraft} maxLength={500} onChange={(event) => setMemoryDraft(event.target.value)} /><div><button type="button" onClick={() => void saveMemory(memory)}>บันทึก</button><button type="button" onClick={() => setEditingMemoryId(null)}>ยกเลิก</button></div></div> : <><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" className="memory-edit-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryDraft(memory.memory); }} aria-label="แก้ไขความจำ">แก้ไข</button></>}</article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
+      {desktopMode && <form className="desktop-memory-add" onSubmit={(event) => { event.preventDefault(); void addMemory(); }}><input value={newMemoryDraft} maxLength={500} onChange={(event) => setNewMemoryDraft(event.target.value)} placeholder="เพิ่มสิ่งที่อยากให้ Vivian จำ" aria-label="ความจำใหม่"/><button type="submit" disabled={!newMemoryDraft.trim()}>เพิ่ม</button></form>}
+      <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/>{editingMemoryId === memory.id ? <div className="memory-edit"><textarea value={memoryDraft} maxLength={500} onChange={(event) => setMemoryDraft(event.target.value)} /><div><button type="button" onClick={() => void saveMemory(memory)}>บันทึก</button><button type="button" onClick={() => setEditingMemoryId(null)}>ยกเลิก</button></div></div> : <><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" className="memory-edit-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryDraft(memory.memory); }} aria-label="แก้ไขความจำ">แก้ไข</button>{desktopMode && <button type="button" className="memory-edit-button" onClick={() => void removeMemory(memory.id)} aria-label="ลบความจำ">ลบ</button>}</>}</article>) : <p className="empty-memory">ยังไม่มีความทรงจำถาวรค่ะ Vivian จะจำเฉพาะเรื่องสำคัญที่คุณเล่า</p>}</div>
+      </>}
+      {(!desktopMode || desktopSettingsSection === "preferences") && <>
       <div className="custom-instructions"><strong>Custom instructions</strong><p>บอก Vivian ว่าคุณอยากให้ตอบอย่างไร เช่น ภาษา โทนเสียง หรือสิ่งที่ควรหลีกเลี่ยง</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="เช่น เรียกฉันว่า... ตอบสั้น ๆ และใช้ภาษาไทยเป็นหลัก" /></div>
-      <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span><button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button></div>
+      <div className="memory-sheet-foot"><button type="button" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/>{muted ? "เปิดเสียงตอบ" : "ปิดเสียงตอบ"}</button><span className="codename">CODENAME: {APP_CODENAME}</span>{!desktopMode && <button type="button" className="close-sheet" onClick={() => setMemoryOpen(false)}>เสร็จ</button>}</div>
+      </>}
     </section>}
     {languageOpen && <div className="chat-backdrop" role="presentation" onClick={() => setLanguageOpen(false)}><section className="info-sheet language-sheet" role="dialog" aria-modal="true" aria-label="ล็อกภาษาการพูด" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>LANGUAGE LOCK</small><h1>ภาษาการพูด</h1><p>ใช้ภาษาเดียวกันทั้งฟังเสียงและตอบด้วยเสียง</p></div><button type="button" onClick={() => setLanguageOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="language-options">{LANGUAGE_OPTIONS.map((option) => <button key={option.code} type="button" className={speechLanguage === option.code ? "is-selected" : ""} onClick={() => { setSpeechLanguage(option.code); window.localStorage.setItem("vivian-speech-language", option.code); setLanguageOpen(false); }}><strong>{option.nativeName}</strong><span>{option.label} · {option.code.toUpperCase()}</span></button>)}</div></section></div>}
     {infoOpen && <div className="chat-backdrop" role="presentation" onClick={() => setInfoOpen(false)}><section className="info-sheet" role="dialog" aria-modal="true" aria-label="ข้อมูลเวอร์ชัน" onClick={(event) => event.stopPropagation()}><div className="memory-sheet-head"><div><small>VIVIAN INFO</small><h1>ข้อมูลเวอร์ชัน</h1><p>ข้อมูลของ companion เวอร์ชันที่กำลังใช้งาน</p></div><button type="button" onClick={() => setInfoOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div><div className="info-list"><p><strong>App</strong>Vivian AI Companion</p><p><strong>Codename</strong>{APP_CODENAME}</p><p><strong>Version</strong>v1.0.0-stable</p><p><strong>Character</strong>Miss</p></div></section></div>}

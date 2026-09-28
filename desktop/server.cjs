@@ -92,6 +92,7 @@ async function startPackagedNextServer({
       HOSTNAME: host,
       PORT: String(port),
       VIVIAN_DESKTOP_TOKEN: desktopToken,
+      VIVIAN_DESKTOP_DATA_DIR: userDataPath,
       ELECTRON_RUN_AS_NODE: "1",
     },
   });

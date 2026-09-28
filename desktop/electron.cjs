@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, session, Tray } = require("electron");
 const { startPackagedNextServer } = require("./server.cjs");
 const { getConfigStatus, saveConfigUpdates } = require("./config.cjs");
 
@@ -29,6 +29,37 @@ let desktopServer = null;
 let desktopOrigin = null;
 let desktopToken = null;
 let quitting = false;
+let linuxTray = null;
+
+function showPet() {
+  if (!mainWindow) { createWindow(); return; }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function updateLinuxTrayMenu() {
+  if (!linuxTray) return;
+  linuxTray.setContextMenu(Menu.buildFromTemplate([
+    { label: "แสดง Vivian", enabled: Boolean(mainWindow && (!mainWindow.isVisible() || mainWindow.isMinimized())), click: showPet },
+    { label: "ซ่อน Vivian", enabled: Boolean(mainWindow?.isVisible()), click: () => mainWindow?.hide() },
+    { type: "separator" },
+    { label: "ออกจาก Vivian", click: () => app.quit() },
+  ]));
+}
+
+function createLinuxTray() {
+  if (process.platform !== "linux" || SMOKE_TEST || linuxTray) return;
+  try {
+    linuxTray = new Tray(path.join(__dirname, "assets", "tray-linux.png"));
+    linuxTray.setToolTip("Vivian Desktop Pet");
+    linuxTray.on("click", () => mainWindow?.isVisible() ? mainWindow.hide() : showPet());
+    updateLinuxTrayMenu();
+  } catch (error) {
+    linuxTray = null;
+    console.warn("[sorasocute] Linux top bar icon unavailable", error);
+  }
+}
 
 function isLocalVivianUrl(value) {
   if (!desktopOrigin) return false;
@@ -102,7 +133,7 @@ function createWindow() {
     frame: false,
     alwaysOnTop: true,
     resizable: true,
-    skipTaskbar: true,
+    skipTaskbar: process.platform !== "linux",
     hasShadow: false,
     backgroundColor: "#00000000",
     show: false,
@@ -127,6 +158,10 @@ function createWindow() {
   mainWindow.once("ready-to-show", () => {
     if (!SMOKE_TEST) mainWindow?.show();
   });
+  mainWindow.on("show", updateLinuxTrayMenu);
+  mainWindow.on("hide", updateLinuxTrayMenu);
+  mainWindow.on("minimize", updateLinuxTrayMenu);
+  mainWindow.on("restore", updateLinuxTrayMenu);
 
   mainWindow.webContents.once("did-finish-load", async () => {
     smokeLog("Renderer did-finish-load");
@@ -155,6 +190,7 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     mainWindow = null;
+    updateLinuxTrayMenu();
   });
 
   void mainWindow.loadURL(`${desktopOrigin}/desktop`).catch((error) => {
@@ -198,6 +234,7 @@ app.whenReady().then(async () => {
     await prepareRuntime();
     configureSessionSecurity();
     createWindow();
+    createLinuxTray();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!SMOKE_TEST) {

@@ -1,0 +1,11 @@
+extends: ./electron-builder.yml
+productName: Sorasocute
+
+files:
+  - assets/tray-linux.png
+
+linux:
+  executableName: Sorasocute
+  category: Utility
+  icon: public/favicon.png
+  syncDesktopName: true

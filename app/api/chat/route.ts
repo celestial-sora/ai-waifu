@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { applyConversationTurn, companionPromptBlock, type CompanionState } from "@/lib/companion";
 import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { appendLocalMessages, loadLocalMemory, markLocalMemoriesUsed, saveLocalMemory, useDesktopLocalMemory } from "@/lib/desktop-local-memory";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, detectToolkits, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
@@ -297,6 +298,7 @@ export async function POST(request: Request) {
     // 1. Memories
     (async () => {
       try {
+        if (useDesktopLocalMemory()) return loadLocalMemory().memories;
         const supabase = getSupabaseAdmin();
         const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance,updated_at,last_used_at,use_count").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(30), supabaseTimeoutMs, "memory load");
         return (data ?? []).sort((a: StoredMemory, b: StoredMemory) => {
@@ -570,6 +572,13 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
+      if (useDesktopLocalMemory()) {
+        appendLocalMessages((idle || visionIdle) ? [{ role: "assistant", content: text }] : [{ role: "user", content: lastUserText }, { role: "assistant", content: text }]);
+        const extracted = !idle && !visionIdle && apiKey && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
+        for (const item of extracted) saveLocalMemory(item.memory.trim(), item.category, Math.min(5, Math.max(1, item.importance ?? 3)));
+        if (!idle && !visionIdle) markLocalMemoriesUsed(memories.slice(0, 8).map((item) => item.id).filter((id): id is number => typeof id === "number"));
+        return;
+      }
       const supabase = getSupabaseAdmin();
       let { data: conversation } = await withTimeout(supabase.from("conversations").select("id").eq("user_key", userKey).limit(1).maybeSingle(), supabaseTimeoutMs, "conversation load");
       if (!conversation) {
