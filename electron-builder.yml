@@ -1,6 +1,6 @@
 appId: dev.celestialsora.vivian
 productName: Vivian
-artifactName: vivian-socute.${ext}
+artifactName: Angela.${ext}
 electronVersion: 44.4.1
 asar: true
 afterPack: ./desktop/after-pack.cjs

@@ -129,7 +129,7 @@ jobs:
         shell: pwsh
         run: |
           $required = @(
-            "dist/vivian-socute.exe",
+            "dist/Angela.exe",
             "dist/win-unpacked/resources/standalone/server.js",
             "dist/win-unpacked/resources/standalone/node_modules/next/package.json",
             "dist/win-unpacked/resources/standalone/public/live2d/live2dcubismcore.min.js"
@@ -155,10 +155,10 @@ jobs:
             exit 1
           }
 
-      - name: Upload Vivian installer
+      - name: Upload Angela installer
         uses: actions/upload-artifact@v4
         with:
-          name: vivian-socute-windows-x64
-          path: dist/vivian-socute.exe
+          name: angela-windows-x64
+          path: dist/Angela.exe
           if-no-files-found: error
           retention-days: 14

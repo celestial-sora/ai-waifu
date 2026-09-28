@@ -72,7 +72,7 @@ jobs:
 
       - name: Verify packaged runtime and AppImage
         run: |
-          test -s dist/vivian-socute.AppImage
+          test -s dist/Angela.AppImage
           test -f dist/linux-unpacked/resources/standalone/server.js
           test -f dist/linux-unpacked/resources/standalone/node_modules/next/package.json
           test -f dist/linux-unpacked/resources/standalone/public/live2d/live2dcubismcore.min.js
@@ -90,10 +90,10 @@ jobs:
       - name: Smoke test packaged Electron app
         run: xvfb-run -a timeout 60s dist/linux-unpacked/Vivian --smoke-test
 
-      - name: Upload Vivian AppImage
+      - name: Upload Angela AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: vivian-socute-linux-x64
-          path: dist/vivian-socute.AppImage
+          name: angela-linux-x64
+          path: dist/Angela.AppImage
           if-no-files-found: error
           retention-days: 14
