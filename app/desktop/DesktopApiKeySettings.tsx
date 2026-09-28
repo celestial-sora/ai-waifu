@@ -15,18 +15,13 @@ interface ConfigField {
 }
 
 const CONFIG_FIELDS: ConfigField[] = [
-  { key: "GROQ_API_KEY", label: "Groq", group: "Chat", secret: true },
-  { key: "CEREBRAS_API_KEY", label: "Cerebras", group: "Chat", secret: true },
-  { key: "GEMINI_API_KEY", label: "Gemini · ค้นหาและ Vision", group: "Chat", secret: true },
-  { key: "TYPESAFE_API_KEY", label: "Jev · ตัดสินใจค้นข้อมูลล่าสุด", group: "Chat", secret: true },
-  { key: "OPENROUTER_API_KEY", label: "OpenRouter · ความจำ", group: "Chat", secret: true },
-  { key: "ELEVENLABS_API_KEY", label: "ElevenLabs · ฟังเสียง", group: "Voice", secret: true },
+  { key: "GROQ_API_KEY", label: "Groq · LLM + Whisper STT", group: "AI", secret: true },
+  { key: "GEMINI_API_KEY", label: "Gemini · Vision และค้นหา", group: "AI", secret: true },
+  { key: "TYPESAFE_API_KEY", label: "Jev · ตัดสินใจค้นข้อมูลล่าสุด", group: "AI", secret: true },
+  { key: "CEREBRAS_API_KEY", label: "Cerebras · Memory Management", group: "Memory", secret: true },
   { key: "FISH_AUDIO_API_KEY", label: "Fish Audio · พูดตอบ", group: "Voice", secret: true },
   { key: "FISH_AUDIO_VOICE_ID", label: "Fish Audio Voice ID", group: "Voice", secret: false },
   { key: "TAVILY_API_KEY", label: "Tavily · ค้นเว็บ", group: "Extras", secret: true },
-  { key: "COMPOSIO_API_KEY", label: "Composio · แอปเชื่อมต่อ", group: "Extras", secret: true },
-  { key: "SUPABASE_URL", label: "Supabase URL", group: "Memory", secret: false },
-  { key: "SUPABASE_SERVICE_ROLE_KEY", label: "Supabase service role", group: "Memory", secret: true },
 ];
 
 function desktopBridge(): DesktopBridge | undefined {
