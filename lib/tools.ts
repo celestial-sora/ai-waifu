@@ -135,8 +135,9 @@ export function memoryTool(userText: string, memories: { memory: string; categor
   return { name: "memory_retrieval", ok: true, content: hits.map((item) => `[${item.category}] ${item.memory}`).join("\n") };
 }
 
-export async function runTools(userText: string, memories: { memory: string; category: string }[]): Promise<ToolResult[]> {
+export async function runTools(userText: string, memories: { memory: string; category: string }[], forceSearch = false): Promise<ToolResult[]> {
   const names = detectTools(userText);
+  if (forceSearch && !names.includes("web_search")) names.push("web_search");
   const results: ToolResult[] = [];
   for (const name of names) {
     if (name === "web_search") results.push(await webSearchTool(userText));

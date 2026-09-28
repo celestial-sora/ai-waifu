@@ -138,6 +138,7 @@ export default function Home() {
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [customInstructions, setCustomInstructions] = useState("");
+  const [jevConfigured, setJevConfigured] = useState<boolean | null | undefined>(undefined);
   const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
   const [backgroundMode, setBackgroundMode] = useState<keyof typeof BACKGROUNDS>("day");
@@ -163,6 +164,16 @@ export default function Home() {
     if (!sidebarOpen || panel !== "conversations") return;
     const refresh = window.setInterval(() => { void loadMemory(); }, 3000);
     return () => window.clearInterval(refresh);
+  }, [sidebarOpen, panel]);
+
+  useEffect(() => {
+    if (!sidebarOpen || panel !== "settings") return;
+    const controller = new AbortController();
+    fetch("/api/jev/status", { cache: "no-store", signal: controller.signal })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { configured?: boolean } | null) => { if (!controller.signal.aborted) setJevConfigured(data?.configured ?? null); })
+      .catch(() => { if (!controller.signal.aborted) setJevConfigured(null); });
+    return () => controller.abort();
   }, [sidebarOpen, panel]);
 
   useEffect(() => {
@@ -1259,7 +1270,7 @@ export default function Home() {
             {panel === "scenes" && <div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" className={backgroundMode === scene ? "is-selected" : ""} onClick={() => setBackgroundMode(scene)}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div>}
             {panel === "voice" && <><button type="button" className="floating-option" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/> Vivian voice <strong>{muted ? "Off" : "On"}</strong></button><label className="floating-range">Speaking speed <span>{speechSpeed.toFixed(2)}×</span><input type="range" min="0.8" max="1.2" step="0.02" value={speechSpeed} onChange={(event) => setSpeechSpeed(Number(event.target.value))}/></label><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Speech language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={toggleRecording}><Icon name="mic" size={18}/> Microphone <strong>{recording ? "Listening" : "Start"}</strong></button></>}
             {panel === "gallery" && <><p className="floating-note">Explore the scenes available in Vivian.</p><div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" onClick={() => { setBackgroundMode(scene); setPanel(null); }}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div><button type="button" className="floating-option" onClick={() => fileInputRef.current?.click()}><Icon name="clip" size={18}/> Attach a photo to chat</button></>}
-            {panel === "settings" && <><div className="custom-instructions"><strong>Custom instructions</strong><p>How should Vivian speak with you?</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="Call me… Speak in Thai…"/></div><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={() => setInfoOpen(true)}><Icon name="info" size={18}/> About Vivian</button></>}
+            {panel === "settings" && <><div className="custom-instructions"><strong>Custom instructions</strong><p>How should Vivian speak with you?</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="Call me… Speak in Thai…"/></div><div className="custom-instructions jev-settings"><strong>Jev API <span>{jevConfigured === undefined ? "กำลังตรวจสอบ" : jevConfigured === null ? "ตรวจสอบไม่ได้" : jevConfigured ? "ตั้งค่าแล้ว" : "ยังไม่ได้ตั้งค่า"}</span></strong><p>ตั้งค่า TYPESAFE_API_KEY ใน Environment Variables ของ Vercel หรือ .env.local และใช้ร่วมกับ Gemini เพื่อช่วยตัดสินใจว่าคำถามใดต้องใช้ข้อมูลล่าสุด</p></div><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={() => setInfoOpen(true)}><Icon name="info" size={18}/> About Vivian</button></>}
           </div>
         </section>}
       </div>

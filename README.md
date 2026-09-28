@@ -33,6 +33,7 @@ Other features are optional:
 | Persistent memory | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Memory extraction and context compression | `CEREBRAS_API_KEY` |
 | Search and connected apps | `TAVILY_API_KEY`, `COMPOSIO_API_KEY` |
+| Jev current-information routing | `TYPESAFE_API_KEY` |
 | Speech input | `GROQ_API_KEY` (optional `GROQ_STT_MODEL`) |
 | Speech output | `FISH_AUDIO_API_KEY`, `FISH_AUDIO_VOICE_ID` (optional `FISH_AUDIO_MODEL`) |
 
@@ -95,6 +96,8 @@ Normal text chat currently uses this provider order:
 3. **Gemini** — default `gemini-2.5-flash`
 
 Vision and search requests are routed through Gemini because they depend on Gemini-specific multimodal/search capabilities.
+
+When `TYPESAFE_API_KEY` and `GEMINI_API_KEY` are configured, Jev checks whether less explicit user requests need current web information. A strong Jev signal routes the request through the existing Tavily/Gemini search flow. Explicit search wording still routes directly, and Jev errors or timeouts leave the existing chat behavior intact. Jev is a decision model; it does not generate Vivian's replies. Keep the key on the server in `.env.local` or the Vercel environment. Web Settings shows its configured status through `GET /api/jev/status` without returning the key.
 
 Background memory extraction and conversation-context compression use Cerebras when configured. `OPENROUTER_API_KEY` may remain in the environment for future use, but the app does not currently call OpenRouter.
 
