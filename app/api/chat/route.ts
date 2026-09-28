@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { appendLocalMessages, loadLocalMemory, markLocalMemoriesUsed, saveLocalMemory, useDesktopLocalMemory } from "@/lib/desktop-local-memory";
 import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
+import { needsCurrentInformation } from "@/lib/jev";
 import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, detectToolkits, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -290,7 +291,8 @@ export async function POST(request: Request) {
   if (!passive && !contents.length && !hasImage) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความหรือส่งรูปภาพก่อนค่ะ" }, { status: 400 });
 
   const lastUserText = passive ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
-  const shouldSearch = !passive && searchIntent.test(lastUserText);
+  const explicitSearch = !passive && searchIntent.test(lastUserText);
+  const shouldSearch = explicitSearch || (!passive && Boolean(geminiApiKey) && await needsCurrentInformation(lastUserText));
   const composioToolkits = !passive ? detectToolkits(lastUserText) : [];
 
   // Run independent pre-flight tasks concurrently in Promise.all to save critical seconds
@@ -316,7 +318,7 @@ export async function POST(request: Request) {
     // 2. Companion state
     loadCompanionState(userKey),
     // 3. Local tools (weather / search)
-    passive ? Promise.resolve([]) : runTools(lastUserText, []),
+    passive ? Promise.resolve([]) : runTools(lastUserText, [], shouldSearch),
     // 4. Composio connected accounts
     !passive ? getComposioConnectedAccounts().catch(() => []) : Promise.resolve([]),
     // 5. Composio tools

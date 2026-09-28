@@ -18,6 +18,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   { key: "GROQ_API_KEY", label: "Groq", group: "Chat", secret: true },
   { key: "CEREBRAS_API_KEY", label: "Cerebras", group: "Chat", secret: true },
   { key: "GEMINI_API_KEY", label: "Gemini · ค้นหาและ Vision", group: "Chat", secret: true },
+  { key: "TYPESAFE_API_KEY", label: "Jev · ตัดสินใจค้นข้อมูลล่าสุด", group: "Chat", secret: true },
   { key: "OPENROUTER_API_KEY", label: "OpenRouter · ความจำ", group: "Chat", secret: true },
   { key: "ELEVENLABS_API_KEY", label: "ElevenLabs · ฟังเสียง", group: "Voice", secret: true },
   { key: "FISH_AUDIO_API_KEY", label: "Fish Audio · พูดตอบ", group: "Voice", secret: true },

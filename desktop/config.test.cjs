@@ -9,10 +9,12 @@ test("desktop settings preserve unrelated config and return statuses only", () =
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vivian-config-"));
   try {
     fs.writeFileSync(path.join(directory, ".env"), "# user setting\nFISH_AUDIO_MODEL=s2.1-pro-free\nGROQ_API_KEY=old\n");
-    const status = saveConfigUpdates(directory, { GROQ_API_KEY: "new-key", GEMINI_API_KEY: "gemini-key" });
+    const status = saveConfigUpdates(directory, { GROQ_API_KEY: "new-key", GEMINI_API_KEY: "gemini-key", TYPESAFE_API_KEY: "jev-key" });
     assert.equal(status.GROQ_API_KEY, "local");
+    assert.equal(status.TYPESAFE_API_KEY, "local");
     assert.equal(JSON.stringify(status).includes("new-key"), false);
-    assert.deepEqual(parseEnvFile(directory), { FISH_AUDIO_MODEL: "s2.1-pro-free", GROQ_API_KEY: "new-key", GEMINI_API_KEY: "gemini-key" });
+    assert.equal(JSON.stringify(status).includes("jev-key"), false);
+    assert.deepEqual(parseEnvFile(directory), { FISH_AUDIO_MODEL: "s2.1-pro-free", GROQ_API_KEY: "new-key", GEMINI_API_KEY: "gemini-key", TYPESAFE_API_KEY: "jev-key" });
     saveConfigUpdates(directory, { GROQ_API_KEY: "" });
     assert.equal(getConfigStatus(directory).GROQ_API_KEY, process.env.GROQ_API_KEY ? "environment" : null);
     assert.equal(parseEnvFile(directory).FISH_AUDIO_MODEL, "s2.1-pro-free");

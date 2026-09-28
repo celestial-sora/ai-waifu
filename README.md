@@ -56,6 +56,8 @@ Normal text chat currently uses this provider order:
 
 Vision and search requests are routed through Gemini because they depend on Gemini-specific multimodal/search capabilities.
 
+When `TYPESAFE_API_KEY` and `GEMINI_API_KEY` are configured, Jev checks whether less explicit user requests need current web information. A strong Jev signal routes the request through the existing Tavily/Gemini search flow. Explicit search wording still routes directly, and Jev errors or timeouts leave the existing chat behavior intact. Jev is a decision model; it does not generate Vivian's replies. Set its key in Desktop settings or the server environment.
+
 OpenRouter is no longer the primary chat provider. It is still used when configured for background memory extraction and conversation-context compression.
 
 ### Search flow
