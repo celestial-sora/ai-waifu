@@ -31,7 +31,7 @@ Other features are optional:
 | Feature | Environment variables |
 | --- | --- |
 | Persistent memory | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
-| Memory extraction and context compression | `OPENROUTER_API_KEY` (optional `OPENROUTER_MODEL`) |
+| Memory extraction and context compression | `CEREBRAS_API_KEY` |
 | Search and connected apps | `TAVILY_API_KEY`, `COMPOSIO_API_KEY` |
 | Speech input | `GROQ_API_KEY` (optional `GROQ_STT_MODEL`) |
 | Speech output | `FISH_AUDIO_API_KEY`, `FISH_AUDIO_VOICE_ID` (optional `FISH_AUDIO_MODEL`) |
@@ -96,7 +96,7 @@ Normal text chat currently uses this provider order:
 
 Vision and search requests are routed through Gemini because they depend on Gemini-specific multimodal/search capabilities.
 
-OpenRouter is no longer the primary chat provider. It is still used when configured for background memory extraction and conversation-context compression.
+Background memory extraction and conversation-context compression use Cerebras when configured. `OPENROUTER_API_KEY` may remain in the environment for future use, but the app does not currently call OpenRouter.
 
 ### Search flow
 
@@ -188,7 +188,7 @@ Current memory functionality includes:
 - Load recent conversation messages
 - Use the most relevant/recent memory context in prompts
 - Update memory usage timestamps
-- Extract durable memories from conversation when OpenRouter is configured
+- Extract durable memories from conversation when Cerebras is configured
 - Compress older conversation turns into a compact conversation summary
 
 Sensitive one-off information and secrets are explicitly excluded from automatic memory extraction.
@@ -225,7 +225,6 @@ External AI/services currently used by the codebase include:
 - Cerebras
 - Groq
 - Google Gemini
-- OpenRouter
 - Tavily
 - Fish Audio
 - Composio

@@ -9,8 +9,8 @@ import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, co
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type CharacterKey = "Miss";
 type StoredMemory = { id?: number; memory: string; category: string; importance: number };
-type OpenRouterMessage = { role: "system" | "user" | "assistant"; content: string };
-type OpenRouterTurn = {
+type ProviderMessage = { role: "system" | "user" | "assistant"; content: string };
+type ProviderTurn = {
   role: "system" | "user" | "assistant";
   content: string | Array<{ type: "text" | "image_url"; text?: string; image_url?: { url: string } }>;
 };
@@ -18,7 +18,6 @@ type OpenRouterTurn = {
 export const maxDuration = 60;
 
 const userKey = "default";
-const modelName = () => process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.3-70b-instruct";
 const cerebrasModelName = () => "qwen-3.8-27b";
 const groqModelName = () => process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const groqVisionModel = () => process.env.GROQ_VISION_MODEL ?? "llama-3.2-11b-vision-preview";
@@ -47,40 +46,19 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string
   }
 }
 
-async function callOpenRouter(apiKey: string, messages: OpenRouterTurn[], options: { json?: boolean; model?: string; timeoutMs?: number } = {}) {
-  const selectedModel = options.model ?? modelName();
-  const timeout = options.timeoutMs ?? providerTimeoutMs;
-  return fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://vivian-chan.vercel.app",
-      "X-Title": "Vivian Personal Project",
-    },
-    signal: AbortSignal.timeout(timeout),
-    body: JSON.stringify({
-      model: selectedModel,
-      messages,
-      temperature: options.json ? 0 : 0.8,
-      ...(!options.json ? { max_tokens: 2500 } : {}),
-      ...(options.json ? { max_tokens: 280, response_format: { type: "json_object" } } : {}),
-    }),
-  });
-}
-
 async function callCerebras(
   apiKey: string,
   messages: any[],
   model = cerebrasModelName(),
-  options: { tools?: any[]; tool_choice?: string; timeoutMs?: number } = {}
+  options: { tools?: any[]; tool_choice?: string; timeoutMs?: number; json?: boolean; maxTokens?: number } = {}
 ) {
   const payload: Record<string, unknown> = {
     model,
     messages,
-    temperature: 0.8,
-    max_tokens: 2500,
+    temperature: options.json ? 0 : 0.8,
+    max_tokens: options.maxTokens ?? 2500,
   };
+  if (options.json) payload.response_format = { type: "json_object" };
   if (options.tools && options.tools.length > 0) {
     payload.tools = options.tools;
     payload.tool_choice = options.tool_choice ?? "auto";
@@ -131,27 +109,30 @@ async function callGemini(apiKey: string, payload: Record<string, unknown>, mode
 
 async function extractMemories(apiKey: string, userText: string) {
   if (userText.length < 12) return [];
-  const response = await callOpenRouter(apiKey, [
-    { role: "system", content: "Extract only durable, useful user facts from the message. Never save secrets, passwords, API keys, one-time requests, precise location, health, financial, or highly sensitive information. Return strict JSON only: {\"memories\":[{\"memory\":\"short Thai fact\",\"category\":\"preference|profile|project|relationship\",\"importance\":1-5}]}. Return an empty list unless the user explicitly states a lasting preference, identity detail, ongoing project fact, or recurring preference. Maximum 2 memories." },
-    { role: "user", content: userText },
-  ], { json: true });
-  if (!response.ok) return [];
-  const data = await response.json();
-  const raw = data.choices?.[0]?.message?.content ?? "";
   try {
+    const response = await callCerebras(apiKey, [
+      { role: "system", content: "Extract only durable, useful user facts from the message. Never save secrets, passwords, API keys, one-time requests, precise location, health, financial, or highly sensitive information. Return strict JSON only: {\"memories\":[{\"memory\":\"short Thai fact\",\"category\":\"preference|profile|project|relationship\",\"importance\":1-5}]}. Return an empty list unless the user explicitly states a lasting preference, identity detail, ongoing project fact, or recurring preference. Maximum 2 memories." },
+      { role: "user", content: userText },
+    ], cerebrasModelName(), { json: true, maxTokens: 280 });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const raw = data.choices?.[0]?.message?.content ?? "";
     const parsed = JSON.parse(raw) as { memories?: StoredMemory[] };
     return (parsed.memories ?? []).filter((item) => item.memory?.trim() && item.memory.length <= 500 && ["preference", "profile", "project", "relationship"].includes(item.category)).slice(0, 2);
-  } catch { return []; }
+  } catch (error) {
+    console.warn("Memory extraction unavailable", error);
+    return [];
+  }
 }
 
 async function compressTurns(apiKey: string, older: ChatMessage[], previous: string) {
   if (older.length < 4) return previous;
   const transcript = older.map((item) => `${item.role === "user" ? "ผู้ใช้" : "Vivian"}: ${item.content.slice(0, 400)}`).join("\n").slice(0, 7000);
   try {
-    const response = await callOpenRouter(apiKey, [
+    const response = await callCerebras(apiKey, [
       { role: "system", content: "Summarize this companion chat into compact Thai context for a future system prompt. Keep names, preferences, unresolved topics, and relationship tone. Ignore secrets. Return JSON only: {\"summary\":\"...\"} maximum 700 characters." },
       { role: "user", content: `${previous ? `สรุปเดิม:\n${previous}\n\n` : ""}บทสนทนาเก่า:\n${transcript}` },
-    ], { json: true });
+    ], cerebrasModelName(), { json: true, maxTokens: 500 });
     if (!response.ok) return previous;
     const data = await response.json();
     const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? "{}") as { summary?: string };
@@ -180,7 +161,7 @@ function trimHistory(inputMessages: ChatMessage[]) {
 }
 
 function mergeRoles(messages: ChatMessage[]) {
-  const contents: OpenRouterMessage[] = [];
+  const contents: ProviderMessage[] = [];
   for (const message of messages) {
     const role = message.role === "assistant" ? "assistant" : "user";
     const previous = contents.at(-1);
@@ -256,7 +237,6 @@ ${memoryContext}${toolContext}`;
 export async function POST(request: Request) {
   const quota = rateLimit(request, "chat", 20);
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
-  const apiKey = process.env.OPENROUTER_API_KEY;
   const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
   const groqApiKey = process.env.GROQ_API_KEY;
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -330,7 +310,7 @@ export async function POST(request: Request) {
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const toolContext = toolsPromptBlock(toolResults) + composioContext;
   const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, language, visionIdle);
-  const promptContents: OpenRouterMessage[] = greeting
+  const promptContents: ProviderMessage[] = greeting
     ? [...contents.slice(-6), { role: "user", content: `[ระบบ: คำทักแรกของ session ใหม่] ข้อความก่อนหน้านี้เป็นบทสนทนาจาก session ที่แล้ว ให้ Vivian ทักผู้ใช้ด้วยข้อความใหม่สดๆ 1-2 ประโยค โดยอิงเรื่องล่าสุดที่ผู้ใช้เล่าหรือความจำที่เกี่ยวข้อง ถ้ามีเรื่องค้างอยู่ให้ชวนคุยต่ออย่างนุ่มนวล หากไม่มีบริบทให้ทักตามบุคลิกตามปกติ ห้ามทวนคำตอบเดิมหรือแต่งเหตุการณ์ที่ไม่รู้จริง ไม่อ้างว่าเห็นผู้ใช้ผ่านกล้องหรือรู้เวลาหรือสภาพอากาศ ห้ามพูดถึงระบบหรือ AI และห้ามใช้ emoji` }]
     : idle
     ? [...contents.slice(-6), { role: "user", content: `[ระบบ: คำทักเมื่อบทสนทนาเงียบลง] Vivian เป็นฝ่ายเริ่มคุยต่อเอง คิดข้อความใหม่สดๆ 1-2 ประโยค โดยอาจต่อยอดเรื่องล่าสุดหรือความจำที่เกี่ยวข้อง ถ้าไม่มีเรื่องให้ต่อยอดให้ชวนคุยเรื่องใหม่อย่างเป็นธรรมชาติ ห้ามทวนคำทักเดิม ห้ามสมมติว่าผู้ใช้หายไปหรือเพิ่งกลับมา ห้ามอ้างว่าเห็นผู้ใช้ผ่านกล้องหรือรู้เวลาหรือสภาพอากาศ ห้ามพูดถึงระบบหรือเครื่องมือ และห้ามใช้ emoji` }]
@@ -370,7 +350,7 @@ export async function POST(request: Request) {
     generationConfig: { temperature: passive ? .9 : .8, maxOutputTokens: greeting ? 120 : 2500 },
   };
 
-  const groqMessages: OpenRouterTurn[] = hasImage
+  const groqMessages: ProviderTurn[] = hasImage
     ? [
         {
           role: "user" as const,
@@ -584,7 +564,7 @@ export async function POST(request: Request) {
         await withTimeout(supabase.from("messages").insert(rows), supabaseTimeoutMs, "message insert");
         await withTimeout(supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversation.id), supabaseTimeoutMs, "conversation update");
       }
-      const newMemories = !idle && !visionIdle && apiKey && memoryIntent.test(lastUserText) ? await extractMemories(apiKey, lastUserText) : [];
+      const newMemories = !idle && !visionIdle && cerebrasApiKey && memoryIntent.test(lastUserText) ? await extractMemories(cerebrasApiKey, lastUserText) : [];
       if (newMemories.length) {
         await withTimeout(supabase.from("memories").upsert(newMemories.map((item) => ({ user_key: userKey, memory: item.memory.trim(), category: item.category, importance: Math.min(5, Math.max(1, item.importance ?? 3)), updated_at: new Date().toISOString(), last_used_at: new Date().toISOString() })), { onConflict: "user_key,memory" }), supabaseTimeoutMs, "memory upsert");
       }
@@ -593,7 +573,7 @@ export async function POST(request: Request) {
         if (used.length) await withTimeout(supabase.from("memories").update({ last_used_at: new Date().toISOString() }).eq("user_key", userKey).in("id", used), supabaseTimeoutMs, "memory usage update");
       }
       if (!idle && !visionIdle && older.length >= 4) {
-        if (apiKey) nextState.conversationSummary = await compressTurns(apiKey, older, state.conversationSummary);
+        if (cerebrasApiKey) nextState.conversationSummary = await compressTurns(cerebrasApiKey, older, state.conversationSummary);
       }
       await saveCompanionState(userKey, nextState);
     } catch (error) { console.warn("Persistence unavailable", error); }
