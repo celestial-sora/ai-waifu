@@ -33,7 +33,7 @@ Other features are optional:
 | Persistent memory | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Memory extraction and context compression | `OPENROUTER_API_KEY` (optional `OPENROUTER_MODEL`) |
 | Search and connected apps | `TAVILY_API_KEY`, `COMPOSIO_API_KEY` |
-| Speech input | `ELEVENLABS_API_KEY` |
+| Speech input | `GROQ_API_KEY` (optional `GROQ_STT_MODEL`) |
 | Speech output | `FISH_AUDIO_API_KEY`, `FISH_AUDIO_VOICE_ID` (optional `FISH_AUDIO_MODEL`) |
 
 Optional chat model overrides: `GROQ_MODEL` and `GEMINI_MODEL`. Keep keys in `.env.local`; never expose them through `NEXT_PUBLIC_*` or commit them.
@@ -143,7 +143,7 @@ The browser UI can capture camera frames and send them to the chat route for vis
 
 ### Speech-to-text
 
-Voice input uses **ElevenLabs Scribe v2**.
+Voice input uses **Groq Whisper Large V3 Turbo** by default. Set `GROQ_STT_MODEL=whisper-large-v3` to favor transcription accuracy over speed.
 
 The selected language can be forwarded to STT to reduce incorrect language/script detection from background noise.
 
@@ -227,7 +227,6 @@ External AI/services currently used by the codebase include:
 - Google Gemini
 - OpenRouter
 - Tavily
-- ElevenLabs
 - Fish Audio
 - Composio
 - Open-Meteo
@@ -281,7 +280,7 @@ app/
   api/
     chat/               LLM routing, tools, vision, memory-context orchestration
     memory/             Memory + conversation CRUD
-    stt/                ElevenLabs speech-to-text
+    stt/                Groq Whisper speech-to-text
     tts/                Fish Audio text-to-speech
 
 lib/
