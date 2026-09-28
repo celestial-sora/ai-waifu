@@ -1170,7 +1170,7 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
       <div className="scene-background" style={{ backgroundImage: `url("${BACKGROUNDS[backgroundMode]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
       {desktopMode && <div className="desktop-pet-interaction" tabIndex={0} aria-label="Vivian Desktop Pet กด Tab เพื่อเปิดเมนู">
-        <div className="desktop-pet-drag-handle" title="ลากเพื่อย้าย Vivian" />
+        <div className="desktop-pet-drag-handle" aria-label="ลากเพื่อย้ายหน้าต่าง Vivian" title="ลากเพื่อย้ายหน้าต่าง Vivian"><span aria-hidden="true">⋮⋮</span> ลากเพื่อย้าย</div>
         <div className={`desktop-pet-tools-group ${desktopToolsOpen ? "is-open" : ""}`}>
           <button className="desktop-pet-tools-trigger" type="button" onClick={() => setDesktopToolsOpen((open) => !open)} aria-expanded={desktopToolsOpen} aria-label="เครื่องมือเพิ่มเติม" title="เครื่องมือเพิ่มเติม">•••</button>
           <nav className="desktop-pet-tools" aria-label="เครื่องมือ Desktop Pet">

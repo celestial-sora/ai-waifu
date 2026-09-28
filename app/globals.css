@@ -162,12 +162,25 @@ body:has(.desktop-pet-shell) {
 
 .desktop-pet-drag-handle {
   position: absolute;
-  z-index: 1;
+  z-index: 4;
   top: 0;
-  right: 0;
-  left: 0;
-  height: 26px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 148px;
+  height: 36px;
+  border: 1px solid rgb(255 255 255 / .3);
+  border-radius: 999px;
+  color: #f8e9ff;
+  background: rgb(28 18 43 / .78);
+  box-shadow: 0 6px 18px rgb(0 0 0 / .28);
+  font: 12px Arial, sans-serif;
+  transform: translateX(-50%);
+  user-select: none;
   cursor: grab;
+  app-region: drag;
   -webkit-app-region: drag;
 }
 

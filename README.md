@@ -248,7 +248,7 @@ Never place provider secrets in `NEXT_PUBLIC_*`, client code, committed source f
 
 ### Desktop Pet
 
-The Linux Desktop Pet is packaged as Sorasocute and opens in a transparent floating window. Hover over Vivian to reveal the compact menu. Hover over the three-dot control above the character to expand microphone, camera, and image attachment tools; click to keep the tools expanded. Drag the thin strip above the dots to move the window. Chat has a text-only composer. Settings are split into Memory, API keys, and Preferences pages; Esc returns to the previous settings page. Popup speech uses the rising frameless text and animated thinking dots from `main`.
+The Linux Desktop Pet is packaged as Sorasocute and opens in a transparent floating window. Hover over Vivian to reveal the compact menu. Hover over the three-dot control above the character to expand microphone, camera, and image attachment tools; click to keep the tools expanded. Drag the visible "ลากเพื่อย้าย" handle above the dots to move the window. Chat has a text-only composer. Settings are split into Memory, API keys, and Preferences pages; Esc returns to the previous settings page. Popup speech uses the rising frameless text and animated thinking dots from `main`.
 
 In the installed Desktop app, Settings saves API keys to the current user's Vivian app-data `.env` file and restarts the app so the local server reads them. Existing values are never shown in the UI. Leaving a field blank keeps its current value; use **Remove** to delete a locally saved value. In `desktop:dev`, restart the development launcher after saving settings. Keep this app-data file private and do not copy it into the repository or installer.
 
