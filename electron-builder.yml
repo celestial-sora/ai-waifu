@@ -13,6 +13,7 @@ files:
   - electron.cjs
   - preload.cjs
   - server.cjs
+  - config.cjs
   - package.json
   - "!node_modules/**/*"
 

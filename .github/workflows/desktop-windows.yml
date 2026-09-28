@@ -70,8 +70,13 @@ jobs:
           node --check desktop/electron.cjs
           node --check desktop/preload.cjs
           node --check desktop/server.cjs
+          node --check desktop/config.cjs
+          node --check desktop/run.mjs
           node --check desktop/smoke-standalone.mjs
           node --check desktop/after-pack.cjs
+
+      - name: Test desktop key configuration
+        run: node --test desktop/config.test.cjs
 
       - name: Build Next.js standalone server
         run: npm run desktop:build

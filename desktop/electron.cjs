@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
 const { startPackagedNextServer } = require("./server.cjs");
+const { getConfigStatus, saveConfigUpdates } = require("./config.cjs");
 
 const HOST = "127.0.0.1";
 const DEV_PORT = Number.parseInt(process.env.VIVIAN_DESKTOP_PORT || "3210", 10);
@@ -234,4 +235,26 @@ ipcMain.handle("vivian-desktop:toggle-always-on-top", () => {
   const next = !mainWindow.isAlwaysOnTop();
   mainWindow.setAlwaysOnTop(next, "floating");
   return next;
+});
+
+function assertTrustedConfigRequest(event) {
+  if (!mainWindow || event.sender !== mainWindow.webContents || !isLocalVivianUrl(event.sender.getURL())) {
+    throw new Error("Desktop settings are only available in Vivian");
+  }
+  const url = new URL(event.sender.getURL());
+  if (url.pathname !== "/desktop") throw new Error("Desktop settings are only available on the desktop page");
+}
+
+ipcMain.handle("vivian-desktop:get-api-key-status", (event) => {
+  assertTrustedConfigRequest(event);
+  return getConfigStatus(app.getPath("userData"));
+});
+
+ipcMain.handle("vivian-desktop:save-api-keys", (event, updates) => {
+  assertTrustedConfigRequest(event);
+  const status = saveConfigUpdates(app.getPath("userData"), updates);
+  if (app.isPackaged) {
+    setTimeout(() => { app.relaunch(); app.quit(); }, 250);
+  }
+  return { status, restarting: app.isPackaged };
 });

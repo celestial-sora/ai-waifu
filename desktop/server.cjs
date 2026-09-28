@@ -3,37 +3,7 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-
-function parseEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) return {};
-
-  const result = {};
-  const source = fs.readFileSync(filePath, "utf8");
-
-  for (const rawLine of source.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-
-    const normalized = line.startsWith("export ") ? line.slice(7).trim() : line;
-    const separator = normalized.indexOf("=");
-    if (separator <= 0) continue;
-
-    const key = normalized.slice(0, separator).trim();
-    let value = normalized.slice(separator + 1).trim();
-
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    value = value.replace(/\\n/g, "\n");
-    result[key] = value;
-  }
-
-  return result;
-}
+const { parseEnvFile } = require("./config.cjs");
 
 function canBind(host, port) {
   return new Promise((resolve) => {
@@ -108,7 +78,7 @@ async function startPackagedNextServer({
 
   const port = await findAvailablePort(host, preferredPort);
   const origin = `http://${host}:${port}`;
-  const userEnv = parseEnvFile(path.join(userDataPath, ".env"));
+  const userEnv = parseEnvFile(userDataPath);
 
   const child = spawn(process.execPath, [serverPath], {
     cwd: standaloneRoot,

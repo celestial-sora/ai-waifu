@@ -246,6 +246,12 @@ FISH_AUDIO_MODEL=s2.1-pro-free
 
 Never place provider secrets in `NEXT_PUBLIC_*`, client code, committed source files, screenshots, or logs.
 
+### Desktop Pet
+
+The Desktop Pet has a transparent floating window. Hover over Vivian to reveal the compact menu, then select Chat to open the composer or Settings to manage memory and API keys. On each launch, Vivian creates a fresh greeting using recent local turns and available cloud memory; if providers are unavailable, she uses a short local greeting.
+
+In the installed Desktop app, Settings saves API keys to the current user's Vivian app-data `.env` file and restarts the app so the local server reads them. Existing values are never shown in the UI. Leaving a field blank keeps its current value; use **Remove** to delete a locally saved value. In `desktop:dev`, restart the development launcher after saving settings. Keep this app-data file private and do not copy it into the repository or installer.
+
 ## Run locally
 
 ```bash

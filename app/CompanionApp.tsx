@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
 import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
+import { DesktopApiKeySettings } from "@/app/desktop/DesktopApiKeySettings";
 
 type IconName = "focus" | "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language";
 
@@ -39,9 +40,13 @@ const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName:
   { code: "zh", label: "Chinese", nativeName: "CN" },
 ];
 const greetings = [
-  "คิดถึงจังเลย~\nขอกอดหน่อยได้ไหม~",
+  "มาแล้วเหรอคะ Vivian กำลังรอฟังเรื่องของคุณอยู่เลย~",
+  "วันนี้อยากชวน Vivian คุยเรื่องอะไรเป็นพิเศษไหมคะ?",
+  "แวะมาหา Vivian แล้วสินะ เล่าอะไรสนุก ๆ ให้ฟังหน่อยสิคะ~",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
+const GREETING_PENDING = "Vivian กำลังคิดคำทักทายให้คุณ...";
+const DESKTOP_RECENT_SESSION_KEY = "vivian-desktop-recent-session-v1";
 const BACKGROUNDS = { day: "/backgrounds/christmas-day-4x3.jpg", night: "/backgrounds/christmas-night-4x3.jpg" } as const;
 const APP_CODENAME = "Sandrome";
 const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -97,9 +102,14 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
   const lipSyncFrameRef = useRef<number | null>(null);
   const speakIdRef = useRef(0);
   const greetingSpokenRef = useRef(false);
+  const greetingRequestRef = useRef<AbortController | null>(null);
+  const greetingGenerationRef = useRef(0);
+  const greetingTextRef = useRef<string | null>(null);
+  const audioUnlockedByUserRef = useRef(false);
   const ttsAbortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
   const speakingRef = useRef(false);
+  const mutedRef = useRef(false);
   const recordingRef = useRef(false);
   const micEnabledRef = useRef(false);
   const interactedRef = useRef(false);
@@ -110,6 +120,7 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messageInputRef = useRef<HTMLInputElement | null>(null);
   const cameraActiveRef = useRef(false);
   const lastVisionTriggerRef = useRef(0);
   const visionTimerRef = useRef<number | null>(null);
@@ -117,9 +128,8 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
   const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   cameraActiveRef.current = cameraActive;
-  // Keep the first server/client render identical; rotate greetings after the
-  // session is hydrated instead of letting Math.random() cause a mismatch.
-  const initialGreeting = useRef<Message>({ from: "vivian", text: greetings[0] });
+  // Keep the first server/client render identical while a fresh greeting loads.
+  const initialGreeting = useRef<Message>({ from: "vivian", text: GREETING_PENDING });
   const messagesRef = useRef<Message[]>([initialGreeting.current]);
   const companionRef = useRef<CompanionState>(defaultCompanionState());
   const [message, setMessage] = useState("");
@@ -134,7 +144,9 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
   const [languageOpen, setLanguageOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [greetingTrigger, setGreetingTrigger] = useState(0);
   const [toolsOpen, setToolsOpen] = useState(true);
+  const [desktopComposerOpen, setDesktopComposerOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
@@ -143,12 +155,17 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
   const [memoryDraft, setMemoryDraft] = useState("");
   const [backgroundMode, setBackgroundMode] = useState<keyof typeof BACKGROUNDS>("day");
   const [speechSpeed, setSpeechSpeed] = useState(.98);
+
+  useEffect(() => {
+    if (desktopMode && desktopComposerOpen) messageInputRef.current?.focus();
+  }, [desktopMode, desktopComposerOpen]);
   const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("th");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
   sendingRef.current = sending;
+  mutedRef.current = muted;
   speechSpeedRef.current = speechSpeed;
   speechLanguageRef.current = speechLanguage;
   companionRef.current = companion;
@@ -157,6 +174,63 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
     const hour = new Date().getHours();
     setBackgroundMode(hour >= 6 && hour < 18 ? "day" : "night");
   }, []);
+
+  useEffect(() => {
+    if (!preferencesReady || messagesRef.current[0]?.text !== GREETING_PENDING || messagesRef.current.length !== 1) return;
+    let previousMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
+    try {
+      const saved: unknown = JSON.parse(window.localStorage.getItem(DESKTOP_RECENT_SESSION_KEY) ?? "[]");
+      if (Array.isArray(saved)) {
+        previousMessages = saved.filter((item): item is Message => item && (item.from === "me" || item.from === "vivian") && typeof item.text === "string" && item.text !== GREETING_PENDING && item.text !== "[ส่งรูปภาพ]")
+          .slice(-6).map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text.slice(0, 500) }));
+      }
+    } catch { /* Damaged local history should not block a greeting. */ }
+
+    const requestId = ++greetingGenerationRef.current;
+    const controller = new AbortController();
+    greetingRequestRef.current = controller;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, CHAT_TIMEOUT_MS);
+    void (async () => {
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({ mode: "greeting", messages: previousMessages, character: selectedModel, customInstructions, language: speechLanguageRef.current }),
+        });
+        if (!response.ok) throw new Error("Greeting unavailable");
+        const data = await response.json() as { text?: string };
+        const text = data.text?.trim();
+        if (!text || requestId !== greetingGenerationRef.current || messagesRef.current[0]?.text !== GREETING_PENDING) return;
+        greetingTextRef.current = text;
+        setMessages([{ from: "vivian", text }]);
+        if (audioUnlockedByUserRef.current && !mutedRef.current && !greetingSpokenRef.current) {
+          greetingSpokenRef.current = true;
+          void speak(text);
+        }
+      } catch {
+        if ((timedOut || !controller.signal.aborted) && requestId === greetingGenerationRef.current && messagesRef.current[0]?.text === GREETING_PENDING) {
+          const fallback = greeting();
+          greetingTextRef.current = fallback.text;
+          setMessages([fallback]);
+          if (audioUnlockedByUserRef.current && !mutedRef.current && !greetingSpokenRef.current) {
+            greetingSpokenRef.current = true;
+            void speak(fallback.text);
+          }
+        }
+      } finally {
+        window.clearTimeout(timeout);
+        if (greetingRequestRef.current === controller) greetingRequestRef.current = null;
+      }
+    })();
+    return () => controller.abort();
+  }, [preferencesReady, greetingTrigger]);
+
+  useEffect(() => {
+    if (!preferencesReady || !messages.some((item) => item.from === "me")) return;
+    try { window.localStorage.setItem(DESKTOP_RECENT_SESSION_KEY, JSON.stringify(messages.slice(-12))); } catch { /* Local history is optional. */ }
+  }, [messages, preferencesReady]);
 
   useEffect(() => {
     if (!chatOpen) return;
@@ -191,10 +265,11 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
 
   useEffect(() => {
     const unlock = () => {
+      audioUnlockedByUserRef.current = true;
       void unlockAudio();
-      if (!greetingSpokenRef.current && !muted) {
+      if (greetingTextRef.current && !greetingSpokenRef.current && !mutedRef.current) {
         greetingSpokenRef.current = true;
-        void speak(initialGreeting.current.text);
+        void speak(greetingTextRef.current);
       }
     };
     window.addEventListener("pointerdown", unlock, { once: true });
@@ -570,6 +645,11 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
     }
     if (sendingRef.current) return;
     if (!idle && !visionIdle && !text && !imageToSend) return;
+    if (!idle && !visionIdle) {
+      greetingGenerationRef.current += 1;
+      greetingRequestRef.current?.abort();
+      greetingTextRef.current = null;
+    }
     if (!idle && !visionIdle && text && await handleExpressionCommand(text)) {
       setMessage("");
       setAttachedImage(null);
@@ -580,7 +660,7 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
     markActivity();
     if (!idle && !visionIdle) interactedRef.current = true;
     const displayText = text || (imageToSend ? "📷 [ส่งรูปภาพ]" : "");
-    const nextMessages = (idle || visionIdle) ? messagesRef.current : [...messagesRef.current, { from: "me" as const, text: displayText }];
+    const nextMessages = (idle || visionIdle) ? messagesRef.current : [...messagesRef.current.filter((item) => item.text !== GREETING_PENDING), { from: "me" as const, text: displayText }];
     if (!idle && !visionIdle) {
       setMessages(nextMessages);
       setMessage("");
@@ -595,7 +675,7 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
         signal: abortAfter(CHAT_TIMEOUT_MS),
         body: JSON.stringify({
           mode: visionIdle ? "vision_idle" : idle ? "idle" : "chat",
-          messages: nextMessages.map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
+          messages: nextMessages.filter((item) => item.text !== GREETING_PENDING).map((item) => ({ role: item.from === "me" ? "user" : "assistant", content: item.text })),
           image: imageToSend ?? undefined,
           character: selectedModel,
           customInstructions,
@@ -1038,17 +1118,36 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
     setEditingMemoryId(null);
   }
 
-  return <main className={`companion-shell ${desktopMode ? "desktop-pet-shell" : ""}`}>
-    {desktopMode && <div className="desktop-pet-chrome" aria-label="Desktop pet window controls">
-      <div className="desktop-drag-region"><span>Vivian</span></div>
-      <div className="desktop-window-actions">
-        <button type="button" onClick={() => (window as Window & { vivianDesktop?: { minimize?: () => void } }).vivianDesktop?.minimize?.()} aria-label="ย่อหน้าต่าง" title="Minimize">−</button>
-        <button type="button" onClick={() => (window as Window & { vivianDesktop?: { close?: () => void } }).vivianDesktop?.close?.()} aria-label="ปิด Desktop Pet" title="Close">×</button>
-      </div>
-    </div>}
+  function startNewConversation(): void {
+    greetingGenerationRef.current += 1;
+    greetingRequestRef.current?.abort();
+    greetingTextRef.current = null;
+    greetingSpokenRef.current = false;
+    if (messagesRef.current.some((item) => item.from === "me")) {
+      try { window.localStorage.setItem(DESKTOP_RECENT_SESSION_KEY, JSON.stringify(messagesRef.current.slice(-12))); } catch { /* Local history is optional. */ }
+    }
+    setMessages([{ from: "vivian", text: GREETING_PENDING }]);
+    setChatOpen(false);
+    setDesktopComposerOpen(false);
+    setGreetingTrigger((value) => value + 1);
+  }
+
+  return <main className={`companion-shell ${desktopMode ? "desktop-pet-shell" : ""} ${desktopComposerOpen ? "desktop-composer-open" : ""}`}>
     <section className={`companion-stage ${MODEL_CONFIG[selectedModel].background} ${desktopMode ? "desktop-pet-stage" : ""} ${!sending && !recording ? "is-idle" : ""}`} aria-label="Vivian companion">
       <div className="scene-background" style={{ backgroundImage: `url("${BACKGROUNDS[backgroundMode]}")` }} aria-hidden="true" />
       <canvas className="live2d-canvas" ref={canvasRef} />
+      {desktopMode && <div className="desktop-pet-interaction" tabIndex={0} aria-label="Vivian Desktop Pet กด Tab เพื่อเปิดเมนู">
+        <div className="desktop-pet-drag-handle" title="ลากเพื่อย้าย Vivian" />
+        <nav className="desktop-pet-menu" aria-label="เมนู Desktop Pet">
+          <button type="button" onClick={() => setDesktopComposerOpen((open) => !open)} aria-label={desktopComposerOpen ? "ปิดช่องแชต" : "เปิดช่องแชต"} title="แชต"><Icon name="message" size={19}/></button>
+          <button type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "ปิดไมค์" : "เปิดไมค์"} title={recording ? "ปิดไมค์" : "เปิดไมค์"}><Icon name={recording ? "mic" : "micOff"} size={19}/></button>
+          <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิดตั้งค่าและความทรงจำ" title="ตั้งค่า"><Icon name="config" size={19}/></button>
+          <button type="button" onClick={() => setLanguageOpen(true)} aria-label="เลือกภาษา" title="ภาษา"><Icon name="language" size={19}/></button>
+          <span className="desktop-pet-menu-divider" aria-hidden="true" />
+          <button type="button" onClick={() => (window as Window & { vivianDesktop?: { minimize?: () => void } }).vivianDesktop?.minimize?.()} aria-label="ย่อหน้าต่าง" title="ย่อ">−</button>
+          <button type="button" onClick={() => (window as Window & { vivianDesktop?: { close?: () => void } }).vivianDesktop?.close?.()} aria-label="ปิด Desktop Pet" title="ปิด">×</button>
+        </nav>
+      </div>}
       <header className="companion-brand"><span className="brand-mark" aria-hidden="true"/><span>Vivian</span></header>
       <div className="camera-pip" style={{ display: cameraActive ? "flex" : "none" }} aria-label="Live Camera Vision">
         <div className="camera-pip-header">
@@ -1080,12 +1179,12 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
       {sttPreview && <div className="speech-preview"><small>You said</small>{sttPreview}</div>}
       <output className="vivian-speech" aria-live="polite">{sending ? "กำลังคิดอยู่ค่ะ..." : lastVivianMessage}</output>
       {errorNotice && <button className="error-notice" type="button" onClick={() => setErrorNotice(null)}>{errorNotice} ×</button>}
-      <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
+      {!desktopMode && <aside className={`side-tools ${toolsOpen ? "is-open" : ""}`} aria-label="เครื่องมือ Vivian">
         <button type="button" onClick={() => setMemoryOpen(true)} aria-label="เปิด Config" title="Config"><Icon name="config"/></button>
         <button type="button" className="language-lock" onClick={() => setLanguageOpen(true)} aria-label={`เลือกภาษา ${speechLanguage.toUpperCase()}`} title={`Language: ${speechLanguage.toUpperCase()}`}><Icon name="language"/><span>{speechLanguage === "global" ? "ALL" : speechLanguage === "ja" ? "JP" : speechLanguage === "ko" ? "KR" : speechLanguage === "zh" ? "CN" : speechLanguage.toUpperCase()}</span></button>
         <button type="button" onClick={() => setInfoOpen(true)} aria-label="ข้อมูลเวอร์ชัน" title="Info"><Icon name="info"/></button>
         <button className="tool-expand" type="button" onClick={() => setToolsOpen((current) => !current)} aria-label={toolsOpen ? "ซ่อนเครื่องมือ" : "แสดงเครื่องมือ"}><Icon name="chevron"/></button>
-      </aside>
+      </aside>}
       {attachedImage && (
         <div className="attachment-preview" aria-label="รูปภาพที่แนบ">
           <img src={attachedImage} alt="Attachment preview" />
@@ -1093,24 +1192,26 @@ export function CompanionApp({ desktopMode = false }: { desktopMode?: boolean } 
           <button type="button" onClick={() => setAttachedImage(null)} aria-label="ลบรูปภาพ">×</button>
         </div>
       )}
-      <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
+      <form className="companion-input" onSubmit={(event) => { event.preventDefault(); void sendMessage(); }} onKeyDown={(event) => { if (desktopMode && event.key === "Escape") setDesktopComposerOpen(false); }}>
+        {desktopMode && <button className="desktop-composer-close" type="button" onClick={() => setDesktopComposerOpen(false)} aria-label="ปิดช่องแชต"><Icon name="close" size={17}/></button>}
         <button className={`circle-control ${recording ? "is-recording" : "is-muted"}`} type="button" onClick={toggleRecording} aria-pressed={recording} aria-label={recording ? "Mute microphone" : "Microphone muted, click to unmute"}><Icon name={recording ? "mic" : "micOff"}/></button>
         <button className={`circle-control ${cameraActive ? "is-active is-camera-active" : ""}`} type="button" onClick={toggleCamera} aria-pressed={cameraActive} aria-label={cameraActive ? "ปิดกล้อง Live" : "เปิดกล้อง Live"}><Icon name="video"/></button>
         <button className={`circle-control ${attachedImage ? "is-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()} aria-label="แนบรูปภาพ"><Icon name="clip"/></button>
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} tabIndex={-1} />
-        <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : cameraActive ? "กล้อง Live กำลังทำงาน... พิมพ์คุยได้" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
+        <input ref={messageInputRef} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={recording ? "กำลังฟัง... กดไมค์เพื่อ Mute" : cameraActive ? "กล้อง Live กำลังทำงาน... พิมพ์คุยได้" : "Ask Vivian"} aria-label="ข้อความถึง Vivian" />
         <button className="send-text" type="submit" disabled={sending || (!message.trim() && !attachedImage)} aria-label="ส่งข้อความ"><Icon name="send" size={22}/></button>
         <button className="text-send" type="button" onClick={() => setChatOpen(true)}><Icon name="message" size={23}/><span>Chat</span></button>
       </form>
     </section>
     {chatOpen && <div className="chat-backdrop" role="presentation" onClick={() => setChatOpen(false)}>
       <section className="chat-sheet" role="dialog" aria-modal="true" aria-label="ประวัติแชตกับ Vivian" onClick={(event) => event.stopPropagation()}>
-        <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
+        <div className="chat-sheet-head"><div><small>VIVIAN CHAT</small><h1>ประวัติแชต</h1><p>บทสนทนาทั้งหมดของคุณกับ Vivian</p></div><div className="desktop-chat-actions">{desktopMode && <button type="button" onClick={startNewConversation}>คุยใหม่</button>}<button type="button" onClick={() => setChatOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div></div>
         <div className="chat-history">{[...historyMessages, ...messages].sort((a, b) => (b.timestamp ? Date.parse(b.timestamp) : 0) - (a.timestamp ? Date.parse(a.timestamp) : 0)).map((item, index) => <div className={`chat-message ${item.from}`} key={`${item.timestamp ?? "current"}-${item.from}-${index}`}><small>{item.from === "me" ? "คุณ" : "Vivian"}</small><time dateTime={item.timestamp}>{item.timestamp ? new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(item.timestamp)) : "ตอนนี้"}</time><p>{item.text}</p></div>)}</div>
       </section>
     </div>}
-    {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label="ความทรงจำของ Vivian">
-      <div className="memory-sheet-head"><div><small>VIVIAN MEMORY</small><h1>ความทรงจำ</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
+    {memoryOpen && <section className="memory-sheet" role="dialog" aria-modal="true" aria-label={desktopMode ? "ตั้งค่า Desktop Pet" : "ความทรงจำของ Vivian"}>
+      <div className="memory-sheet-head"><div><small>{desktopMode ? "VIVIAN DESKTOP" : "VIVIAN MEMORY"}</small><h1>{desktopMode ? "ตั้งค่า" : "ความทรงจำ"}</h1><p>สิ่งที่ Vivian ใช้จำเพื่อคุยกับคุณให้ต่อเนื่อง</p></div><button type="button" onClick={() => setMemoryOpen(false)} aria-label="ปิด"><Icon name="close"/></button></div>
+      {desktopMode && <DesktopApiKeySettings />}
       <div className="bond-panel" aria-label="ความสัมพันธ์กับ Vivian">
         <p><strong>Daily check-in</strong> ติดต่อกัน {streak} วัน</p>
         <p><strong>อารมณ์พื้นฐาน</strong>{moodLabel(companion.mood)}</p>

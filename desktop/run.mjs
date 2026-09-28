@@ -1,15 +1,20 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import process from "node:process";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { defaultUserDataPath, parseEnvFile } = require("./config.cjs");
 
 const root = resolve(import.meta.dirname, "..");
 const host = "127.0.0.1";
 const port = "3210";
 const nextBin = resolve(root, "node_modules", "next", "dist", "bin", "next");
+const userEnv = parseEnvFile(defaultUserDataPath());
 
 const next = spawn(process.execPath, [nextBin, "dev", "-H", host, "-p", port], {
   cwd: root,
-  env: { ...process.env, VIVIAN_DESKTOP_HOST: host, VIVIAN_DESKTOP_PORT: port },
+  env: { ...process.env, ...userEnv, VIVIAN_DESKTOP_HOST: host, VIVIAN_DESKTOP_PORT: port },
   stdio: "inherit",
 });
 
