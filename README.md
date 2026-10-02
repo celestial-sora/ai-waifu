@@ -300,3 +300,9 @@ public/
 supabase/
   migrations/           Database schema migrations
 ```
+
+### Licensed model assets
+
+The purchased Miss model is not distributed with this repository. Its model files, textures, expressions, physics, and configuration are excluded from version control. To run the avatar locally, supply your own licensed copy at `public/live2d/Miss/`, with `Miss.model3.json` at `public/live2d/Miss/Miss.model3.json`. Without those files, the avatar is unavailable; text chat remains usable.
+
+Do not commit model files or model archives. `.gitignore` does not restrict HTTP access: anything placed under `public/` is served publicly by Next.js. Do not include the purchased model in public deployments unless its license explicitly allows that distribution.

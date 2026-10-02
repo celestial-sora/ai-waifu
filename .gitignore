@@ -41,3 +41,9 @@ public/live2d/yuino-4096-backup/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Licensed Live2D model assets are local-only; retain the Cubism runtime.
+/public/live2d/*
+!/public/live2d/live2dcubismcore.min.js
+*.moc3
+*.cmo3
