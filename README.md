@@ -218,11 +218,11 @@ Sensitive one-off information and secrets are explicitly excluded from automatic
 
 ## Live2D
 
-Import your licensed Cubism model through **Character → Outfit → Import model ZIP** or **Choose folder**. Include the complete `.model3.json`, `.moc3`, textures, and any referenced expressions, motions, physics, pose, and sound files. ZIPs may include nested directories and multiple model manifests; use the Model / outfit selector to switch between them.
+Import your licensed Cubism model through **Character → Models → Import model ZIP** or **Choose folder**. Include the complete `.model3.json`, `.moc3`, textures, and any referenced expressions, motions, physics, pose, and sound files. ZIPs may include nested directories and multiple model manifests; use the Model / outfit selector to switch between them.
 
 Models are stored in IndexedDB on this browser and origin, restored on reload, and never sent to Vivian's server, Supabase, GitHub, or other users. Clearing site data removes them; another browser/device/domain needs a separate import. The import limit is 512 MB uncompressed and 3,000 files. Only local file references are accepted, and missing referenced assets are reported before saving.
 
-Expression buttons come from `FileReferences.Expressions`; Pose lists every entry in `FileReferences.Motions` by group and plays it on demand. The importer also discovers nearby `.exp3.json` and `.motion3.json` files when artists omit them from the manifest, preserving declared names/groups and excluding nested model folders. Undeclared motions use their folder group, `Idle`, or `Imported`. A `.pose3.json` controls part visibility and does not define selectable animations. Common emotion names can also be matched to Vivian's mood; opaque expression names remain selectable manually. Outfit uses a supplied preview/thumbnail/icon/portrait/cover image when present (excluding texture atlases), otherwise captures the rendered model. Remove a package from Outfit to delete all its saved models from this browser.
+Expression buttons come from `FileReferences.Expressions`; Pose lists every entry in `FileReferences.Motions` by group and plays it on demand. The importer also discovers nearby `.exp3.json` and `.motion3.json` files when artists omit them from the manifest, preserving declared names/groups and excluding nested model folders. Undeclared motions use their folder group, `Idle`, or `Imported`. A `.pose3.json` controls part visibility and does not define selectable animations. Recognizable pose expressions (for example sitting or holding a bouquet) also appear in Pose, while remaining available in Expression. Common emotion names can also be matched to Vivian's mood; opaque expression names remain selectable manually. Models uses a supplied preview/thumbnail/icon/portrait/cover image when present (excluding texture atlases), otherwise captures the rendered model. Remove a package from Models to delete all its saved models from this browser.
 
 Runtime:
 
@@ -233,6 +233,8 @@ Runtime:
 The model includes multiple expressions and reacts to companion state / responses. Audio amplitude is mapped to mouth movement for lip sync.
 
 The renderer includes mobile-specific resolution and performance handling, especially for iPhone/iPad Safari.
+
+Models → Texture quality defaults to Auto. PNG atlas dimensions are inspected before decoding; GPU texture limits and an RGBA atlas budget (512 MiB desktop, 128 MiB mobile) determine the render size. Large textures are resized sequentially into temporary browser-only copies, with mipmaps disabled. Two 16,384px square atlases render at 8,192px on a compatible desktop or 4,096px under the mobile budget. Original textures remain unchanged in IndexedDB. Original quality bypasses the budget but rejects textures exceeding the device GPU limit; it can require substantially more memory. Render dimensions are shown when Auto adapts a model.
 
 ## Tech stack
 
@@ -329,13 +331,13 @@ supabase/
 
 ### Licensed model assets
 
-The purchased Miss model is not distributed with this repository. Its model files, textures, expressions, physics, and configuration are excluded from version control. Import your own licensed copy through Character → Outfit; the avatar stays in private browser storage. Without an imported model, text chat remains usable.
+The purchased Miss model is not distributed with this repository. Its model files, textures, expressions, physics, and configuration are excluded from version control. Import your own licensed copy through Character → Models; the avatar stays in private browser storage. Without an imported model, text chat remains usable.
 
 Do not commit model files or model archives. `.gitignore` does not restrict HTTP access: anything placed under `public/` is served publicly by Next.js. Do not include the purchased model in public deployments unless its license explicitly allows that distribution.
 
 ### After the Live2D history cleanup
 
-All character model assets, including historical models, have been removed from Git history. The Cubism Core runtime remains tracked. A fresh clone can run text chat; import your own licensed model through Character → Outfit to enable the avatar. Model assets must remain untracked and must not be redistributed.
+All character model assets, including historical models, have been removed from Git history. The Cubism Core runtime remains tracked. A fresh clone can run text chat; import your own licensed model through Character → Models to enable the avatar. Model assets must remain untracked and must not be redistributed.
 
 For an existing clone, copy your licensed `public/live2d/` model folders to a private directory outside the repository before changing Git history. Save any uncommitted source changes separately. Clone the cleaned repository into a new directory, install dependencies, then copy your licensed models back into its ignored `public/live2d/` directory. Keep the tracked Cubism Core runtime from the fresh clone. Confirm `git status --short` does not list model assets before committing.
 

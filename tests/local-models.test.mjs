@@ -74,3 +74,12 @@ test('artist packages with undeclared expressions/motions are discovered without
   assert.match(resources.resolve(resources.manifest.FileReferences.Expressions[0].File), /^blob:/);
   resources.dispose();
 });
+
+test('pose expressions remain available in Expression and also appear in Pose', async () => {
+  const files = assets(); const json = manifest();
+  json.FileReferences.Expressions = [{Name:'坐姿',File:'expressions/happy.exp3.json'},{Name:'Happy',File:'expressions/เศร้า #.exp3.json'}];
+  files[0] = asset('pack/avatar.model3.json',JSON.stringify(json));
+  const pack = await inspectPackage(files);
+  assert.deepEqual(pack.models[0].poses,['坐姿']);
+  assert.deepEqual(pack.models[0].expressions,['坐姿','Happy']);
+});

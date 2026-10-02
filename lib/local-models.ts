@@ -1,4 +1,5 @@
 /** Private browser-only Cubism packages. No model file is uploaded to a server. */
+import type { TextureBudget, TexturePlan } from "./model-textures";
 export interface ModelAsset { path: string; blob: Blob }
 export interface ModelMotion { group: string; index: number; name: string }
 export interface LocalModel {
@@ -6,6 +7,7 @@ export interface LocalModel {
   name: string;
   manifestPath: string;
   expressions: string[];
+  poses: string[];
   motions: ModelMotion[];
   previewPath?: string;
 }
@@ -73,7 +75,7 @@ export function discoverManifest(assets: ModelAsset[], manifestPath: string, val
     if (!/\.motion3\.json$/i.test(asset.path) || motionPaths.has(asset.path)) continue;
     const file = asset.path.slice(directory.length);
     const parent = file.split("/").at(-2);
-    const group = parent && !/^(?:motions?|animations?)$/i.test(parent) ? parent : /idle/i.test(fileLabel(file)) ? "Idle" : "Imported";
+    const group = parent && !/^(?:motions?|animations?)$/i.test(parent) ? parent : /(?:idle|待机|待機|アイドル)/i.test(fileLabel(file)) ? "Idle" : "Imported";
     motions[group] = [...(motions[group] ?? []), { File: file }];
   }
   if (Object.keys(motions).length) refs.Motions = motions;
@@ -115,6 +117,7 @@ export async function inspectPackage(assets: ModelAsset[], id = crypto.randomUUI
     models.push({
       id: `${id}:${asset.path}`, name: fileLabel(asset.path), manifestPath: asset.path,
       expressions: (manifest.FileReferences.Expressions ?? []).map((item) => item.Name),
+      poses: (manifest.FileReferences.Expressions ?? []).map((item) => item.Name).filter((name) => /(?:pose|sitting|standing|kneel|坐姿|站姿|姿势|提裙|捧花|ポーズ|座り|ท่านั่ง|ท่ายืน)/i.test(name)),
       motions: Object.entries(manifest.FileReferences.Motions ?? {}).flatMap(([group, items]) => items.map((item, index) => ({ group, index, name: fileLabel(item.File) || `${group} ${index + 1}` }))),
       previewPath: preview && (score(preview.path) > 0 || candidates.length === 1) ? preview.path : undefined,
     });
@@ -155,10 +158,32 @@ export async function importModelFiles(files: File[]): Promise<ModelPackage> {
   return inspectPackage(assets);
 }
 
-export async function createModelResources(pack: ModelPackage, model: LocalModel) {
+export async function createModelResources(pack: ModelPackage, model: LocalModel, budget?: TextureBudget) {
   const asset = pack.assets.find((item) => item.path === model.manifestPath);
   if (!asset) throw new Error("Model manifest is missing.");
   const manifest = discoverManifest(pack.assets, model.manifestPath, JSON.parse(await asset.blob.text()));
+  const renderCopies = new Map<string, Blob>();
+  let texturePlan: TexturePlan[] = [];
+  if (budget) {
+    const { readTextureSize, planTextures, resizeTexture } = await import("./model-textures");
+    const textures = manifest.FileReferences.Textures.map((ref) => {
+      const path = resolveAsset(model.manifestPath, ref);
+      const file = pack.assets.find((item) => item.path === path);
+      if (!file) throw new Error(`Missing texture: ${path}`);
+      return file;
+    });
+    const sizes = [];
+    for (const texture of textures) { budget.signal?.throwIfAborted(); sizes.push(await readTextureSize(texture.blob)); }
+    texturePlan = planTextures(sizes, budget);
+    for (let index = 0; index < textures.length; index++) {
+      budget.signal?.throwIfAborted();
+      const plan = texturePlan[index];
+      if (plan.source.width !== plan.render.width || plan.source.height !== plan.render.height) {
+        renderCopies.set(textures[index].path, await resizeTexture(textures[index].blob, plan.render, budget.signal));
+      }
+    }
+    budget.signal?.throwIfAborted();
+  }
   const urls = new Map<string, string>();
   let disposed = false;
   const resolve = (reference: string): string => {
@@ -167,12 +192,13 @@ export async function createModelResources(pack: ModelPackage, model: LocalModel
     if (!urls.has(path)) {
       const file = pack.assets.find((item) => item.path === path);
       if (!file) throw new Error(`Missing asset: ${path}`);
-      urls.set(path, URL.createObjectURL(new Blob([file.blob], { type: mime(path) })));
+      const renderCopy = renderCopies.get(path);
+      urls.set(path, URL.createObjectURL(new Blob([renderCopy ?? file.blob], { type: renderCopy?.type ?? mime(path) })));
     }
     return urls.get(path)!;
   };
-  return { manifest: { ...manifest, url: model.manifestPath }, resolve,
-    dispose: () => { disposed = true; for (const url of urls.values()) URL.revokeObjectURL(url); urls.clear(); } };
+  return { manifest: { ...manifest, url: model.manifestPath }, resolve, texturePlan,
+    dispose: () => { disposed = true; for (const url of urls.values()) URL.revokeObjectURL(url); urls.clear(); renderCopies.clear(); } };
 }
 
 async function storage<T>(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {

@@ -351,9 +351,10 @@ This section is the current source of truth for continuing work. Read it before 
 
 ### Live2D facts that must not be changed casually
 
-- Purchased model assets remain excluded from Git and deployments. Character → Outfit imports licensed ZIPs/folders into private browser IndexedDB via `lib/local-models.ts`; models never upload to a server.
+- Purchased model assets remain excluded from Git and deployments. Character → Models imports licensed ZIPs/folders into private browser IndexedDB via `lib/local-models.ts`; models never upload to a server.
 - `app/companion.tsx` reads imported manifests and discovers undeclared `.exp3.json`/`.motion3.json` files for expressions and motion groups, resolves every runtime file to a revocable local Blob URL, and supports multiple manifests/outfits per package. No bundled model is required for text chat.
 - Preview images use supplied preview/icon/thumbnail files, excluding texture atlases; models without one get a renderer snapshot. All model URLs are released on switching/unmount.
+- `lib/model-textures.ts` plans atlas sizes against GPU limits and a 512 MiB desktop / 128 MiB mobile RGBA budget. Auto resizes only temporary render copies, one atlas at a time; originals stay unchanged. Original quality must still respect GPU texture limits. Recognizable pose expressions also appear in Pose.
 - Runtime import remains `pixi-live2d-display/cubism4` with PixiJS 6. Cubism Core must load before the model runtime.
 - Backend character identity remains `Miss`; browser avatar choice does not change cloud memory identity.
 - Test model package validation, private file resolution, and storage with `npm run test:models`. Keep neutral resets and text-chat degradation when avatar loading fails.

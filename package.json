@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test:auth": "node --experimental-strip-types --test tests/auth-policy.test.mjs",
     "test:auth:integration": "node --test tests/auth.integration.test.mjs",
-    "test:models": "node --experimental-strip-types --test tests/local-models.test.mjs"
+    "test:models": "node --experimental-strip-types --test tests/local-models.test.mjs tests/model-textures.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

@@ -148,6 +148,8 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   const [modelStatus, setModelStatus] = useState<"empty" | "loading" | "ready" | "error">("empty");
   const [modelNotice, setModelNotice] = useState<string | null>(null);
   const [modelPreview, setModelPreview] = useState<string | null>(null);
+  const [textureQuality, setTextureQuality] = useState<"auto" | "original">("auto");
+  const [textureSummary, setTextureSummary] = useState<string | null>(null);
   const [activeExpression, setActiveExpression] = useState<string | null>(null);
   const [activeMotion, setActiveMotion] = useState<string | null>(null);
   const modelZipRef = useRef<HTMLInputElement>(null);
@@ -490,6 +492,8 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     setActiveMotion(null);
     if (!activeModel || !activePackage) { setModelStatus("empty"); return; }
     setModelStatus("loading");
+    setTextureSummary(null);
+    const textureAbort = new AbortController();
     let releaseResources: (() => void) | undefined;
     let app: any;
     let resizeModel = () => {};
@@ -530,7 +534,15 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
           previousModel.destroy({ children: true, texture: true, baseTexture: true });
           modelRef.current = null;
         }
-        const resources = await createModelResources(activePackage, activeModel);
+        const maxTextureSize = app.renderer.gl.getParameter(app.renderer.gl.MAX_TEXTURE_SIZE) as number;
+        canvasRef.current.dataset.gpuTextureLimit = String(maxTextureSize);
+        const mobileDevice = isAppleMobile || /Android|Mobile/i.test(navigator.userAgent);
+        const resources = await createModelResources(activePackage, activeModel, {
+          maxDimension: maxTextureSize,
+          budgetBytes: (mobileDevice ? 128 : 512) * 1024 * 1024,
+          original: textureQuality === "original",
+          signal: textureAbort.signal,
+        });
         releaseResources = resources.dispose;
         if (disposed) { resources.dispose(); return; }
         const settings = new Cubism4ModelSettings(resources.manifest);
@@ -541,7 +553,13 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
           resources.dispose();
           return;
         }
+        for (const texture of model.textures) texture.baseTexture.mipmap = PIXI.MIPMAP_MODES.OFF;
         modelRef.current = model;
+        if (resources.texturePlan.some((plan) => plan.source.width !== plan.render.width || plan.source.height !== plan.render.height)) {
+          const source = Math.max(...resources.texturePlan.flatMap((plan) => [plan.source.width, plan.source.height]));
+          const render = Math.max(...resources.texturePlan.flatMap((plan) => [plan.render.width, plan.render.height]));
+          setTextureSummary(`${render.toLocaleString()}px rendering · ${source.toLocaleString()}px original`);
+        }
         setModelStatus("ready");
         const bounds = model.getLocalBounds();
         resizeModel = () => {
@@ -597,16 +615,17 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
         window.addEventListener("orientationchange", handleOrientationChange);
         window.visualViewport?.addEventListener("resize", queueResize);
       } catch (error) {
-        console.error("Live2D failed to load", error);
         if (!disposed) {
+          console.error("Live2D failed to load", error);
           setModelStatus("error");
-          setModelNotice("Could not render this model. Check that it is compatible with Cubism 4 and includes all assets.");
+          setModelNotice(error instanceof Error ? error.message : "Could not render this model. Check that it is compatible with Cubism 4 and includes all assets.");
         }
         releaseResources?.();
       }
     })();
     return () => {
       disposed = true;
+      textureAbort.abort();
       modelLoadIdRef.current += 1;
       if (resizeFrame) cancelAnimationFrame(resizeFrame);
       if (resizeTimeout) window.clearTimeout(resizeTimeout);
@@ -621,7 +640,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       modelRef.current = null;
       releaseResources?.();
     };
-  }, [preferencesReady, modelsReady, activeModel, activePackage]);
+  }, [preferencesReady, modelsReady, activeModel, activePackage, textureQuality]);
 
   useEffect(() => () => {
     pixiAppRef.current?.destroy(true, { children: true });
@@ -1490,14 +1509,16 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
               <div className="memory-list">{memories.length ? memories.map((memory) => <article key={memory.id}><Icon name="memory" size={18}/>{editingMemoryId === memory.id ? <div className="memory-edit"><textarea value={memoryDraft} maxLength={500} onChange={(event) => setMemoryDraft(event.target.value)}/><div><button type="button" onClick={() => void saveMemory(memory)}>Save</button><button type="button" onClick={() => setEditingMemoryId(null)}>Cancel</button></div></div> : <><p><strong>{memory.category}</strong>{memory.memory}</p><button type="button" className="memory-edit-button" onClick={() => { setEditingMemoryId(memory.id); setMemoryDraft(memory.memory); }}>Edit</button></>}</article>) : <p className="floating-empty">Vivian will remember the important things you share.</p>}</div>
             </>}
             {panel === "character" && <>
-              <div className="floating-tabs">{(["outfit", "expression", "pose"] as const).map((tab) => <button key={tab} type="button" className={characterTab === tab ? "is-selected" : ""} onClick={() => setCharacterTab(tab)}>{tab}</button>)}</div>
+              <div className="floating-tabs">{(["outfit", "expression", "pose"] as const).map((tab) => <button key={tab} type="button" className={characterTab === tab ? "is-selected" : ""} onClick={() => setCharacterTab(tab)}>{tab === "outfit" ? "Models" : tab}</button>)}</div>
               {characterTab === "outfit" && <>
                 <div className="character-preview">
                   {modelPreview ? <img className="model-preview-image" src={modelPreview} alt={`${activeModel?.name ?? "Model"} preview`} /> : <span className="character-preview-mark">V</span>}
                   <strong>{activeModel?.name ?? "Your character awaits"}</strong>
                   <small>{modelStatus === "loading" ? "Loading model…" : modelStatus === "ready" ? `${activeModel?.expressions.length ?? 0} expressions · ${activeModel?.motions.length ?? 0} motions` : "Import your Live2D model"}</small>
                 </div>
-                {modelPackages.length > 0 && <label className="model-select-label">Model / outfit<select value={activeModelId ?? ""} disabled={modelImporting} onChange={(event) => { setModelNotice(null); setActiveModelId(event.target.value); }}>{modelPackages.flatMap((pack) => pack.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>))}</select></label>}
+                {modelPackages.length > 0 && <label className="model-select-label">Model<select value={activeModelId ?? ""} disabled={modelImporting} onChange={(event) => { setModelNotice(null); setActiveModelId(event.target.value); }}>{modelPackages.flatMap((pack) => pack.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>))}</select></label>}
+                {activeModel && <label className="model-select-label">Texture quality<select value={textureQuality} onChange={(event) => { setModelNotice(null); setTextureQuality(event.target.value as "auto" | "original"); }}><option value="auto">Auto · fit this device</option><option value="original">Original textures</option></select></label>}
+                {textureSummary && <p className="floating-note">{textureSummary}. Original files stay unchanged.</p>}
                 <div className="model-import-actions">
                   <button className="floating-option model-import-primary" type="button" disabled={modelImporting || !modelsReady} onClick={() => modelZipRef.current?.click()}><Icon name="plus" size={16} />{modelImporting ? "Importing…" : "Import model ZIP"}</button>
                   <button className="floating-option" type="button" disabled={modelImporting || !modelsReady} onClick={() => modelFolderRef.current?.click()}>Choose folder</button>
@@ -1510,12 +1531,13 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
               {characterTab === "expression" && <>
                 <button type="button" className="floating-option" disabled={modelStatus !== "ready"} onClick={() => { void selectExpression(null); }}>Reset expression</button>
                 <div className="expression-grid">{activeModel?.expressions.map((expression, index) => <button type="button" key={`${expression}:${index}`} disabled={modelStatus !== "ready"} aria-pressed={activeExpression === expression} onClick={() => { void selectExpression(expression); }}>{expression.trim()}</button>)}</div>
-                {!activeModel?.expressions.length && <p className="floating-note">{activeModel ? "This model does not include expressions." : "Import a model in Outfit to discover its expressions."}</p>}
+                {!activeModel?.expressions.length && <p className="floating-note">{activeModel ? "This model does not include expressions." : "Import a model in Models to discover its expressions."}</p>}
               </>}
               {characterTab === "pose" && <>
-                <button type="button" className="floating-option" disabled={modelStatus !== "ready"} onClick={() => { void selectMotion(null); }}>Reset to idle pose</button>
+                <button type="button" className="floating-option" disabled={modelStatus !== "ready"} onClick={() => { resetReaction(); void selectMotion(null); }}>Reset to idle pose</button>
+                {!!activeModel?.poses?.length && <><p className="floating-note">Poses</p><div className="expression-grid">{activeModel.poses.map((pose) => <button type="button" key={pose} disabled={modelStatus !== "ready"} aria-pressed={activeExpression === pose} onClick={() => { void selectExpression(pose); }}>{pose}</button>)}</div></>}
                 {[...new Set(activeModel?.motions.map((motion) => motion.group) ?? [])].map((group) => <div className="model-motion-group" key={group}><p className="floating-note">{group || "Default"}</p><div className="expression-grid">{activeModel?.motions.filter((motion) => motion.group === group).map((motion) => <button type="button" key={motion.index} disabled={modelStatus !== "ready"} aria-pressed={activeMotion === `${group}:${motion.index}`} onClick={() => { void selectMotion(motion); }}>{motion.name}</button>)}</div></div>)}
-                {!activeModel?.motions.length && <p className="floating-note">{activeModel ? "This model does not include playable motions." : "Import a model in Outfit to discover its motions."}</p>}
+                {!activeModel?.motions.length && !activeModel?.poses?.length && <p className="floating-note">{activeModel ? "This model does not include playable motions." : "Import a model in Models to discover its motions."}</p>}
               </>}
               {modelNotice && <p className="model-notice" role="alert">{modelNotice}</p>}
             </>}
