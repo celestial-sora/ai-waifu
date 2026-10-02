@@ -10,7 +10,7 @@ export interface SpeechStyle {
 // Remove only recognizable stage directions; spoken explanations in
 // parentheses (including technical terms and numbers) must survive.
 const stageDirection = /^[\s]*(?:หลบตา|เม้มปาก|กลบยิ้ม|ยิ้ม|หัวเราะ|หน้าแดง|เขิน|ทำหน้า|หันหน้า|กอดอก|ถอนหายใจ|ขยับ|พยักหน้า|ส่ายหน้า|looks? away|blush(?:es|ing)?|smiles?|sighs?|chuckles?|laughs?|pouts?)/iu;
-const stammer = /(?:^|\s)([\p{L}]{1,4})\s*[-–—…]\s*\1\s*[-–—…]/iu;
+const stammer = /(?:^|\s)([\p{L}]{1,4})\s*[-‐‑‒–—…]\s*\1\s*[-‐‑‒–—…]/iu;
 
 export function speechText(value: string): string {
   return value.split(/\n\s*(?:แหล่งข้อมูล|sources)\s*:/i)[0]
@@ -20,8 +20,8 @@ export function speechText(value: string): string {
     .replace(/[*_`~〜～]/g, "")
     // Romaji "B- B- Baka" means interrupted "ba" sounds, not the letter B.
     // Preserve the number of attempts rather than collapsing repeated words.
-    .replace(/\b((?:b\s*-\s*)+)baka\b/giu, (match: string, attempts: string) => {
-      const count = attempts.match(/-/g)?.length ?? 1;
+    .replace(/\b((?:b\s*[-‐‑‒–—]\s*)+)baka\b/giu, (match: string, attempts: string) => {
+      const count = attempts.match(/[-‐‑‒–—]/g)?.length ?? 1;
       return `${"Ba… ".repeat(count)}${match.match(/baka$/i)?.[0] ?? "Baka"}`;
     })
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")

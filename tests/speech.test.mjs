@@ -24,6 +24,8 @@ test("romaji stammers keep every attempted syllable without spelling the letter 
   assert.equal(speechStyle("เล่ามาสิ").repetitionPenalty, 1.2);
   assert.match(fishSpeechText(text, speechStyle(text), "s2.1-pro-free", "th"), /standard Central Thai accent/);
   assert.equal(speechText("B-B-Baka"), "Ba… Ba… Baka");
+  assert.equal(speechText("B‑ B‑ Baka"), "Ba… Ba… Baka");
+  assert.equal(speechText("B– B– Baka"), "Ba… Ba… Baka");
   assert.equal(speechText("B- Baka"), "Ba… Baka");
   assert.equal(speechText("N- N- No!"), "N- N- No!");
   assert.match(speechStyle("N- N- No!").cue, /stammering naturally/);

@@ -115,3 +115,10 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Local checks passed: speech tests, TypeScript, focused ESLint, diff whitespace, and production build. Live synthesis was unavailable because local Fish credentials were missing; no real audio was generated or pronunciation verified locally.
 - Prior personality commit `0cfc181` was automatically deployed by GitHub to production as `dpl_CWFSwUM6eZ1B5QhCwyAVGnhJPMaK` (READY). Current configured alias is `https://vivianlabs.vercel.app`, verified HTTP 200 at `/login`; old `vivian-chan.vercel.app` returned 404.
 - Push this TTS change to main and verify the automatic deployment. No explicit CLI deployment requested. Preserve unrelated `supabase/.temp/`.
+
+### Live Chrome follow-up
+
+- User requested opening Chrome. Reused the existing Vivian tab on `vivianlabs-celestial-sora1.vercel.app`, reloaded to the current deployment, and submitted a short stammered speech test through the normal chat UI.
+- Verified production deployment `dpl_2CiZx87jLFNRcXyEELYSBaFnjtJw` READY for commit `07e2cd9`; aliases include `vivianlabs.vercel.app`. Live chat and TTS both returned 200. Fish generated 406,882 bytes in 9,569 ms, language `th`, delivery `flustered`. Voice was already On at 0.98× and TH.
+- Live response exposed Unicode nonbreaking hyphens (`B‑ B‑ Baka`) and an inaccurate claim that Vivian could not speak. Extended stammer normalization to Unicode hyphens/dashes and added chat guidance to return requested spoken words directly while not claiming playback succeeded.
+- Existing tab had no privately imported avatar and logged a missing model; do not bundle licensed assets to address that. Audio generation success does not by itself verify perceived accent or playback quality.
