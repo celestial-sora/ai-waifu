@@ -307,3 +307,11 @@ supabase/
 The purchased Miss model is not distributed with this repository. Its model files, textures, expressions, physics, and configuration are excluded from version control. To run the avatar locally, supply your own licensed copy at `public/live2d/Miss/`, with `Miss.model3.json` at `public/live2d/Miss/Miss.model3.json`. Without those files, the avatar is unavailable; text chat remains usable.
 
 Do not commit model files or model archives. `.gitignore` does not restrict HTTP access: anything placed under `public/` is served publicly by Next.js. Do not include the purchased model in public deployments unless its license explicitly allows that distribution.
+
+### After the Live2D history cleanup
+
+All character model assets, including historical models, have been removed from Git history. The Cubism Core runtime remains tracked. A fresh clone can run text chat; the avatar requires your own licensed model files at the paths configured in `lib/models.ts`. Model assets must remain untracked and must not be redistributed.
+
+For an existing clone, copy your licensed `public/live2d/` model folders to a private directory outside the repository before changing Git history. Save any uncommitted source changes separately. Clone the cleaned repository into a new directory, install dependencies, then copy your licensed models back into its ignored `public/live2d/` directory. Keep the tracked Cubism Core runtime from the fresh clone. Confirm `git status --short` does not list model assets before committing.
+
+Do not merge or push old branches/tags into the cleaned repository: that restores the removed history. Reapply source changes as patches, excluding model assets. Retire the old clone after preserving your source changes and licensed files. Rewriting this repository cannot erase copies previously downloaded by other people.
