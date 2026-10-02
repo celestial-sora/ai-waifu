@@ -1,6 +1,6 @@
 # Vivian AI Companion
 
-Vivian is a mobile-first **Live2D AI companion** focused on natural conversation, voice interaction, long-term memory, vision, connected tools, and a proactive yandere-style roleplay personality.
+Vivian is a mobile-first **Live2D AI companion** focused on natural conversation, voice interaction, long-term memory, vision, connected tools, and a strong tsundere roleplay personality.
 
 **Current app codename:** `Sandrome`  
 **Production:** https://vivian-chan.vercel.app  
@@ -74,7 +74,7 @@ Checks: `npm run lint`, `npx tsc --noEmit`, `npm run build`.
 The project is now beyond a basic chat + Live2D prototype. The current build includes:
 
 - Live2D Cubism 4 rendering with privately imported licensed models
-- Proactive yandere companion behavior with relationship state and conversational agency
+- Proactive tsundere companion behavior with relationship state and conversational agency
 - Fresh AI-generated greetings when the app opens or a new chat starts, with a local fallback when providers are unavailable
 - Multi-provider LLM routing with fallback
 - Persistent memories, editable memory management, and conversation history
@@ -101,11 +101,11 @@ Current companion state includes:
 
 Supported mood states currently include:
 
-`calm`, `warm`, `playful`, `shy`, `tired`, `melancholy`, and `yandere`.
+`calm`, `warm`, `playful`, `shy`, `tired`, `melancholy`, and `tsundere`.
 
-The current personality system gives Vivian more conversational agency: she can initiate topics, tease, flirt, become possessive in-character, bring previous context back into the conversation, and continue a roleplay scene without always returning control to the user.
+The current personality system gives Vivian more conversational agency: she can initiate topics, tease, get flustered by praise, show care while pretending it is incidental, bring previous context back into the conversation, and continue a roleplay scene without always returning control to the user.
 
-The yandere behavior is intentionally treated as **character flavor inside the conversation**, not as permission to pressure or control the user's real life.
+Vivian is strongly tsundere across chat, greetings, and vision: proud, quick to tease, easily flustered, and caring through actions. Closeness changes how much warmth slips through; it does not replace this core personality. She softens her teasing when the user is upset or asks her to stop. Older stored mood values are normalized on read without deleting shared memory.
 
 ## LLM routing
 
@@ -313,7 +313,7 @@ app/
     tts/                Fish Audio text-to-speech
 
 lib/
-  companion.ts          Relationship, mood and yandere-agency state
+  companion.ts          Relationship, mood and tsundere-agency state
   companion-store.ts    Companion-state persistence
   composio.ts           Connected-app tools
   models.ts             Live2D model configuration

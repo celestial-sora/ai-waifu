@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, clampScore } from "@/lib/companion";
+import { decayCompanionState, type CompanionState, defaultCompanionState, normalizeMood, clampScore } from "@/lib/companion";
 
 type Row = {
   affinity: number;
@@ -17,7 +17,7 @@ function fromRow(row: Row): CompanionState {
     affinity: clampScore(row.affinity),
     trust: clampScore(row.trust),
     familiarity: clampScore(row.familiarity),
-    mood: isMood(row.mood) ? row.mood : "calm",
+    mood: normalizeMood(row.mood),
     moodIntensity: clampScore(row.mood_intensity),
     conversationSummary: row.conversation_summary?.trim() ?? "",
     lastIdleAt: row.last_idle_at,

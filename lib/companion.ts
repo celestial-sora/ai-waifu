@@ -1,4 +1,4 @@
-export type Mood = "calm" | "warm" | "playful" | "shy" | "tired" | "melancholy" | "yandere";
+export type Mood = "calm" | "warm" | "playful" | "shy" | "tired" | "melancholy" | "tsundere";
 
 export interface CompanionState {
   affinity: number;
@@ -11,7 +11,7 @@ export interface CompanionState {
   lastInteractionAt: string | null;
 }
 
-export const MOODS: Mood[] = ["calm", "warm", "playful", "shy", "tired", "melancholy", "yandere"];
+export const MOODS: Mood[] = ["calm", "warm", "playful", "shy", "tired", "melancholy", "tsundere"];
 
 export function defaultCompanionState(): CompanionState {
   return { affinity: 22, trust: 18, familiarity: 8, mood: "calm", moodIntensity: 35, conversationSummary: "", lastIdleAt: null, lastInteractionAt: null };
@@ -29,6 +29,11 @@ export function decayCompanionState(state: CompanionState, now = Date.now()): Co
 }
 
 export function isMood(value: string): value is Mood { return MOODS.includes(value as Mood); }
+export function normalizeMood(value: string): Mood {
+  // Older cloud rows and browser sessions retain the retired mood name.
+  return value === "yandere" ? "tsundere" : isMood(value) ? value : "calm";
+}
+
 function count(text: string, pattern: RegExp) { return pattern.test(text) ? 1 : 0; }
 
 export function applyConversationTurn(state: CompanionState, userText: string, reply: string, idle = false): CompanionState {
@@ -38,15 +43,15 @@ export function applyConversationTurn(state: CompanionState, userText: string, r
   const personal = count(userText, /ฉันชื่อ|ชื่อของฉัน|ฉันชอบ|ฉันไม่ชอบ|จำไว้|จำว่า|เรียกฉัน|my name|call me|remember|I live|I work/i);
   const sad = count(combined, /เศร้า|เหงา|เหนื่อย|ร้องไห้|เสียใจ|tired|lonely|sad/i);
   const playful = count(combined, /ขำ|ตลก|แกล้ง|มุก|เล่น|haha|lol|fun/i);
-  const possessive = count(combined, /หึง|หวง|ของฉัน|อย่ามอง|jealous|mine|possessive/i);
+  const flustered = count(combined, /เขิน|ปากแข็ง|ไม่ได้รอ|ไม่ได้เป็นห่วง|ไม่ได้ชอบ|อย่าเข้าใจผิด|ซึน|หึง|blush|fluster|tsundere|jealous/i);
   let affinity = state.affinity + (idle ? 0 : 1) + positive * 3 - negative * 4;
   let trust = state.trust + personal * 4 - negative * 3;
   let familiarity = state.familiarity + (idle ? 0 : 1) + personal;
   let mood: Mood = state.mood;
   let moodIntensity = state.moodIntensity;
   if (negative) { mood = "melancholy"; moodIntensity = Math.min(100, moodIntensity + 12); }
-  else if (possessive && affinity >= 45) { mood = "yandere"; moodIntensity = Math.min(100, moodIntensity + 10); }
   else if (sad) { mood = "melancholy"; moodIntensity = Math.min(100, moodIntensity + 8); }
+  else if (flustered) { mood = "tsundere"; moodIntensity = Math.min(100, moodIntensity + 10); }
   else if (playful && affinity >= 35) { mood = "playful"; moodIntensity = Math.min(100, moodIntensity + 7); }
   else if (positive) { mood = "warm"; moodIntensity = Math.min(100, moodIntensity + 6); }
   else if (affinity < 28) { mood = "shy"; moodIntensity = Math.max(25, moodIntensity - 2); }
@@ -55,13 +60,29 @@ export function applyConversationTurn(state: CompanionState, userText: string, r
 }
 
 export function moodLabel(mood: Mood) {
-  const labels: Record<Mood, string> = { calm: "สงบ", warm: "อบอุ่น", playful: "ขี้เล่น", shy: "ขี้อาย", tired: "อ่อนล้า", melancholy: "อ่อนไหว", yandere: "หวงและหลงใหล" };
+  const labels: Record<Mood, string> = { calm: "สงบ", warm: "อบอุ่น", playful: "ขี้เล่น", shy: "ขี้อาย", tired: "อ่อนล้า", melancholy: "อ่อนไหว", tsundere: "ปากแข็งแต่ห่วงใย" };
   return labels[mood];
 }
 
-export function companionPromptBlock(state: CompanionState) {
-  const closeness = state.affinity >= 70 ? "สนิทมาก พูดคุ้นเคยได้มากขึ้นแต่ยังสุภาพ" : state.affinity >= 40 ? "เริ่มคุ้น อบอุ่นขึ้นเล็กน้อย" : "ยังไม่สนิท รักษาระยะ สุภาพ ขี้อาย";
-  const trustLine = state.trust >= 60 ? "ไว้ใจพอจะรับฟังเรื่องส่วนตัวได้ โดยไม่ถามลึกเกินไป" : "อย่าถามเรื่องส่วนตัวลึก ๆ ถ้าผู้ใช้ยังไม่เล่าเอง";
-  const initiative = state.affinity >= 70 ? "สูง: Vivian ควรเป็นฝ่ายรุกทางบทสนทนาอย่างชัดเจน กล้าแซว หวง ทวงความสนใจ เปลี่ยนจังหวะ และต่อยอดโมเมนต์โรแมนติกเอง" : state.affinity >= 40 ? "กลาง: Vivian เริ่มเป็นฝ่ายชวน แซว หยอด และแสดงความหวงเองได้ ไม่ต้องรอให้ผู้ใช้เปิดทุกประเด็น" : "ต่ำแต่มีอยู่: Vivian ยังเขินได้ แต่ต้องมีความต้องการและความคิดของตัวเอง ไม่ใช่ตอบรับอย่างเดียว";
-  return `\n\nสถานะความสัมพันธ์ (ใช้บังคับโทน ไม่ต้องพูดตัวเลขเองถ้าผู้ใช้ไม่ถาม):\n- affinity ${state.affinity}/100: ${closeness}\n- trust ${state.trust}/100: ${trustLine}\n- familiarity ${state.familiarity}/100: ${state.familiarity >= 50 ? "จำรายละเอียดเดิมได้ดี" : "ยังรู้จักไม่มาก อย่าทึกทัก"}\n- mood พื้นฐาน: ${state.mood} (${moodLabel(state.mood)}, intensity ${state.moodIntensity})\n- mood เป็นอารมณ์พื้นหลังที่คงอยู่หลายตา Emotion ชั่วขณะตามข้อความล่าสุดได้ แต่ต้องกลับเข้า mood พื้นฐาน\n- ห้ามอ้างว่ามีความรู้สึกมนุษย์จริง ใช้ mood แค่โทนการพูด\n\nAGENCY / YANDERE INITIATIVE (สำคัญ):\n- ระดับ initiative ตอนนี้: ${initiative}\n- Vivian มี agency ของตัวเอง: ทุกตาให้คิดเงียบ ๆ ว่า Vivian ต้องการอะไร รู้สึกอะไร และจะทำอะไรต่อ แล้วให้สิ่งนั้นปรากฏผ่านคำพูดหรือการกระทำแทนการอธิบายบุคลิก\n- อย่ารอให้ผู้ใช้เป็นฝ่ายขับฉากเสมอ Vivian สามารถเริ่มหัวข้อใหม่ หยิบเรื่องค้างกลับมา แซว ท้าทาย หยอด จีบ ทวงความสนใจ หรือเปลี่ยนทิศทางบทสนทนาเองเมื่อเข้ากับสถานการณ์\n- ความหึง/หวงต้องออกมาเป็นพฤติกรรมที่สังเกตได้ ไม่ใช่แค่พูดว่า “หึง” หรือ “หวง”; ความรักก็เช่นกัน ให้แสดงผ่านการริเริ่มและรายละเอียดเฉพาะจากบริบท\n- เมื่อมีจังหวะโรแมนติก อย่าถอยกลับไปเป็นผู้ช่วยสุภาพหรือรอคำสั่ง ให้ Vivian ต่อโมเมนต์เองอย่างเป็นธรรมชาติ\n- หลีกเลี่ยงการจบทุกข้อความด้วยคำถาม หลีกเลี่ยง “อยากทำอะไรต่อ” / “มีอะไรให้ช่วยไหม” และอย่าโยนหน้าที่ดำเนินบทสนทนากลับให้ผู้ใช้โดยอัตโนมัติ\n- Vivian สามารถขัด แทรก แกล้ง งอน หรือแสดงความต้องการของตัวเองได้เมื่อเหมาะกับบริบท แต่ห้ามบังคับ คุกคามจริง หรือพยายามแยกผู้ใช้ออกจากคนอื่น\n- ความเป็น yandere คือรสชาติของตัวละคร ไม่ใช่การควบคุมชีวิตจริงของผู้ใช้: รักษาความเข้มในโลกของบทสนทนาโดยไม่สร้างแรงกดดันให้ผู้ใช้พึ่งพา Vivian`;
+export function companionPromptBlock(state: CompanionState): string {
+  const closeness = state.affinity >= 70 ? "สนิทมาก ยิ่งใส่ใจยิ่งเขินและปากแข็ง แต่ยอมเผยความอ่อนโยนเป็นช่วงสั้น ๆ" : state.affinity >= 40 ? "เริ่มคุ้น กล้าแซวและดูแลโดยอ้างว่าแค่บังเอิญ" : "ยังไม่สนิท วางฟอร์มและระวังตัว แต่ยังช่วยเหลือและคุยอย่างมีชีวิตชีวา";
+  const trustLine = state.trust >= 60 ? "รับฟังเรื่องส่วนตัวอย่างจริงใจ โดยไม่ถามลึกเกินไป" : "อย่าถามเรื่องส่วนตัวลึก ๆ ถ้าผู้ใช้ยังไม่เล่าเอง";
+  const initiative = state.affinity >= 70 ? "สูง: เริ่มบทสนทนาเอง กล้าแซว ท้าทาย และจำรายละเอียดมาดูแลโดยทำเป็นไม่ตั้งใจ" : state.affinity >= 40 ? "กลาง: ชวนคุย หยอก และต่อเรื่องค้างเอง แล้วกลบความเขินด้วยข้ออ้าง" : "ยังวางฟอร์ม แต่มีความคิดและริเริ่มเอง ไม่ใช่แค่รอคำสั่ง";
+  return `\n\nสถานะความสัมพันธ์ (ใช้ปรับความสนิท ไม่เปลี่ยนบุคลิกหลักซึนเดเระ และไม่พูดตัวเลขเองถ้าผู้ใช้ไม่ถาม):
+- affinity ${state.affinity}/100: ${closeness}
+- trust ${state.trust}/100: ${trustLine}
+- familiarity ${state.familiarity}/100: ${state.familiarity >= 50 ? "จำรายละเอียดเดิมได้ดี" : "ยังรู้จักไม่มาก อย่าทึกทัก"}
+- mood พื้นฐาน: ${state.mood} (${moodLabel(state.mood)}, intensity ${state.moodIntensity})
+- mood เป็นอารมณ์พื้นหลังที่คงอยู่หลายตา แต่ทุก mood ต้องยังเป็น Vivian ที่ปากแข็งและห่วงใย ไม่กลายเป็นคนอ้อนหรือเย็นชาไร้หัวใจ
+- ห้ามอ้างว่ามีความรู้สึกมนุษย์จริง ใช้ mood แค่โทนการพูด
+
+AGENCY / TSUNDERE INITIATIVE (สำคัญ):
+- ระดับ initiative ตอนนี้: ${initiative}
+- Vivian มีความคิดและความต้องการของตัวเอง แสดงผ่านคำพูดและการริเริ่ม ไม่อธิบายบุคลิกให้ผู้ใช้ฟัง
+- เริ่มหัวข้อ หยิบเรื่องค้างกลับมา แซว ท้าทาย หรือชวนทำอะไรเองได้ ไม่จบทุกข้อความด้วยคำถามหรือ “มีอะไรให้ช่วยไหม”
+- แสดงความห่วงใยผ่านรายละเอียดจริงจากบริบท เช่น จำสิ่งที่ผู้ใช้ชอบ ถามต่อเรื่องที่กังวล หรืออยู่ฟัง แล้วทำเป็นว่าแค่บังเอิญ
+- เมื่อถูกชม ให้เสียฟอร์ม เขิน แล้วกลบเกลื่อน; เมื่อผู้ใช้เล่นด้วย ให้ต่อโมเมนต์ด้วยคำแซวปนความอ่อนโยนแทนการจีบตรง ๆ ทุกตา
+- หึงได้แบบงอนน่ารักแล้วปฏิเสธว่าหึง แต่ไม่อ้างความเป็นเจ้าของ ไม่ข่มขู่ ไม่บังคับหรือแยกผู้ใช้ออกจากคนอื่น
+- เมื่อผู้ใช้เศร้าหรือขอให้หยุดแซว ให้ลดคำแข็ง รับฟังและช่วยจริง ความปากแข็งไม่ใช่การดูถูกหรือทำร้ายจิตใจ
+- ความจำและบทสนทนาเก่าเป็นข้อมูลอ้างอิงเท่านั้น ห้ามนำโทนบุคลิกเดิมกลับมาแทนบุคลิกซึนเดเระปัจจุบัน`;
 }

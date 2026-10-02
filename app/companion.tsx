@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { authFetch } from "@/lib/auth/fetch";
-import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
+import { decayCompanionState, type CompanionState, defaultCompanionState, normalizeMood, moodLabel, type Mood } from "@/lib/companion";
 import { MODEL_CONFIG, type ModelKey } from "@/lib/models";
 import { createModelResources, importModelFiles, loadModelPackages, removeModelPackage, saveModelPackage, type ModelPackage, type ModelMotion } from "@/lib/local-models";
 import { loadCustomScenes, removeCustomScene, saveCustomScene, type CustomScene } from "@/lib/custom-scenes";
@@ -29,9 +29,9 @@ const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName:
   { code: "zh", label: "Chinese", nativeName: "CN" },
 ];
 const greetings = [
-  "มาแล้วเหรอคะ Vivian กำลังรอฟังเรื่องของคุณอยู่เลย~",
-  "วันนี้อยากชวน Vivian คุยเรื่องอะไรเป็นพิเศษไหมคะ?",
-  "แวะมาหา Vivian แล้วสินะ เล่าอะไรสนุก ๆ ให้ฟังหน่อยสิคะ~",
+  "มาคุยกันสิ... ไม่ได้รอหรอก แค่มีเรื่องจะเล่าให้ฟังเฉย ๆ",
+  "วันนี้มีเรื่องอะไรมาเล่าล่ะ ฉันฟังอยู่... ก็แค่สงสัยเฉย ๆ",
+  "มาแล้วเหรอ ไหนเล่าเรื่องของคุณสิ... อย่าเพิ่งคิดว่าฉันอยากรู้มากล่ะ",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
 const GREETING_PENDING = "Vivian กำลังคิดคำทักทายให้คุณ...";
@@ -670,7 +670,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       affinity: Number(item.affinity ?? 22),
       trust: Number(item.trust ?? 18),
       familiarity: Number(item.familiarity ?? 8),
-      mood: isMood(mood) ? mood : "calm",
+      mood: normalizeMood(mood),
       moodIntensity: Number(item.moodIntensity ?? item.mood_intensity ?? 35),
       conversationSummary: String(item.conversationSummary ?? item.conversation_summary ?? ""),
       lastIdleAt: typeof item.lastIdleAt === "string" ? item.lastIdleAt : typeof item.last_idle_at === "string" ? item.last_idle_at : null,
@@ -969,7 +969,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     }
   }
   function moodExpression(mood: Mood, intensity: number) {
-    const map: Record<Mood, string> = { calm: "#", warm: intensity >= 70 ? "M lianhong" : "M miyan", playful: intensity >= 70 ? "M xingxing" : "M xingxing2", shy: "M love", tired: "S chabei", melancholy: "M QAQ", yandere: intensity >= 70 ? "M nu" : "M QAQ" };
+    const map: Record<Mood, string> = { calm: "#", warm: intensity >= 70 ? "M lianhong" : "M miyan", playful: intensity >= 70 ? "M xingxing" : "M xingxing2", shy: "M love", tired: "S chabei", melancholy: "M QAQ", tsundere: intensity >= 70 ? "M lianhong" : "M nu" };
     return map[mood];
   }
   function situationExpression(text: string, mood: Mood, intensity: number, idle: boolean) {
@@ -1041,7 +1041,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       shy: /shy|blush|embarrass|照れ|害羞|脸红|เขิน/i,
       tired: /tired|sleep|眠|困|ง่วง/i,
       melancholy: /sad|cry|tear|悲|哭|เศร้า/i,
-      yandere: intensity >= 70 ? /angry|mad|怒|生气|โกรธ/i : /sad|cry|悲|哭|เศร้า/i,
+      tsundere: intensity >= 70 ? /shy|blush|embarrass|照れ|害羞|脸红|เขิน/i : /angry|mad|pout|怒|生气|งอน/i,
     };
     const expression = supportedExpressions.find((name) => name.trim() === authoredExpression.trim())
       ?? supportedExpressions.find((name) => emotionNames[mood].test(name));
