@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { authFetch } from "@/lib/auth/fetch";
 import { decayCompanionState, type CompanionState, defaultCompanionState, isMood, moodLabel, type Mood } from "@/lib/companion";
-import { isModelKey, MODEL_CONFIG, type ModelKey } from "@/lib/models";
+import { MODEL_CONFIG, type ModelKey } from "@/lib/models";
+import { createModelResources, importModelFiles, loadModelPackages, removeModelPackage, saveModelPackage, type ModelPackage, type ModelMotion } from "@/lib/local-models";
 import { loadCustomScenes, removeCustomScene, saveCustomScene, type CustomScene } from "@/lib/custom-scenes";
 
 type IconName = "config" | "info" | "wardrobe" | "chevron" | "mic" | "micOff" | "video" | "clip" | "message" | "send" | "close" | "memory" | "sound" | "language" | "gallery" | "scene" | "plus" | "search" | "sun" | "moon";
@@ -75,6 +76,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   const pixiAppRef = useRef<any>(null);
   const modelRef = useRef<any>(null);
   const modelLoadIdRef = useRef(0);
+  const motionActionRef = useRef(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingStartedAtRef = useRef(0);
@@ -138,7 +140,20 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   const [characterTab, setCharacterTab] = useState<"outfit" | "expression" | "pose">("outfit");
   const [languageOpen, setLanguageOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<ModelKey>("Miss");
+  const selectedModel: ModelKey = "Miss";
+  const [modelPackages, setModelPackages] = useState<ModelPackage[]>([]);
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
+  const [modelsReady, setModelsReady] = useState(false);
+  const [modelImporting, setModelImporting] = useState(false);
+  const [modelStatus, setModelStatus] = useState<"empty" | "loading" | "ready" | "error">("empty");
+  const [modelNotice, setModelNotice] = useState<string | null>(null);
+  const [modelPreview, setModelPreview] = useState<string | null>(null);
+  const [activeExpression, setActiveExpression] = useState<string | null>(null);
+  const [activeMotion, setActiveMotion] = useState<string | null>(null);
+  const modelZipRef = useRef<HTMLInputElement>(null);
+  const modelFolderRef = useRef<HTMLInputElement>(null);
+  const activePackage = modelPackages.find((pack) => pack.models.some((model) => model.id === activeModelId));
+  const activeModel = activePackage?.models.find((model) => model.id === activeModelId);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [companion, setCompanion] = useState<CompanionState>(defaultCompanionState());
   const [customInstructions, setCustomInstructions] = useState("");
@@ -275,6 +290,89 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    void loadModelPackages().then((packages) => {
+      if (cancelled) return;
+      setModelPackages(packages);
+      const saved = localStorage.getItem("vivian-local-model");
+      setActiveModelId(packages.some((pack) => pack.models.some((model) => model.id === saved)) ? saved : packages[0]?.models[0]?.id ?? null);
+    }).catch(() => {
+      if (!cancelled) setModelNotice("Browser storage is unavailable. Enable site storage to save a model.");
+    }).finally(() => { if (!cancelled) setModelsReady(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!modelsReady) return;
+    if (activeModelId) localStorage.setItem("vivian-local-model", activeModelId);
+    else localStorage.removeItem("vivian-local-model");
+  }, [modelsReady, activeModelId]);
+
+  useEffect(() => {
+    setModelPreview(null);
+    if (!activeModel?.previewPath || !activePackage) return;
+    const image = activePackage.assets.find((asset) => asset.path === activeModel.previewPath);
+    if (!image) return;
+    const url = URL.createObjectURL(image.blob);
+    setModelPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [activeModel, activePackage]);
+
+  async function importModels(files: File[]) {
+    if (modelImporting || !files.length) return;
+    setModelImporting(true);
+    setModelNotice(null);
+    try {
+      const pack = await importModelFiles(files);
+      await saveModelPackage(pack);
+      setModelPackages((current) => [...current, pack]);
+      setActiveModelId(pack.models[0].id);
+      void navigator.storage?.persist?.().catch(() => {});
+    } catch (error) {
+      setModelNotice(error instanceof Error ? error.message : "Could not import this model.");
+    } finally { setModelImporting(false); }
+  }
+
+  async function removeActiveModel() {
+    if (!activePackage || modelImporting) return;
+    setModelImporting(true);
+    try {
+      await removeModelPackage(activePackage.id);
+      const remaining = modelPackages.filter((pack) => pack.id !== activePackage.id);
+      setModelPackages(remaining);
+      setActiveModelId(remaining[0]?.models[0]?.id ?? null);
+      setModelNotice(null);
+    } catch { setModelNotice("Could not remove the saved model. Please try again."); }
+    finally { setModelImporting(false); }
+  }
+
+  async function selectExpression(expression: string | null) {
+    const loadId = modelLoadIdRef.current;
+    try {
+      if (!modelRef.current) return;
+      if (expression === null) resetReaction();
+      else if (!await modelRef.current.expression(expression)) throw new Error("Expression unavailable");
+      if (loadId === modelLoadIdRef.current) setActiveExpression(expression);
+    } catch { if (loadId === modelLoadIdRef.current) setModelNotice("This expression could not be played."); }
+  }
+
+  async function selectMotion(motion: ModelMotion | null) {
+    const actionId = ++motionActionRef.current;
+    const loadId = modelLoadIdRef.current;
+    try {
+      const manager = modelRef.current?.internalModel?.motionManager;
+      if (!manager) return;
+      manager.stopAllMotions();
+      if (motion) {
+        const started = await modelRef.current.motion(motion.group, motion.index, 3);
+        if (actionId !== motionActionRef.current || loadId !== modelLoadIdRef.current) return;
+        if (!started) throw new Error("Motion unavailable");
+      }
+      setActiveMotion(motion ? `${motion.group}:${motion.index}` : null);
+    } catch { if (actionId === motionActionRef.current && loadId === modelLoadIdRef.current) setModelNotice("This motion could not be played."); }
+  }
+
+  useEffect(() => {
     if (!preferencesReady) return;
     setConversations((current) => {
       const existing = current.find((item) => item.id === activeConversationId);
@@ -346,11 +444,6 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    // Bump the preference key so users who previously had Miss selected
-    // receive the new Vivian model instead of being silently stuck on the
-    // old cached selection.
-    const storedModel = window.localStorage.getItem("vivian-model-v2");
-    if (isModelKey(storedModel)) setSelectedModel(storedModel);
     const storedLanguage = window.localStorage.getItem("vivian-speech-language");
     if (LANGUAGE_OPTIONS.some((option) => option.code === storedLanguage)) setSpeechLanguage(storedLanguage as SpeechLanguage);
     setCustomInstructions(window.localStorage.getItem("vivian-custom-instructions") ?? "");
@@ -392,7 +485,12 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }, []);
 
   useEffect(() => {
-    if (!preferencesReady) return;
+    if (!preferencesReady || !modelsReady) return;
+    setActiveExpression(null);
+    setActiveMotion(null);
+    if (!activeModel || !activePackage) { setModelStatus("empty"); return; }
+    setModelStatus("loading");
+    let releaseResources: (() => void) | undefined;
     let app: any;
     let resizeModel = () => {};
     let queueResize = () => {};
@@ -404,7 +502,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     void (async () => {
       try {
         const PIXI = await import("pixi.js");
-        const { Live2DModel } = await import("pixi-live2d-display/cubism4");
+        const { Live2DModel, Cubism4ModelSettings } = await import("pixi-live2d-display/cubism4");
         if (!canvasRef.current || disposed) return;
         const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         // Keep the 4096 textures intact, but render the canvas above CSS
@@ -432,13 +530,19 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
           previousModel.destroy({ children: true, texture: true, baseTexture: true });
           modelRef.current = null;
         }
-        const modelConfig = MODEL_CONFIG[selectedModel];
-        const model = await Live2DModel.from(modelConfig.path);
+        const resources = await createModelResources(activePackage, activeModel);
+        releaseResources = resources.dispose;
+        if (disposed) { resources.dispose(); return; }
+        const settings = new Cubism4ModelSettings(resources.manifest);
+        settings.resolveURL = resources.resolve;
+        const model = await Live2DModel.from(settings);
         if (disposed || loadId !== modelLoadIdRef.current) {
           model.destroy({ children: true, texture: true, baseTexture: true });
+          resources.dispose();
           return;
         }
         modelRef.current = model;
+        setModelStatus("ready");
         const bounds = model.getLocalBounds();
         resizeModel = () => {
           const stage = canvasRef.current?.parentElement?.getBoundingClientRect();
@@ -467,11 +571,38 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
           queueResize();
         };
         queueResize();
+        // If the artist did not supply a thumbnail, capture the rendered model.
+        resizeModel();
+        if (!activeModel.previewPath) {
+          try {
+            app.renderer.render(app.stage);
+            // Read the rendered framebuffer: extracting the model as a render
+            // texture resets its transform and makes Cubism previews too small.
+            const snapshot = app.renderer.plugins.extract.canvas() as HTMLCanvasElement;
+            const visibleBounds = model.getBounds();
+            const pixelRatio = snapshot.width / app.renderer.screen.width;
+            const left = Math.max(0, visibleBounds.x * pixelRatio);
+            const top = Math.max(0, visibleBounds.y * pixelRatio);
+            const width = Math.max(1, Math.min(snapshot.width - left, visibleBounds.width * pixelRatio));
+            const height = Math.max(1, Math.min(snapshot.height - top, visibleBounds.height * pixelRatio));
+            const thumbnail = document.createElement("canvas");
+            const previewScale = Math.min(256 / width, 256 / height);
+            thumbnail.width = Math.max(1, Math.round(width * previewScale));
+            thumbnail.height = Math.max(1, Math.round(height * previewScale));
+            thumbnail.getContext("2d")?.drawImage(snapshot, left, top, width, height, 0, 0, thumbnail.width, thumbnail.height);
+            setModelPreview(thumbnail.toDataURL("image/png"));
+          } catch { /* Preview failure does not prevent the model from loading. */ }
+        }
         window.addEventListener("resize", queueResize);
         window.addEventListener("orientationchange", handleOrientationChange);
         window.visualViewport?.addEventListener("resize", queueResize);
       } catch (error) {
         console.error("Live2D failed to load", error);
+        if (!disposed) {
+          setModelStatus("error");
+          setModelNotice("Could not render this model. Check that it is compatible with Cubism 4 and includes all assets.");
+        }
+        releaseResources?.();
       }
     })();
     return () => {
@@ -488,8 +619,9 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
         currentModel.destroy({ children: true, texture: true, baseTexture: true });
       }
       modelRef.current = null;
+      releaseResources?.();
     };
-  }, [preferencesReady, selectedModel]);
+  }, [preferencesReady, modelsReady, activeModel, activePackage]);
 
   useEffect(() => () => {
     pixiAppRef.current?.destroy(true, { children: true });
@@ -601,6 +733,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }
   function resetReaction() {
     const expressionManager = modelRef.current?.internalModel?.motionManager?.expressionManager;
+    setActiveExpression(null);
     try { expressionManager?.resetExpression(); } catch (error) { console.warn("Live2D default expression unavailable", error); }
   }
   function stopLipSync() {
@@ -848,7 +981,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     const match = text.match(/^\/(?:expression|exp)(?:\s+(.+))?$/i);
     if (!match) return false;
     const argument = match[1]?.trim() ?? "";
-    const expressions = MODEL_CONFIG[selectedModel].expressions;
+    const expressions = (activeModel?.expressions ?? []);
     if (argument.toLowerCase() === "list") {
       setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: `Expression ที่ใช้ได้: ${expressions.join(", ")}` }]);
       return true;
@@ -866,6 +999,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     try {
       if (!modelRef.current) throw new Error("Live2D model is not ready");
       await modelRef.current.expression(expression);
+      setActiveExpression(expression);
       setMessages((current) => [...current, { from: "me", text }, { from: "vivian", text: `เปลี่ยนเป็น expression ${expression.trim()} แล้วค่ะ` }]);
     } catch (error) {
       console.warn("Manual Live2D expression unavailable", error);
@@ -879,14 +1013,24 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     if (!model) return;
     const combined = `${reply} ${userText}`;
     const { mood, moodIntensity: intensity } = companionRef.current;
-    const expression = situationExpression(combined, mood, intensity, idle);
+    const supportedExpressions = activeModel?.expressions ?? [];
+    const authoredExpression = situationExpression(combined, mood, intensity, idle);
+    const emotionNames: Record<Mood, RegExp> = {
+      calm: /neutral|normal|default|calm|平常|通常|ปกติ/i,
+      warm: /happy|smile|joy|warm|笑|开心|ยิ้ม/i,
+      playful: /happy|smile|excited|laugh|笑|开心|ดีใจ/i,
+      shy: /shy|blush|embarrass|照れ|害羞|脸红|เขิน/i,
+      tired: /tired|sleep|眠|困|ง่วง/i,
+      melancholy: /sad|cry|tear|悲|哭|เศร้า/i,
+      yandere: intensity >= 70 ? /angry|mad|怒|生气|โกรธ/i : /sad|cry|悲|哭|เศร้า/i,
+    };
+    const expression = supportedExpressions.find((name) => name.trim() === authoredExpression.trim())
+      ?? supportedExpressions.find((name) => emotionNames[mood].test(name));
     try {
-      const supportedExpressions = MODEL_CONFIG[selectedModel].expressions;
-      if (expression && supportedExpressions.includes(expression)) await model.expression(expression);
+      if (expression) { await model.expression(expression); setActiveExpression(expression); }
       else resetReaction();
       const definitions = model.internalModel?.motionManager?.definitions ?? {};
-      // Miss currently ships without named motion groups. When a model adds
-      // them, use the contextual pair; otherwise keep its stable Idle motion.
+      // Use authored groups when available and keep unknown models at idle.
       const motionByExpression: Record<string, string[]> = {
         "M love": ["Shy", "Idle"], "M QAQ": ["Sad", "Idle"], "M nu": ["Angry", "Idle"],
         "M wenhao ": ["Surprise", "Idle"], "M ##": ["Thinking", "Idle"], "M xingxing": ["Excited", "Idle"],
@@ -894,7 +1038,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
         "T faxing": ["Hair", "Idle"], "X shetou": ["Tease", "Idle"], "M ###": ["Look", "Idle"],
         "M miyan": ["Happy", "Idle"], "M lianhong": ["Warm", "Idle"], "#": ["Idle"],
       };
-      const motionName = motionByExpression[expression]?.find((name) => definitions[name]?.length);
+      const motionName = (motionByExpression[authoredExpression] ?? ["Idle"]).find((name) => definitions[name]?.length);
       if (motionName) await model.motion(motionName, 0, intensity >= 70 ? 3 : 2);
     } catch (error) {
       resetReaction();
@@ -1347,9 +1491,33 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
             </>}
             {panel === "character" && <>
               <div className="floating-tabs">{(["outfit", "expression", "pose"] as const).map((tab) => <button key={tab} type="button" className={characterTab === tab ? "is-selected" : ""} onClick={() => setCharacterTab(tab)}>{tab}</button>)}</div>
-              {characterTab === "outfit" && <><div className="character-preview"><span className="character-preview-mark">V</span><strong>Vivian · Miss</strong><small>Original outfit</small></div><p className="floating-note">The current Vivian model includes one outfit. More outfits will appear here when their Live2D assets are available.</p></>}
-              {characterTab === "expression" && <div className="expression-grid">{MODEL_CONFIG[selectedModel].expressions.map((expression) => <button type="button" key={expression} onClick={() => { void modelRef.current?.expression(expression); }}>{expression.trim()}</button>)}</div>}
-              {characterTab === "pose" && <><button type="button" className="floating-option" onClick={() => resetReaction()}>Reset to idle pose</button><p className="floating-note">Additional poses depend on the motions supplied with the Live2D model.</p></>}
+              {characterTab === "outfit" && <>
+                <div className="character-preview">
+                  {modelPreview ? <img className="model-preview-image" src={modelPreview} alt={`${activeModel?.name ?? "Model"} preview`} /> : <span className="character-preview-mark">V</span>}
+                  <strong>{activeModel?.name ?? "Your character awaits"}</strong>
+                  <small>{modelStatus === "loading" ? "Loading model…" : modelStatus === "ready" ? `${activeModel?.expressions.length ?? 0} expressions · ${activeModel?.motions.length ?? 0} motions` : "Import your Live2D model"}</small>
+                </div>
+                {modelPackages.length > 0 && <label className="model-select-label">Model / outfit<select value={activeModelId ?? ""} disabled={modelImporting} onChange={(event) => { setModelNotice(null); setActiveModelId(event.target.value); }}>{modelPackages.flatMap((pack) => pack.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>))}</select></label>}
+                <div className="model-import-actions">
+                  <button className="floating-option model-import-primary" type="button" disabled={modelImporting || !modelsReady} onClick={() => modelZipRef.current?.click()}><Icon name="plus" size={16} />{modelImporting ? "Importing…" : "Import model ZIP"}</button>
+                  <button className="floating-option" type="button" disabled={modelImporting || !modelsReady} onClick={() => modelFolderRef.current?.click()}>Choose folder</button>
+                </div>
+                <input ref={modelZipRef} hidden type="file" accept=".zip" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void importModels(files); }} />
+                <input ref={modelFolderRef} hidden type="file" multiple {...{ webkitdirectory: "", directory: "" }} onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void importModels(files); }} />
+                <p className="floating-note">Stored privately in this browser. Include the .model3.json, .moc3, textures and animation files. Up to 512 MB.</p>
+                {activePackage && <button className="floating-option model-remove" type="button" disabled={modelImporting} onClick={() => { void removeActiveModel(); }}>Remove this package from browser</button>}
+              </>}
+              {characterTab === "expression" && <>
+                <button type="button" className="floating-option" disabled={modelStatus !== "ready"} onClick={() => { void selectExpression(null); }}>Reset expression</button>
+                <div className="expression-grid">{activeModel?.expressions.map((expression, index) => <button type="button" key={`${expression}:${index}`} disabled={modelStatus !== "ready"} aria-pressed={activeExpression === expression} onClick={() => { void selectExpression(expression); }}>{expression.trim()}</button>)}</div>
+                {!activeModel?.expressions.length && <p className="floating-note">{activeModel ? "This model does not include expressions." : "Import a model in Outfit to discover its expressions."}</p>}
+              </>}
+              {characterTab === "pose" && <>
+                <button type="button" className="floating-option" disabled={modelStatus !== "ready"} onClick={() => { void selectMotion(null); }}>Reset to idle pose</button>
+                {[...new Set(activeModel?.motions.map((motion) => motion.group) ?? [])].map((group) => <div className="model-motion-group" key={group}><p className="floating-note">{group || "Default"}</p><div className="expression-grid">{activeModel?.motions.filter((motion) => motion.group === group).map((motion) => <button type="button" key={motion.index} disabled={modelStatus !== "ready"} aria-pressed={activeMotion === `${group}:${motion.index}`} onClick={() => { void selectMotion(motion); }}>{motion.name}</button>)}</div></div>)}
+                {!activeModel?.motions.length && <p className="floating-note">{activeModel ? "This model does not include playable motions." : "Import a model in Outfit to discover its motions."}</p>}
+              </>}
+              {modelNotice && <p className="model-notice" role="alert">{modelNotice}</p>}
             </>}
             {panel === "scenes" && <><div className="scene-grid">{(Object.keys(BACKGROUNDS) as Array<keyof typeof BACKGROUNDS>).map((scene) => <button key={scene} type="button" className={!activeCustomSceneId && backgroundMode === scene ? "is-selected" : ""} onClick={() => selectPresetScene(scene)}><span style={{ backgroundImage: `url(${BACKGROUNDS[scene]})` }}/><strong>Christmas {scene}</strong></button>)}</div>{customScenes.length > 0 && <><p className="floating-note">Your scenes</p><div className="scene-grid">{customScenes.map((scene) => <button key={scene.id} type="button" className={activeCustomSceneId === scene.id ? "is-selected" : ""} onClick={() => selectCustomScene(scene.id)}><span style={{ backgroundImage: `url("${scene.image}")` }}/><strong>{scene.name}</strong></button>)}</div></>}</>}
             {panel === "voice" && <><button type="button" className="floating-option" onClick={() => setMuted((value) => !value)}><Icon name="sound" size={18}/> Vivian voice <strong>{muted ? "Off" : "On"}</strong></button><label className="floating-range">Speaking speed <span>{speechSpeed.toFixed(2)}×</span><input type="range" min="0.8" max="1.2" step="0.02" value={speechSpeed} onChange={(event) => setSpeechSpeed(Number(event.target.value))}/></label><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Speech language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" className="floating-option" onClick={toggleRecording}><Icon name="mic" size={18}/> Microphone <strong>{recording ? "Listening" : "Start"}</strong></button></>}

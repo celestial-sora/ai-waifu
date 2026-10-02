@@ -351,12 +351,12 @@ This section is the current source of truth for continuing work. Read it before 
 
 ### Live2D facts that must not be changed casually
 
-- Active model: `/public/live2d/witch/witch.model3.json`
-- Runtime import: `pixi-live2d-display/cubism4`
-- Cubism Core must remain loaded before the client-side model import.
-- The Witch model has approved 8192px source textures. Do not downgrade, delete, or swap those assets unless the user explicitly requests a new model/asset strategy.
-- Available expressions: `cw`, `fz`, `h`, `hdj`, `ku`, `mz`, `sq`, `x`, `xx`, `yj`, `zs1`, `zs2`.
-- Neutral expression reset is required when TTS, STT, chat, or Live2D reaction fails.
+- Purchased model assets remain excluded from Git and deployments. Character → Outfit imports licensed ZIPs/folders into private browser IndexedDB via `lib/local-models.ts`; models never upload to a server.
+- `app/companion.tsx` reads imported manifests and discovers undeclared `.exp3.json`/`.motion3.json` files for expressions and motion groups, resolves every runtime file to a revocable local Blob URL, and supports multiple manifests/outfits per package. No bundled model is required for text chat.
+- Preview images use supplied preview/icon/thumbnail files, excluding texture atlases; models without one get a renderer snapshot. All model URLs are released on switching/unmount.
+- Runtime import remains `pixi-live2d-display/cubism4` with PixiJS 6. Cubism Core must load before the model runtime.
+- Backend character identity remains `Miss`; browser avatar choice does not change cloud memory identity.
+- Test model package validation, private file resolution, and storage with `npm run test:models`. Keep neutral resets and text-chat degradation when avatar loading fails.
 
 ### Provider and security rules
 

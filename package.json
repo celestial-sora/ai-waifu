@@ -8,11 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "test:auth": "node --experimental-strip-types --test tests/auth-policy.test.mjs",
-    "test:auth:integration": "node --test tests/auth.integration.test.mjs"
+    "test:auth:integration": "node --test tests/auth.integration.test.mjs",
+    "test:models": "node --experimental-strip-types --test tests/local-models.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",
+    "fflate": "^0.8.3",
     "next": "16.3.3",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
@@ -27,6 +29,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
+    "fake-indexeddb": "^6.2.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
