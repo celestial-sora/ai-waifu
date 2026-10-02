@@ -1,3 +1,4 @@
+import { requireApiAccess } from "@/lib/auth/server";
 import { NextResponse } from "next/server";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
@@ -41,6 +42,8 @@ function speechStyle(value: string) {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   const quota = rateLimit(request, "tts", 30);
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const startedAt = Date.now();

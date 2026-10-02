@@ -39,7 +39,27 @@ Other features are optional:
 
 Optional chat model overrides: `GROQ_MODEL` and `GEMINI_MODEL`. Keep keys in `.env.local`; never expose them through `NEXT_PUBLIC_*` or commit them.
 
-### Start
+### Private Google sign-in
+
+Vivian now requires a verified Supabase Auth session before the companion or any chat, speech, memory, or Jev API can be used. Only `suphloeksangko@gmail.com` and `duckchan690@gmail.com` are authorized; the server checks the confirmed email returned by Supabase Auth. Other accounts are signed out after OAuth and denied access. Missing Auth configuration locks the app rather than bypassing login.
+
+Configure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local` and your hosting environment. A legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` is also supported. The public URL must refer to the same Supabase project as `SUPABASE_URL`. **Never use `SUPABASE_SERVICE_ROLE_KEY` as the public Auth key.** The admin key remains server-only for existing memory persistence.
+
+1. Create a Google OAuth Web application client. Set its authorized redirect URI to the Supabase project's callback shown under Authentication → Sign In / Providers → Google (usually `https://<project-ref>.supabase.co/auth/v1/callback`). Put the Google client ID and secret in that provider's settings and enable it; they do not belong in the browser or repository.
+2. In Supabase Authentication → URL Configuration, set Site URL to `https://vivian-chan.vercel.app`. Add `https://vivian-chan.vercel.app/auth/callback` and `http://localhost:3000/auth/callback` to Redirect URLs. Add exact callback URLs for any other intended development/deployment origins.
+3. Allow new user signups for the first Google login of these accounts. The app allowlist controls access to Vivian; it does not prevent Supabase from creating an Auth record for a denied Google account. Supabase's OAuth access/refresh tokens for a denied account never authorize Vivian's APIs.
+4. Keep RLS enabled on `conversations`, `messages`, `memories`, and `companion_state`, with no public read/write policies. Browser clients use Auth only; database operations go through the guarded server routes using the existing service-role client. Do not add blanket `anon` or `authenticated` table policies.
+5. Sign in with each allowed Google account, check chat/memory/voice, test an unlisted account, then sign out via Menu → Settings. Direct API calls without a valid session must fail. Test expired sessions and iPhone/iPad Safari as well.
+
+The two allowed accounts share Vivian's existing cloud memory and relationship state (`user_key = 'default'`); this change adds private access without migrating or separating existing data. Local chat history remains in the browser. Login uses a PKCE callback, cookie session refresh, server-side checks independent of Proxy, and same-origin mutation checks. If a session can no longer be refreshed, API responses take the browser back to login. The licensed model remains local and untracked; authentication is not permission to redistribute it in a deployment.
+
+The Web client uses session cookies. Desktop/native integrations can send a Supabase access token as `Authorization: Bearer <token>` to the same APIs; the server verifies it with Supabase Auth and applies the same two-email allowlist. Those clients must implement Google sign-in and token refresh before using the secured backend; provider/admin keys must remain on the server.
+
+Verification (Node.js 22.13+): `npm run test:auth`, then `npm run build && npm run test:auth:integration`. The integration suite runs local Next servers against a local Auth fixture and clears provider/admin credentials; it does not contact Google, live Supabase, or AI providers. Real Google login still needs to be tested after provider configuration. Rebuild after configuring public environment variables.
+
+Setup references: [Supabase SSR](https://supabase.com/docs/guides/auth/server-side/creating-a-client), [Google sign-in](https://supabase.com/docs/guides/auth/social-login/auth-google).
+
+### Start the app
 
 ```bash
 npm run dev
@@ -278,7 +298,10 @@ This repository contains a personal AI companion project and its application cod
 
 ```text
 app/
-  page.tsx              Main Live2D companion UI
+  page.tsx              Server-side authentication gate
+  companion.tsx         Client-side Live2D companion UI
+  login/                Private Google sign-in screen
+  auth/                 OAuth callback and sign-out handlers
   api/
     chat/               LLM routing, tools, vision, memory-context orchestration
     memory/             Memory + conversation CRUD

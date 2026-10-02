@@ -140,7 +140,7 @@ import { Container } from "pixi-live2d-display";
 - **Provider Logic:** Modify the provider blocks in `app/api/chat/route.ts` to adjust fallback order
 
 ### Implementing New Live2D Animations
-**Location:** `app/page.tsx` (client component)
+**Location:** `app/companion.tsx` (client component); `app/page.tsx` verifies authentication before rendering it.
 
 ```typescript
 // Set expression
@@ -279,7 +279,8 @@ model.setExpression(null);
 
 | File | Purpose | Edit Frequency |
 |------|---------|----------------|
-| `app/page.tsx` | Main UI component (chat + Live2D) | High |
+| `app/page.tsx` | Server-side authentication gate | Low |
+| `app/companion.tsx` | Main UI component (chat + Live2D) | High |
 | `app/api/chat/route.ts` | LLM routing logic | High |
 | `app/layout.tsx` | Root layout (Cubism Core loader) | Low |
 | `app/globals.css` | Styling | Medium |
@@ -295,7 +296,7 @@ model.setExpression(null);
 1. Check browser console for errors
 2. Verify `window.Live2DCubismCore` is defined (Cubism Core loaded?)
 3. Check that `witch.model3.json` points to correct texture folder
-4. Verify model file path is correct in `app/page.tsx`
+4. Verify model file path is correct in `lib/models.ts` and `app/companion.tsx`
 
 ### API Keys Not Working
 1. Check environment variables are set on Vercel
@@ -361,7 +362,9 @@ This section is the current source of truth for continuing work. Read it before 
 
 - Never print, commit, or place API keys in this file, Notion, Trello, client code, or `NEXT_PUBLIC_*` variables.
 - Provider secrets belong only in Vercel environment variables.
-- Do not add authentication, multi-user behavior, a home server, Python backend, self-hosted LLM, or GPU infrastructure unless explicitly requested.
+- Web access now requires Supabase Auth with confirmed email, restricted to `suphloeksangko@gmail.com` and `duckchan690@gmail.com`. Keep the allowlist server-side and guard every API independently of Proxy. Never trust client-supplied identity or `user_metadata` for authorization.
+- `app/page.tsx` is the server-side gate; `app/companion.tsx` retains the existing client UI. Google OAuth uses `/auth/callback`; Settings provides POST `/auth/signout`. Configure public Supabase URL/publishable key and the Google provider before live login testing.
+- Both authorized accounts retain the existing shared `default` memory/relationship identity. Do not widen access, separate user data, add a home server, Python backend, self-hosted LLM, or GPU infrastructure unless explicitly requested.
 - TTS and Live2D failures must never prevent text chat from completing.
 - Search and vision requests use Gemini; normal text chat uses Groq first, then Cerebras and Gemini as fallbacks.
 

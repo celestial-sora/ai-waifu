@@ -1,6 +1,42 @@
 @import url('https://fonts.googleapis.com/css2?family=Itim&display=swap');
 @import "tailwindcss";
 
+/* The private entrance uses the companion's midnight and lavender palette. */
+.login-shell { position: fixed; inset: 0; isolation: isolate; display: grid; grid-template-rows: auto 1fr auto; gap: 26px; overflow-y: auto; padding: max(28px, env(safe-area-inset-top)) clamp(20px, 5vw, 72px) max(22px, env(safe-area-inset-bottom)); color: #f9f3ff; background: radial-gradient(ellipse at 50% 38%, #362549 0%, #1c152c 40%, #110c1c 80%); }
+.login-shell::before { content: ""; position: fixed; z-index: -1; inset: 0; opacity: .32; pointer-events: none; background-image: radial-gradient(circle, #efdaff 1px, transparent 1px); background-size: 94px 94px; mask-image: linear-gradient(transparent, #0008 45%, transparent); }
+.login-aurora { position: fixed; z-index: -1; inset: -20% -40%; pointer-events: none; background: radial-gradient(ellipse 25% 27% at 42% 42%, #9866bd2c, transparent), radial-gradient(ellipse 20% 32% at 65% 60%, #8f627720, transparent); filter: blur(32px); }
+.login-brand { display: flex; align-items: center; gap: 10px; font: 500 29px Arial, sans-serif; letter-spacing: -.06em; }
+.login-brand .brand-mark { width: 28px; height: 28px; border-width: 2px; color: #ead5fa; }
+.login-brand-note { margin-left: 10px; padding-left: 20px; border-left: 1px solid #d8b9f22e; color: #bcaacb; font: 12px Arial, sans-serif; letter-spacing: .02em; }
+.login-card { position: relative; width: min(100%, 456px); justify-self: center; align-self: center; padding: 22px 36px 29px; border: 1px solid #ddc7f32b; border-radius: 32px; background: linear-gradient(150deg, #ffffff09, #ffffff02); box-shadow: inset 0 1px #ffffff0a, 0 24px 90px #09051055; text-align: center; backdrop-filter: blur(18px); }
+.login-constellation { position: relative; width: 240px; height: 186px; margin: 0 auto 14px; }
+.login-orbit { position: absolute; left: 50%; top: 50%; border: 1px solid #d6b8f332; border-radius: 50%; transform: translate(-50%, -50%) rotate(-27deg); }
+.login-orbit-outer { width: 228px; height: 108px; }
+.login-orbit-inner { width: 175px; height: 175px; border-color: #d6b8f317; }
+.login-moon { position: absolute; inset: 39px 66px; display: grid; place-items: center; border: 1px solid #dbc0f431; border-radius: 50%; background: linear-gradient(145deg, #baa0d521, #8561b10b); box-shadow: 0 0 62px #b481e329, inset 0 0 24px #d4b2f012; animation: login-float 6s ease-in-out infinite; }
+.login-moon svg { width: 68px; height: 68px; filter: drop-shadow(0 0 12px #e8c8fb42); }
+.login-star { position: absolute; color: #e9d2f4; text-shadow: 0 0 14px #e9bcfe50; }
+.login-star-one { left: 22px; top: 51px; font-size: 21px; }.login-star-two { right: 21px; bottom: 35px; font-size: 27px; }.login-star-three { left: 166px; top: 19px; font-size: 12px; color: #e8ccb0; }
+.login-eyebrow { margin: 0 0 14px; color: #b9a4c8; font: 10px Arial, sans-serif; letter-spacing: .23em; }
+.login-card h1 { margin: 0; color: #fcf5ff; font-size: clamp(30px, 5vw, 36px); font-weight: 400; line-height: 1.26; }.login-card h1 span { display: block; color: #d8b9e7; }
+.login-description { margin: 19px 0 28px; color: #c0b2cb; font-size: 17px; line-height: 1.7; }
+.google-login-button { display: flex; align-items: center; justify-content: center; gap: 13px; width: 100%; min-height: 56px; padding: 14px 18px; border: 1px solid #fff; border-radius: 17px; color: #302439; background: linear-gradient(135deg, #fff, #f5eefb); box-shadow: 0 5px 22px #10071945, inset 0 1px #fff; font-size: 18px; transition: background .2s, transform .2s, box-shadow .2s; }
+.google-login-button > svg { flex: 0 0 auto; }.google-login-button .login-arrow { margin-left: auto; color: #756080; transition: transform .2s; }
+.google-login-button:hover:not(:disabled) { transform: translateY(-2px); background: #fff; box-shadow: 0 8px 30px #c5a0ec27; }.google-login-button:hover .login-arrow { transform: translateX(3px); }.google-login-button:active:not(:disabled) { transform: translateY(0) scale(.985); }
+.google-login-button:focus-visible { outline: 3px solid #c798f1; outline-offset: 5px; }.google-login-button:disabled { cursor: not-allowed; opacity: .65; }
+.login-feedback { min-height: 26px; margin-top: 12px; }.login-feedback p { margin: 0; color: #edbfd7; font-size: 15px; line-height: 1.5; }
+.login-private-note { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 10px; color: #b2a0c0; font-size: 13px; }
+.login-spinner { width: 20px; height: 20px; flex-shrink: 0; border: 2px solid #8d729d40; border-top-color: #694780; border-radius: 50%; animation: login-spin .8s linear infinite; }
+.login-footer { display: flex; justify-content: space-between; gap: 12px; color: #a795b5; font: 11px Arial, sans-serif; letter-spacing: .035em; }.login-footer span span { margin-left: 8px; color: #d0b5e0; }
+.account-settings { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #d4bed82e; }.account-settings div { min-width: 0; }.account-settings small { color: #bbaac2; font-size: 12px; }.account-settings p { margin: 3px 0 0; overflow-wrap: anywhere; color: #f1e8f7; font: 12px Arial, sans-serif; }.account-settings button { flex-shrink: 0; padding: 9px 13px; border: 1px solid #dcc7ec33; border-radius: 12px; color: #eddbf7; background: #ffffff0a; font-size: 14px; }.account-settings button:hover { background: #ffffff17; }.account-settings button:focus-visible { outline: 2px solid #d8b9f4; outline-offset: 3px; }
+@keyframes login-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } } @keyframes login-spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) { .login-shell { gap: 24px; }.login-card { padding: 16px 24px 25px; border-radius: 26px; }.login-brand-note { display: none; }.login-footer { flex-direction: column; align-items: center; gap: 7px; }.login-constellation { height: 174px; }.google-login-button { font-size: 17px; gap: 10px; } }
+@media (max-height: 660px) { .login-shell { gap: 18px; padding-top: max(18px, env(safe-area-inset-top)); padding-bottom: max(18px, env(safe-area-inset-bottom)); }.login-constellation { height: 98px; margin-bottom: 4px; }.login-orbit-outer { width: 184px; height: 70px; }.login-orbit-inner { width: 90px; height: 90px; }.login-moon { inset: 12px 84px; }.login-moon svg { width: 48px; height: 48px; }.login-star-one { left: 36px; top: 27px; }.login-star-two { right: 37px; bottom: 15px; }.login-star-three { top: 4px; }.login-card { padding-top: 12px; }.login-card h1 { font-size: 29px; }.login-description { margin: 12px 0 20px; }.login-eyebrow { margin-bottom: 9px; }.login-footer { display: none; } }
+@media (prefers-reduced-motion: reduce) { .login-moon, .login-spinner { animation: none; }.google-login-button, .google-login-button .login-arrow { transition: none; } }
+@media (max-height: 480px) and (min-width: 640px) {
+  .login-shell { gap: 12px; }.login-card { display: grid; grid-template-columns: 160px 1fr; column-gap: 24px; width: min(720px, 100%); padding: 20px 28px; }.login-constellation { grid-column: 1; grid-row: 1 / 7; align-self: center; width: 160px; height: 150px; margin: 0; }.login-orbit-outer { width: 156px; height: 80px; }.login-orbit-inner { width: 120px; height: 120px; }.login-moon { inset: 35px 38px; }.login-star-one { left: 5px; top: 44px; }.login-star-two { right: 0; bottom: 24px; }.login-star-three { left: 118px; top: 16px; }.login-card > :not(.login-constellation) { grid-column: 2; }.login-eyebrow { font-size: 9px; }.login-card h1 { font-size: 25px; }.login-card h1 span { display: inline; margin-left: 5px; }.login-description { margin: 9px 0 14px; font-size: 15px; line-height: 1.5; }.google-login-button { min-height: 48px; padding: 10px 15px; font-size: 16px; }.login-feedback { min-height: 0; margin-top: 8px; }.login-feedback p { font-size: 14px; }.login-private-note { font-size: 12px; margin-top: 10px; }
+}
+
 .error-notice { position: absolute; top: 5.5rem; left: 50%; transform: translateX(-50%); z-index: 8; border: 1px solid rgb(255 180 210 / .45); border-radius: 999px; padding: .55rem .9rem; color: #fff; background: rgb(65 24 62 / .82); backdrop-filter: blur(12px); cursor: pointer; }
 @keyframes vivian-idle-breathe { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-2px) scale(1.002); } }
 .companion-stage.is-idle .live2d-canvas { animation: vivian-idle-breathe 5s ease-in-out infinite; }

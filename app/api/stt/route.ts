@@ -1,9 +1,12 @@
+import { requireApiAccess } from "@/lib/auth/server";
 import { NextResponse } from "next/server";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
 
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   const quota = rateLimit(request, "stt", 12);
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const key = process.env.GROQ_API_KEY;

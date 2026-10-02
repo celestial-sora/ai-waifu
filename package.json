@@ -6,15 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:auth": "node --experimental-strip-types --test tests/auth-policy.test.mjs",
+    "test:auth:integration": "node --test tests/auth.integration.test.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.4",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.2",
     "next": "16.3.3",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

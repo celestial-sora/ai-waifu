@@ -1,3 +1,4 @@
+import { requireApiAccess } from "@/lib/auth/server";
 import { after, NextResponse } from "next/server";
 import { applyConversationTurn, companionPromptBlock, type CompanionState } from "@/lib/companion";
 import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
@@ -236,6 +237,8 @@ ${memoryContext}${toolContext}`;
 }
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   const quota = rateLimit(request, "chat", 20);
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
   const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
