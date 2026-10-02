@@ -372,7 +372,7 @@ This section is the current source of truth for continuing work. Read it before 
 ### Safe continuation workflow
 
 1. Read this handoff and inspect the current files before editing.
-2. Preserve unrelated user edits; keep the canonical `AGENTS.md` as the only agent handoff file.
+2. Preserve unrelated user edits. Use `AGENTS.md` for development rules and the user-requested `handoff.md` for changes and verification from this chat.
 3. Run `npx tsc --noEmit` and `git diff --check` after meaningful changes.
 4. Test the affected route/UI locally where possible.
 5. Commit only intentional source changes with a descriptive message.
