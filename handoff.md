@@ -180,3 +180,10 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Executed the user-requested repeat reset afterward. Settings confirmed success and Vercel request logs confirm `DELETE /api/memory` returned 200. The reset endpoint verifies zero scoped cloud rows before returning success.
 - Memories empty; Mood calm (“สงบ”), Affinity 22, Trust 18, Familiarity 8, check-in 0. Conversations shows one fresh empty Daily Talk. Post-reset screen displays a ready local welcome instead of a stuck thinking placeholder. No further chat was sent after resetting.
 - Screenshots: `/tmp/vivian-household-greeting.png` and `/tmp/vivian-household-memory-reset.png`. Keep the working Chrome tab open. Household canon remains in source, separate from deleted learned memory/history/state.
+
+## 2026-10-02 — TTS timeout shown in the user's Vercel screenshot
+
+- Production logs confirm the 21:20:36.66 `POST /api/tts` 500 was an uncaught `TimeoutError`. Fish's fetch returned headers, but the subsequent `response.arrayBuffer()` ran outside the catch; the existing 14-second signal could still abort the audio stream there.
+- Extended error handling through complete audio consumption. Timeouts during headers or audio return non-cacheable `504/TTS_TIMEOUT`; connection/read failures and empty audio return `502/TTS_UPSTREAM`. Logs include the failing phase and metadata only. Keep the existing voice, model, pronunciation/style, speed, deadline, auth, and client text fallback.
+- Added six route regression tests using fixture credentials and simulated partial/stalled streams (no live provider or cloud-memory calls). Passed all six, eight speech tests, TypeScript, focused ESLint, production build, and whitespace checks.
+- Push the fix to main and deploy production, then record the READY deployment and alias checks. Unrelated untracked `supabase/.temp/` remains untouched.

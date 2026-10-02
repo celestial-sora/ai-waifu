@@ -185,7 +185,7 @@ The current TTS path includes:
 - general word/syllable stammers across scripts, including `H-H-Hello`, `I- I- I'm`, and `ด- ด- เดี๋ยว`; interrupted Latin consonants use the following word's opening vowel, while every written attempt is retained
 - Thai/English boundary cleanup
 - MP3 output
-- bounded upstream timeout handling
+- a 14-second upstream timeout covering headers and the complete audio body; timeouts return `504/TTS_TIMEOUT`, interrupted or empty audio returns `502/TTS_UPSTREAM`, and text chat still completes
 - browser audio-unlock handling for Safari/iOS
 - Live2D lip sync driven by playback amplitude
 
