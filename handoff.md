@@ -172,3 +172,11 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Replaced default viewer/VTuber framing with household conversation and adjusted early closeness wording so a fresh relationship remains consistent with the story. Direct identity questions still receive truthful virtual-companion answers.
 - Passed: production build, TypeScript, companion tests (4), and whitespace checks. New story module passes ESLint. Existing route/companion lint diagnostics were checked against HEAD and remain unchanged; those older errors are outside this story change.
 - Push and verify the automatic production deployment, check a fresh non-persisted greeting in Chrome, then perform the explicitly requested full reset. Do not send a test user chat after resetting. Preserve unrelated untracked `supabase/.temp/`.
+
+### Household story — live verification and repeat reset completed
+
+- Story commit `eb7756b` deployed READY as `dpl_7cJ5qpeNMZQmeo7qESawaU2fmKGq`, with the configured production aliases available.
+- A new, ephemeral greeting in Chrome returned “...ไงโซระจัง แค่พักอ่านหนังสืออยู่… มีอะไรอยากคุยบ้างไหมคะ”. Chat and TTS returned 200; Fish produced 155,479 bytes in 3,038 ms with reserved Thai delivery. No test user chat was submitted.
+- Executed the user-requested repeat reset afterward. Settings confirmed success and Vercel request logs confirm `DELETE /api/memory` returned 200. The reset endpoint verifies zero scoped cloud rows before returning success.
+- Memories empty; Mood calm (“สงบ”), Affinity 22, Trust 18, Familiarity 8, check-in 0. Conversations shows one fresh empty Daily Talk. Post-reset screen displays a ready local welcome instead of a stuck thinking placeholder. No further chat was sent after resetting.
+- Screenshots: `/tmp/vivian-household-greeting.png` and `/tmp/vivian-household-memory-reset.png`. Keep the working Chrome tab open. Household canon remains in source, separate from deleted learned memory/history/state.
