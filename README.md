@@ -345,3 +345,9 @@ All character model assets, including historical models, have been removed from 
 For an existing clone, copy your licensed `public/live2d/` model folders to a private directory outside the repository before changing Git history. Save any uncommitted source changes separately. Clone the cleaned repository into a new directory, install dependencies, then copy your licensed models back into its ignored `public/live2d/` directory. Keep the tracked Cubism Core runtime from the fresh clone. Confirm `git status --short` does not list model assets before committing.
 
 Do not merge or push old branches/tags into the cleaned repository: that restores the removed history. Reapply source changes as patches, excluding model assets. Retire the old clone after preserving your source changes and licensed files. Rewriting this repository cannot erase copies previously downloaded by other people.
+
+### Resetting Vivian
+
+Settings → **Reset Vivian** permanently clears shared cloud memories, conversation history, the conversation summary, and companion relationship/mood state. It also clears this device's chats, check-in streak, idle timestamps, and custom instructions, then restores the initial companion scores. Imported models, voice/language preferences, and the login account are retained. Other devices retain their own local chat storage.
+
+The authenticated `DELETE /api/memory` request with `{ "scope": "all" }` deletes only the existing shared `default` identity and verifies empty cloud results before acknowledging success. Partial failures can be retried; this device's history is cleared only after a confirmed server response.

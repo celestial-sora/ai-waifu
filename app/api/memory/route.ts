@@ -1,6 +1,8 @@
 import { requireApiAccess } from "@/lib/auth/server";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { defaultCompanionState } from "@/lib/companion";
+import { resetCompanionData } from "@/lib/reset-companion";
 
 const userKey = "default";
 
@@ -13,10 +15,10 @@ export async function GET(request: Request) {
     if (error) throw error;
     const { data: conversation } = await supabase.from("conversations").select("id").eq("user_key", userKey).order("updated_at", { ascending: false }).limit(1).maybeSingle();
     const { data: messages } = conversation ? await supabase.from("messages").select("role,content,created_at").eq("conversation_id", conversation.id).order("created_at", { ascending: false }).limit(100) : { data: [] };
-    let companion = null;
+    let companion: unknown = defaultCompanionState();
     try {
       const loaded = await supabase.from("companion_state").select("affinity,trust,familiarity,mood,mood_intensity,last_idle_at,last_interaction_at").eq("user_key", userKey).maybeSingle();
-      if (!loaded.error) companion = loaded.data;
+      if (!loaded.error && loaded.data) companion = loaded.data;
     } catch { /* Companion table may not exist yet. */ }
     return NextResponse.json({ memories: data ?? [], messages: messages ?? [], companion });
   } catch (error) {
@@ -63,8 +65,12 @@ export async function DELETE(request: Request) {
   const denied = await requireApiAccess(request);
   if (denied) return denied;
   try {
-    const body = (await request.json()) as { scope?: "conversation" | "memory"; id?: number };
+    const body = (await request.json()) as { scope?: "conversation" | "memory" | "all"; id?: number };
     const supabase = getSupabaseAdmin();
+    if (body.scope === "all") {
+      await resetCompanionData(supabase, userKey);
+      return NextResponse.json({ ok: true, memories: [], messages: [], companion: defaultCompanionState() }, { headers: { "Cache-Control": "no-store" } });
+    }
     if (body.scope === "memory" && Number.isInteger(body.id)) {
       const { error } = await supabase.from("memories").delete().eq("user_key", userKey).eq("id", body.id);
       if (error) throw error;

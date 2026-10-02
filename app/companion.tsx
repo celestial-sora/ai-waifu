@@ -98,6 +98,8 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   const audioUnlockedByUserRef = useRef(false);
   const ttsAbortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
+  const resettingRef = useRef(false);
+  const memoryGenerationRef = useRef(0);
   const speakingRef = useRef(false);
   const mutedRef = useRef(false);
   const recordingRef = useRef(false);
@@ -169,6 +171,8 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   const [speechSpeed, setSpeechSpeed] = useState(.98);
   const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("th");
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const lastVivianMessage = messages.filter((item) => item.from === "vivian").at(-1)?.text ?? initialGreeting.current.text;
   messagesRef.current = messages;
@@ -653,11 +657,14 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }, []);
 
   async function loadMemory() {
+    if (resettingRef.current) return;
+    const generation = memoryGenerationRef.current;
     try {
       const response = await authFetch("/api/memory", { cache: "no-store" });
       const data = await response.json();
+      if (generation !== memoryGenerationRef.current || resettingRef.current) return;
       if (Array.isArray(data.memories)) setMemories(data.memories);
-      if (data.messages?.length) setHistoryMessages(data.messages.map((item: { role: string; content: string; created_at?: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content, timestamp: item.created_at })));
+      if (Array.isArray(data.messages)) setHistoryMessages(data.messages.map((item: { role: string; content: string; created_at?: string }) => ({ from: item.role === "user" ? "me" : "vivian", text: item.content, timestamp: item.created_at })));
       const next = normalizeCompanion(data.companion);
       if (next) setCompanion(next);
     } catch { /* Vivian stays usable while Supabase is unavailable. */ }
@@ -686,7 +693,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     return Math.max(fromState || 0, fromStore || 0);
   }
   async function maybeIdleGreeting() {
-    if (idleBusyRef.current || sendingRef.current || speakingRef.current || recordingRef.current) return;
+    if (resettingRef.current || idleBusyRef.current || sendingRef.current || speakingRef.current || recordingRef.current) return;
     if (!interactedRef.current || document.hidden) return;
     if (Date.now() - lastActivityRef.current < IDLE_AFTER_MS) return;
     if (Date.now() - lastIdleAt() < IDLE_COOLDOWN_MS) return;
@@ -901,7 +908,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
         imageToSend = liveFrame;
       }
     }
-    if (sendingRef.current) return;
+    if (sendingRef.current || resettingRef.current) return;
     if (!idle && !visionIdle && !text && !imageToSend) return;
     if (!idle && !visionIdle) {
       greetingGenerationRef.current += 1;
@@ -1065,19 +1072,22 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     }
   }
   async function startRecording() {
-    if (recording || recorderRef.current) return;
+    if (resettingRef.current || recording || recorderRef.current) return;
+    const generation = memoryGenerationRef.current;
     if (speakingRef.current) stopSpeech();
     markActivity();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
+      if (generation !== memoryGenerationRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
       const chunks: BlobPart[] = [];
       const preferredMimeTypes = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
       const mimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type));
       const recorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 128000 });
       recorder.ondataavailable = (event) => event.data.size && chunks.push(event.data);
       recorder.onstop = async () => {
+        if (generation !== memoryGenerationRef.current) { recorderRef.current = null; streamRef.current = null; return; }
         const durationMs = Date.now() - recordingStartedAtRef.current;
         const actualMimeType = recorder.mimeType || mimeType || "audio/webm";
         const extension = actualMimeType.includes("mp4") ? "m4a" : "webm";
@@ -1094,6 +1104,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
           form.append("language", speechLanguageRef.current);
           const response = await authFetch("/api/stt", { method: "POST", body: form, signal: abortAfter(STT_TIMEOUT_MS) });
           const data = await response.json() as { text?: string; error?: string };
+          if (generation !== memoryGenerationRef.current) return;
           if (!response.ok) throw new Error(data.error ?? "STT failed");
           if (data.text?.trim()) {
             setSttPreview(data.text);
@@ -1387,9 +1398,57 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     setEditingMemoryId(null);
   }
 
+  async function resetVivian(): Promise<void> {
+    if (sendingRef.current || resettingRef.current) return;
+    if (!window.confirm("ลบความจำและประวัติแชตบนคลาวด์ที่ใช้ร่วมกัน พร้อมรีเซ็ต Mood ความสัมพันธ์ แชตบนอุปกรณ์นี้ และคำแนะนำส่วนตัวถาวรใช่ไหม? โมเดล การตั้งค่าเสียง และบัญชีล็อกอินจะยังอยู่")) return;
+    resettingRef.current = true;
+    memoryGenerationRef.current += 1;
+    setResetting(true);
+    setResetNotice(null);
+    greetingGenerationRef.current += 1;
+    greetingRequestRef.current?.abort();
+    greetingTextRef.current = null;
+    stopSpeech();
+    micEnabledRef.current = false;
+    stopRecording();
+    stopCamera();
+    try {
+      const response = await authFetch("/api/memory", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "all" }) });
+      if (!response.ok) throw new Error("Reset failed");
+      const data = await response.json() as { ok?: boolean };
+      if (data.ok !== true) throw new Error("Reset unconfirmed");
+      for (const key of [CONVERSATIONS_KEY, "vivian-active-conversation", "vivian-checkin-date", "vivian-streak", LAST_IDLE_KEY, "vivian-custom-instructions"]) window.localStorage.removeItem(key);
+      const id = crypto.randomUUID();
+      window.localStorage.setItem("vivian-active-conversation", id);
+      setActiveConversationId(id);
+      setConversations([]);
+      setMessages([]);
+      setHistoryMessages([]);
+      setMemories([]);
+      setCompanion(defaultCompanionState());
+      setCustomInstructions("");
+      setStreak(0);
+      setMessage("");
+      setAttachedImage(null);
+      setSttPreview(null);
+      setEditingMemoryId(null);
+      setMemoryDraft("");
+      setConversationSearch("");
+      setErrorNotice(null);
+      markActivity();
+      interactedRef.current = false;
+      setResetNotice("รีเซ็ตแล้ว เริ่มคุยกันใหม่ได้เลยนะ");
+    } catch {
+      setResetNotice("รีเซ็ตไม่สำเร็จทั้งหมด ลองอีกครั้งนะ แชตบนอุปกรณ์นี้ยังไม่ได้ล้าง");
+    } finally {
+      resettingRef.current = false;
+      setResetting(false);
+    }
+  }
+
   function openPanel(next: Panel) { setPanel(next); setSidebarOpen(true); }
   function selectConversation(conversation: Conversation) {
-    if (sending) return;
+    if (sending || resettingRef.current) return;
     greetingGenerationRef.current += 1;
     greetingRequestRef.current?.abort();
     greetingTextRef.current = null;
@@ -1400,7 +1459,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
     setSidebarOpen(false);
   }
   function newConversation() {
-    if (sending) return;
+    if (sending || resettingRef.current) return;
     greetingGenerationRef.current += 1;
     greetingRequestRef.current?.abort();
     greetingTextRef.current = null;
@@ -1549,7 +1608,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
                <button type="button" className="floating-option scene-upload" disabled={sceneSaving} onClick={() => sceneInputRef.current?.click()}><Icon name="plus" size={18}/>{sceneSaving ? "Saving scene…" : "Upload a custom scene"}</button>
                {customScenes.length ? <div className="custom-scene-grid">{customScenes.map((scene) => <article className={activeCustomSceneId === scene.id ? "is-selected" : ""} key={scene.id}><button type="button" className="custom-scene-select" onClick={() => selectCustomScene(scene.id)}><span className="custom-scene-image" style={{ backgroundImage: `url("${scene.image}")` }}/><strong>{scene.name}</strong><small>{activeCustomSceneId === scene.id ? "Current scene" : "Use scene"}</small></button><button type="button" className="custom-scene-delete" onClick={() => void deleteCustomScene(scene.id)} aria-label={`Delete ${scene.name}`} title="Delete scene"><Icon name="close" size={14}/></button></article>)}</div> : <p className="floating-empty">Your custom scenes will appear here.</p>}
              </>}
-              {panel === "settings" && <><div className="custom-instructions"><strong>Custom instructions</strong><p>How should Vivian speak with you?</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="Call me… Speak in Thai…"/></div><div className="custom-instructions jev-settings"><strong>Jev API <span>{jevConfigured === undefined ? "กำลังตรวจสอบ" : jevConfigured === null ? "ตรวจสอบไม่ได้" : jevConfigured ? "ตั้งค่าแล้ว" : "ยังไม่ได้ตั้งค่า"}</span></strong><p>ตั้งค่า TYPESAFE_API_KEY ใน Environment Variables ของ Vercel หรือ .env.local และใช้ร่วมกับ Gemini เพื่อช่วยตัดสินใจว่าคำถามใดต้องใช้ข้อมูลล่าสุด</p></div><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" onClick={() => setInfoOpen(true)} className="floating-option"><Icon name="info" size={18}/> About Vivian</button></>}
+              {panel === "settings" && <><div className="custom-instructions"><strong>Reset Vivian</strong><p>ล้างความจำ แชต Mood และความสัมพันธ์บนคลาวด์ที่ใช้ร่วมกัน รวมถึงแชตและคำแนะนำส่วนตัวบนอุปกรณ์นี้</p><button type="button" className="floating-option" disabled={sending || resetting} onClick={() => { void resetVivian(); }}>{resetting ? "กำลังรีเซ็ต…" : "Reset memories and companion"}</button>{resetNotice && <p role="status">{resetNotice}</p>}</div><div className="custom-instructions"><strong>Custom instructions</strong><p>How should Vivian speak with you?</p><textarea value={customInstructions} maxLength={2000} onChange={(event) => { const value = event.target.value; setCustomInstructions(value); window.localStorage.setItem("vivian-custom-instructions", value); }} placeholder="Call me… Speak in Thai…"/></div><div className="custom-instructions jev-settings"><strong>Jev API <span>{jevConfigured === undefined ? "กำลังตรวจสอบ" : jevConfigured === null ? "ตรวจสอบไม่ได้" : jevConfigured ? "ตั้งค่าแล้ว" : "ยังไม่ได้ตั้งค่า"}</span></strong><p>ตั้งค่า TYPESAFE_API_KEY ใน Environment Variables ของ Vercel หรือ .env.local และใช้ร่วมกับ Gemini เพื่อช่วยตัดสินใจว่าคำถามใดต้องใช้ข้อมูลล่าสุด</p></div><button type="button" className="floating-option" onClick={() => setLanguageOpen(true)}><Icon name="language" size={18}/> Language <strong>{speechLanguage.toUpperCase()}</strong></button><button type="button" onClick={() => setInfoOpen(true)} className="floating-option"><Icon name="info" size={18}/> About Vivian</button></>}
             {panel === "settings" && <form action="/auth/signout" method="post" className="account-settings"><div><small>ลงชื่อเข้าใช้ด้วย</small><p>{accountEmail}</p></div><button type="submit">ออกจากระบบ <span aria-hidden="true">↗</span></button></form>}
           </div>
         </section>}
