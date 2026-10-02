@@ -187,3 +187,9 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Extended error handling through complete audio consumption. Timeouts during headers or audio return non-cacheable `504/TTS_TIMEOUT`; connection/read failures and empty audio return `502/TTS_UPSTREAM`. Logs include the failing phase and metadata only. Keep the existing voice, model, pronunciation/style, speed, deadline, auth, and client text fallback.
 - Added six route regression tests using fixture credentials and simulated partial/stalled streams (no live provider or cloud-memory calls). Passed all six, eight speech tests, TypeScript, focused ESLint, production build, and whitespace checks.
 - Push the fix to main and deploy production, then record the READY deployment and alias checks. Unrelated untracked `supabase/.temp/` remains untouched.
+
+### TTS fix — production verification
+
+- Fix commit `4d070f1` pushed to main; explicit production deployment `dpl_7nNNCSqpQd1iJqSo46HxJ73fiEB3` reached READY. `vercel inspect` confirms both configured aliases: `https://vivianlabs.vercel.app` and `https://vivianlabs-celestial-sora1.vercel.app`. The older `vivian-chan.vercel.app` URL in AGENTS.md now returns DEPLOYMENT_NOT_FOUND; no domain changes were made.
+- Reloaded the working authenticated Chrome tab and exercised ephemeral greeting synthesis without sending a user chat or writing cloud history. Production logs show `/api/tts` 200 with 193,096 bytes in 4,451 ms; Chrome reports no warning/error. An additional fresh greeting completed in the UI. Actual perceived sound quality and mobile Safari playback were not evaluated.
+- The deployment error scan returned no errors at the time checked. Screenshot proof: `/tmp/vivian-tts-fixed.png`. Fish may still exceed the existing deadline; regression tests verify those cases now return controlled JSON instead of an uncaught 500.
