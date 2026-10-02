@@ -164,3 +164,11 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Settings displayed “รีเซ็ตแล้ว เริ่มคุยกันใหม่ได้เลยนะ”. Memories was empty; Mood was calm (“สงบ”), check-in 0, Affinity 22, Trust 18, Familiarity 8. Conversations showed only a fresh Daily Talk with no previous messages. Custom instructions were empty. Saved screenshots in `/tmp/vivian-reset-success.png` and `/tmp/vivian-reset-memories.png`.
 - Refreshing the fresh Chrome tab retained the reset. No user test chat was sent after resetting; automatic greetings do not write cloud history or relationship state. The original Chrome tab remains unavailable to automation; leave the fresh working tab open for the user.
 - Corrected the post-reset empty-message fallback to a short local welcome so the UI does not keep showing the initial “กำลังคิด” placeholder. This does not add a chat message or cloud state.
+
+## 2026-10-02 — Vivian in Sorachan's household
+
+- User requested another full memory reset and a new backstory: Vivian is a member of Sorachan's household. Retain the shy, polite tsundere personality and current TTS.
+- Added core fictional canon in `lib/vivian-story.ts`, injected into the shared system prompt for chat, greetings, and vision: a place in Sorachan's home, a reading corner and tea cup, gentle everyday conversation, and slowly growing trust. Default address is “โซระจัง”, honoring a different requested name. Household canon survives resets; it does not restore remembered events, raise relationship scores, or claim physical presence/knowledge of the real home.
+- Replaced default viewer/VTuber framing with household conversation and adjusted early closeness wording so a fresh relationship remains consistent with the story. Direct identity questions still receive truthful virtual-companion answers.
+- Passed: production build, TypeScript, companion tests (4), and whitespace checks. New story module passes ESLint. Existing route/companion lint diagnostics were checked against HEAD and remain unchanged; those older errors are outside this story change.
+- Push and verify the automatic production deployment, check a fresh non-persisted greeting in Chrome, then perform the explicitly requested full reset. Do not send a test user chat after resetting. Preserve unrelated untracked `supabase/.temp/`.
