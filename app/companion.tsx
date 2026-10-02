@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { captureModelRestState, restoreModelRestState, type ModelRestState, type CubismRestModel } from "@/lib/model-rest-state";
 import { authFetch } from "@/lib/auth/fetch";
 import { decayCompanionState, type CompanionState, defaultCompanionState, normalizeMood, moodLabel, type Mood } from "@/lib/companion";
 import { MODEL_CONFIG, type ModelKey } from "@/lib/models";
@@ -75,6 +76,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pixiAppRef = useRef<any>(null);
   const modelRef = useRef<any>(null);
+  const modelRestStateRef = useRef<ModelRestState | null>(null);
   const modelLoadIdRef = useRef(0);
   const expressionActionRef = useRef(0);
   const motionActionRef = useRef(0);
@@ -383,6 +385,9 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       manager.stopAllMotions();
       setModelNotice(null);
       setActiveMotion(motion ? `${motion.group}:${motion.index}` : null);
+      if (!motion && modelRestStateRef.current) {
+        restoreModelRestState(modelRef.current.internalModel.coreModel, modelRestStateRef.current);
+      }
       if (motion) {
         const started = await modelRef.current.motion(motion.group, motion.index, 3);
         if (actionId !== motionActionRef.current || loadId !== modelLoadIdRef.current) return;
@@ -555,6 +560,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
           app.stage.removeChild(previousModel);
           previousModel.destroy({ children: true, texture: true, baseTexture: true });
           modelRef.current = null;
+          modelRestStateRef.current = null;
         }
         const maxTextureSize = app.renderer.gl.getParameter(app.renderer.gl.MAX_TEXTURE_SIZE) as number;
         canvasRef.current.dataset.gpuTextureLimit = String(maxTextureSize);
@@ -576,6 +582,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
           return;
         }
         for (const texture of model.textures) texture.baseTexture.mipmap = PIXI.MIPMAP_MODES.OFF;
+        modelRestStateRef.current = captureModelRestState(model.internalModel.coreModel as CubismRestModel);
         modelRef.current = model;
         if (resources.texturePlan.some((plan) => plan.source.width !== plan.render.width || plan.source.height !== plan.render.height)) {
           const source = Math.max(...resources.texturePlan.flatMap((plan) => [plan.source.width, plan.source.height]));
@@ -660,6 +667,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
         currentModel.destroy({ children: true, texture: true, baseTexture: true });
       }
       modelRef.current = null;
+      modelRestStateRef.current = null;
       releaseResources?.();
     };
   }, [preferencesReady, modelsReady, activeModel, activePackage, textureQuality]);

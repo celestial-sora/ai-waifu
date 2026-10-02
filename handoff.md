@@ -202,3 +202,11 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Verified locally with the privately imported Princess model: blush and sitting pose on → off → on → off, wink motion on → off → on → off, rapid double clicks, cancelling a newly loaded expression then re-enabling it, and toggling a shared pose off from Expression. Browser warning/error logs were empty. No live chat, TTS, or cloud-memory calls were used; authentication used the local fixture.
 - Passed production build, TypeScript, whitespace checks, and all 11 model tests. Screenshot: `/home/sorachan/.codex/visualizations/2026/10/02/01a0fc34-dd18-7121-a3c6-76e59a7f8535/live2d-toggle-fixed.png`.
 - Push this fix and handoff update to `main`. No explicit CLI production deployment requested for this fix. Preserve unrelated untracked `supabase/.temp/`.
+
+## 2026-10-02 — Marymie motion pose remains after toggling off
+
+- User reported Marymie in their current Chrome tab with Imported → 蝴蝶 selected. Reproduced the button deselecting while the model retained the motion's visual state; the existing reset only stops the motion queue, which leaves persisted Cubism parameters untouched.
+- Capture each loaded model's authored parameter defaults and initial part opacities before its first ticker update. On manual motion toggle-off and Reset to idle pose, stop the queue, restore those values, and save the restored parameters so the next Cubism frame cannot reload the stale motion baseline. Clear the snapshot when changing/unmounting models.
+- Retain the preceding expression-selection fix, normal idle playback, private imported assets, and existing rendering/layout.
+- Two regression tests cover persistent accessory values absent from idle, repeated resets, nonzero defaults, part opacity restoration, and separate model baselines. Included them in test:models. The previous 11 model tests passed; TypeScript, focused helper/test ESLint, whitespace checks, and production build passed after aligning the Cubism runtime type with its broad library declaration.
+- Push and deploy this fix, then verify Marymie in the user's existing production Chrome tab. Preserve unrelated untracked supabase/.temp/.
