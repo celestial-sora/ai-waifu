@@ -13,7 +13,10 @@ test("tsundere denials sound flustered and comfort wins over teasing", () => {
   assert.equal(speechStyle("ไม่ได้เป็นห่วงสักหน่อย").delivery, "flustered");
   assert.equal(speechStyle("ไม่เป็นไร ฉันฟังอยู่ ไม่ได้เป็นห่วงสักหน่อย").delivery, "gentle");
   assert.equal(speechStyle("เล่ามาสิ ฉันฟังอยู่~").delivery, "gentle");
-  assert.equal(speechStyle("ทำได้ดีนี่!").delivery, "teasing");
+  assert.equal(speechStyle("ทำได้ดีนี่!").delivery, "reserved");
+  assert.equal(speechStyle("...ไง มีอะไรเหรอ?").delivery, "reserved");
+  assert.equal(speechStyle("โธ่ อย่าแซวสิ").delivery, "teasing");
+  assert.match(speechStyle("ฉันก็ไม่ได้รออยู่หรืออะไรนะ").cue, /soft-spoken, bashful/);
 });
 
 test("romaji stammers keep every attempted syllable without spelling the letter B", () => {
@@ -86,7 +89,7 @@ test("other languages and older models do not get Thai voice instructions", () =
 
 test("delivery adjustments respect the voice speed slider limits", () => {
   assert.equal(speechSpeed(.8, speechStyle("ไม่เป็นไร")), .8);
-  assert.equal(speechSpeed(1.2, speechStyle("ไม่ได้รอ")), 1.2);
+  assert.equal(speechSpeed(2, speechStyle("ไม่ได้รอ")), 1.2);
   assert.equal(speechSpeed(1.1, speechStyle("เล่ามาสิ")), 1.1);
   assert.equal(speechSpeed("fast", speechStyle("เล่ามาสิ")), .98);
 });

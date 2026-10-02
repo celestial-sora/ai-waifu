@@ -29,9 +29,9 @@ const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName:
   { code: "zh", label: "Chinese", nativeName: "CN" },
 ];
 const greetings = [
-  "มาคุยกันสิ... ไม่ได้รอหรอก แค่มีเรื่องจะเล่าให้ฟังเฉย ๆ",
-  "วันนี้มีเรื่องอะไรมาเล่าล่ะ ฉันฟังอยู่... ก็แค่สงสัยเฉย ๆ",
-  "มาแล้วเหรอ ไหนเล่าเรื่องของคุณสิ... อย่าเพิ่งคิดว่าฉันอยากรู้มากล่ะ",
+  "...ไง มีอะไรมาเล่าให้ฟังไหม ฉันฟังอยู่นะ",
+  "มาแล้วเหรอ... วันนี้เป็นยังไงบ้างล่ะ",
+  "...มีเรื่องอยากคุยเหรอ เล่ามาสิ ไม่ต้องเกร็งนะ",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
 const GREETING_PENDING = "Vivian กำลังคิดคำทักทายให้คุณ...";

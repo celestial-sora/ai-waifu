@@ -1,6 +1,6 @@
 # Vivian AI Companion
 
-Vivian is a mobile-first **Live2D AI companion** focused on natural conversation, voice interaction, long-term memory, vision, connected tools, and a strong tsundere roleplay personality.
+Vivian is a mobile-first **Live2D AI companion** focused on natural conversation, voice interaction, long-term memory, vision, connected tools, and a shy, soft-spoken tsundere personality.
 
 **Current app codename:** `Sandrome`  
 **Production:** https://vivian-chan.vercel.app  
@@ -105,7 +105,7 @@ Supported mood states currently include:
 
 The current personality system gives Vivian more conversational agency: she can initiate topics, tease, get flustered by praise, show care while pretending it is incidental, bring previous context back into the conversation, and continue a roleplay scene without always returning control to the user.
 
-Vivian is strongly tsundere across chat, greetings, and vision: proud, quick to tease, easily flustered, and caring through actions. Closeness changes how much warmth slips through; it does not replace this core personality. She softens her teasing when the user is upset or asks her to stop. Older stored mood values are normalized on read without deleting shared memory.
+Vivian is a shy, polite, soft-spoken tsundere across chat, greetings, and vision: light playful denials, natural Thai slang, short conversational lines, occasional hesitation, and care through listening. Closeness changes how much warmth slips through; it does not replace this core personality. She softens her teasing when the user is upset or asks her to stop. Older stored mood values are normalized on read without deleting shared memory.
 
 ## LLM routing
 
@@ -177,7 +177,7 @@ Voice output uses **Fish Audio**.
 The current TTS path includes:
 
 - speech-speed control
-- tsundere delivery cues for teasing, flustered replies, and gentle reassurance on Fish S2 models
+- soft-spoken tsundere delivery cues for reserved conversation, mild teasing, shy replies, and gentle reassurance on Fish S2 models
 - standard Central Thai pronunciation cues for Thai speech (no regional or Isan accent)
 - stage-direction filtering so gestures such as `(หลบตา)` are not read aloud
 - general word/syllable stammers across scripts, including `H-H-Hello`, `I- I- I'm`, and `ด- ด- เดี๋ยว`; interrupted Latin consonants use the following word's opening vowel, while every written attempt is retained

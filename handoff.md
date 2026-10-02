@@ -130,3 +130,13 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Repeated and single written stammers select expressive delivery and disable repetition suppression. Comfort remains gentle while preserving the requested stammer. Ordinary compounds/acronyms and pauses are not labeled as stammers.
 - Expanded `npm run test:speech` to eight tests with 13 multilingual examples plus single fragments and compound/acronym regressions. README.md now describes general support.
 - Previous live Chrome check on `aa919d6` confirmed the requested line and successful TTS: 113,475 audio bytes in 3,139 ms. Deployment `dpl_9yH9orkobdMoiLSoQUgTMX4cW5cg` was READY. Actual accent quality was not verified by listening.
+
+## 2026-10-02 — Reply style from the user's Grok screenshots
+
+- User supplied screenshots showing a shy, polite tsundere with natural slang, hesitant pauses, short lines, and mild defensive affection. This updates the earlier forceful tsundere direction.
+- Adjusted the shared chat personality, relationship initiative, and optional personality facets to be shy and soft-spoken, with occasional wordplay, light teasing, natural Thai particles, and brief contextual hesitation. Replies address the user's actual message first; neither a denial of affection nor a final question is mandatory every turn.
+- Added greeting and compliment examples as tone guidance rather than fixed replies. Normal conversation uses 1–3 short sentences and optional line breaks; explicit informational/help requests retain complete answers. Gestural stage narration is no longer the default.
+- Updated local greeting fallbacks and descriptions to match. Retained shared memory, identity, Auth, provider routing, and general stammer support.
+- TTS now defaults to reserved, polite, soft-spoken conversation; teasing is selected only when the reply has teasing cues. Flustered/stammered delivery stays bashful and gentle, preserving standard Central Thai instructions and the user's speed control.
+- Passed speech tests (8), companion tests (4), TypeScript, focused ESLint, diff whitespace, and production build. Push to main and check the automatic production deployment, then verify the new conversational tone in the existing Chrome session.
+- Prior general-stammer live test succeeded on `b3ff955` / `dpl_GHxUpa3JGRifWVe6wdCMMMsVv5H6`: 240,743 audio bytes in 4,687 ms, normal chat UI returning the requested English/Thai sentence. Actual accent quality has not been evaluated by listening.

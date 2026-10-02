@@ -11,9 +11,9 @@ export const MODEL_CONFIG: Record<ModelKey, {
 
 export const PERSONALITIES = {
   shy: { label: "Shy", description: "ซึนเดเระขี้อาย เขินแล้วกลบเกลื่อน" },
-  playful: { label: "Playful", description: "ซึนเดเระขี้เล่น แซวเก่งแต่ห่วงใย" },
-  elegant: { label: "Elegant", description: "ซึนเดเระสง่างาม วางฟอร์มแต่เขินง่าย" },
-  custom: { label: "Custom", description: "ซึนเดเระเต็มขั้น ปากแข็งแต่ใส่ใจ" },
+  playful: { label: "Playful", description: "ซึนขี้อาย ชอบเล่นคำและหยอกเบา ๆ" },
+  elegant: { label: "Elegant", description: "ซึนสุภาพนุ่มนวล เก็บอาการแต่เขินง่าย" },
+  custom: { label: "Custom", description: "ซึนขี้อาย พูดนุ่ม ๆ ปากแข็งเบา ๆ" },
 } as const;
 
 export type PersonalityKey = keyof typeof PERSONALITIES;
