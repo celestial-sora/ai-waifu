@@ -27,10 +27,45 @@ test("romaji stammers keep every attempted syllable without spelling the letter 
   assert.equal(speechText("B‑ B‑ Baka"), "Ba… Ba… Baka");
   assert.equal(speechText("B– B– Baka"), "Ba… Ba… Baka");
   assert.equal(speechText("B- Baka"), "Ba… Baka");
-  assert.equal(speechText("N- N- No!"), "N- N- No!");
+  assert.equal(speechText("N- N- No!"), "No… No… No!");
   assert.match(speechStyle("N- N- No!").cue, /stammering naturally/);
   assert.equal(speechText("Use UTF-8 and a B-tree."), "Use UTF-8 and a B-tree.");
   assert.equal(speechStyle("ไม่เป็นไร B- B- Baka").delivery, "gentle");
+});
+
+test("stammers work for arbitrary words, scripts, fragments, and apostrophes", () => {
+  const cases = [
+    ["H-H-Hello!", "He… He… Hello!"],
+    ["S- S- Sorry", "So… So… Sorry"],
+    ["Th- Th- Thanks", "Tha… Tha… Thanks"],
+    ["I- I- I'm here", "I… I… I'm here"],
+    ["B- Ba- Baka", "Ba… Ba… Baka"],
+    ["ด- ด- เดี๋ยวก่อน", "ด… ด… เดี๋ยวก่อน"],
+    ["มะ- มะ- มะม่วง", "มะ… มะ… มะม่วง"],
+    ["จะ-จะ-จะพูด", "จะ… จะ… จะพูด"],
+    ["ちょ-ちょ-ちょっと", "ちょ… ちょ… ちょっと"],
+    ["아-아-아니", "아… 아… 아니"],
+    ["我-我-我没有", "我… 我… 我没有"],
+    ["ж-ж-жду", "ж… ж… жду"],
+    ["é-é-écoute", "é… é… écoute"],
+  ];
+  for (const [input, expected] of cases) {
+    const spoken = speechText(input);
+    assert.equal(spoken, expected, input);
+    assert.match(speechStyle(spoken).cue, /stammering naturally/, input);
+    assert.equal(speechStyle(spoken).repetitionPenalty, 1, input);
+  }
+  assert.equal(speechText("H- Hello"), "He… Hello");
+  assert.match(speechStyle(speechText("H- Hello")).cue, /stammering naturally/);
+});
+
+test("compounds, acronyms, and ordinary hesitation retain their meaning", () => {
+  for (const input of ["re-read", "ha-ha", "UTF-8", "B-tree", "A-B-C", "well-being"]) {
+    assert.equal(speechText(input), input);
+    assert.doesNotMatch(speechStyle(input).cue, /stammering/);
+  }
+  assert.equal(speechText("ฉัน... แค่อยากถาม"), "ฉัน… แค่อยากถาม");
+  assert.doesNotMatch(speechStyle("ฉัน… แค่อยากถาม").cue, /stammering/);
 });
 
 test("Thai speech receives standard Central Thai delivery without changing spoken words", () => {

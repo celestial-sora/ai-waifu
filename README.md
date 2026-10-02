@@ -180,7 +180,7 @@ The current TTS path includes:
 - tsundere delivery cues for teasing, flustered replies, and gentle reassurance on Fish S2 models
 - standard Central Thai pronunciation cues for Thai speech (no regional or Isan accent)
 - stage-direction filtering so gestures such as `(หลบตา)` are not read aloud
-- audible stammers: `B- B- Baka` keeps both interrupted `ba` syllables instead of spelling the letter B
+- general word/syllable stammers across scripts, including `H-H-Hello`, `I- I- I'm`, and `ด- ด- เดี๋ยว`; interrupted Latin consonants use the following word's opening vowel, while every written attempt is retained
 - Thai/English boundary cleanup
 - MP3 output
 - bounded upstream timeout handling

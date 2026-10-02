@@ -122,3 +122,11 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Verified production deployment `dpl_2CiZx87jLFNRcXyEELYSBaFnjtJw` READY for commit `07e2cd9`; aliases include `vivianlabs.vercel.app`. Live chat and TTS both returned 200. Fish generated 406,882 bytes in 9,569 ms, language `th`, delivery `flustered`. Voice was already On at 0.98× and TH.
 - Live response exposed Unicode nonbreaking hyphens (`B‑ B‑ Baka`) and an inaccurate claim that Vivian could not speak. Extended stammer normalization to Unicode hyphens/dashes and added chat guidance to return requested spoken words directly while not claiming playback succeeded.
 - Existing tab had no privately imported avatar and logged a missing model; do not bundle licensed assets to address that. Audio generation success does not by itself verify perceived accent or playback quality.
+
+## 2026-10-02 — General stammer handling
+
+- User clarified that `Baka` was an example, not the only word to support. Removed the word-specific replacement and added Unicode word/fragment handling, including Thai leading vowels, apostrophes, and progressively longer fragments.
+- Keep each interrupted attempt and the full target word. Bare Latin consonants use the target word's opening vowel as a pronunciation hint; other scripts retain their written fragments. This is an orthographic hint, not a phonetic dictionary or a guarantee of pronunciation for every language/voice.
+- Repeated and single written stammers select expressive delivery and disable repetition suppression. Comfort remains gentle while preserving the requested stammer. Ordinary compounds/acronyms and pauses are not labeled as stammers.
+- Expanded `npm run test:speech` to eight tests with 13 multilingual examples plus single fragments and compound/acronym regressions. README.md now describes general support.
+- Previous live Chrome check on `aa919d6` confirmed the requested line and successful TTS: 113,475 audio bytes in 3,139 ms. Deployment `dpl_9yH9orkobdMoiLSoQUgTMX4cW5cg` was READY. Actual accent quality was not verified by listening.
