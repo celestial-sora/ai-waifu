@@ -76,6 +76,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   const pixiAppRef = useRef<any>(null);
   const modelRef = useRef<any>(null);
   const modelLoadIdRef = useRef(0);
+  const expressionActionRef = useRef(0);
   const motionActionRef = useRef(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -354,13 +355,23 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }
 
   async function selectExpression(expression: string | null) {
+    if (expression === null) { resetReaction(); return; }
+    const actionId = ++expressionActionRef.current;
     const loadId = modelLoadIdRef.current;
     try {
       if (!modelRef.current) return;
-      if (expression === null) resetReaction();
-      else if (!await modelRef.current.expression(expression)) throw new Error("Expression unavailable");
-      if (loadId === modelLoadIdRef.current) setActiveExpression(expression);
-    } catch { if (loadId === modelLoadIdRef.current) setModelNotice("This expression could not be played."); }
+      setModelNotice(null);
+      // Select immediately so a second click can cancel an expression still loading.
+      setActiveExpression(expression);
+      const started = await modelRef.current.expression(expression);
+      if (actionId !== expressionActionRef.current || loadId !== modelLoadIdRef.current) return;
+      if (!started) throw new Error("Expression unavailable");
+    } catch {
+      if (actionId === expressionActionRef.current && loadId === modelLoadIdRef.current) {
+        resetReaction();
+        setModelNotice("This expression could not be played.");
+      }
+    }
   }
 
   async function selectMotion(motion: ModelMotion | null) {
@@ -370,13 +381,19 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       const manager = modelRef.current?.internalModel?.motionManager;
       if (!manager) return;
       manager.stopAllMotions();
+      setModelNotice(null);
+      setActiveMotion(motion ? `${motion.group}:${motion.index}` : null);
       if (motion) {
         const started = await modelRef.current.motion(motion.group, motion.index, 3);
         if (actionId !== motionActionRef.current || loadId !== modelLoadIdRef.current) return;
         if (!started) throw new Error("Motion unavailable");
       }
-      setActiveMotion(motion ? `${motion.group}:${motion.index}` : null);
-    } catch { if (actionId === motionActionRef.current && loadId === modelLoadIdRef.current) setModelNotice("This motion could not be played."); }
+    } catch {
+      if (actionId === motionActionRef.current && loadId === modelLoadIdRef.current) {
+        setActiveMotion(null);
+        setModelNotice("This motion could not be played.");
+      }
+    }
   }
 
   useEffect(() => {
@@ -760,8 +777,17 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }
   function resetReaction() {
     const expressionManager = modelRef.current?.internalModel?.motionManager?.expressionManager;
+    expressionActionRef.current += 1;
     setActiveExpression(null);
-    try { expressionManager?.resetExpression(); } catch (error) { console.warn("Live2D default expression unavailable", error); }
+    try {
+      if (expressionManager) {
+        // Cubism's resetExpression only resets playback. Clear its selection and
+        // pending load too, so the same expression can be enabled again.
+        expressionManager.reserveExpressionIndex = -1;
+        expressionManager.currentExpression = expressionManager.defaultExpression;
+        expressionManager.resetExpression();
+      }
+    } catch (error) { console.warn("Live2D default expression unavailable", error); }
   }
   function stopLipSync() {
     if (lipSyncFrameRef.current !== null) cancelAnimationFrame(lipSyncFrameRef.current);
@@ -1591,13 +1617,13 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
               </>}
               {characterTab === "expression" && <>
                 <button type="button" className="floating-option" disabled={modelStatus !== "ready"} onClick={() => { void selectExpression(null); }}>Reset expression</button>
-                <div className="expression-grid">{activeModel?.expressions.map((expression, index) => <button type="button" key={`${expression}:${index}`} disabled={modelStatus !== "ready"} aria-pressed={activeExpression === expression} onClick={() => { void selectExpression(expression); }}>{expression.trim()}</button>)}</div>
+                <div className="expression-grid">{activeModel?.expressions.map((expression, index) => <button type="button" key={`${expression}:${index}`} disabled={modelStatus !== "ready"} aria-pressed={activeExpression === expression} onClick={() => { void selectExpression(activeExpression === expression ? null : expression); }}>{expression.trim()}</button>)}</div>
                 {!activeModel?.expressions.length && <p className="floating-note">{activeModel ? "This model does not include expressions." : "Import a model in Models to discover its expressions."}</p>}
               </>}
               {characterTab === "pose" && <>
                 <button type="button" className="floating-option" disabled={modelStatus !== "ready"} onClick={() => { resetReaction(); void selectMotion(null); }}>Reset to idle pose</button>
-                {!!activeModel?.poses?.length && <><p className="floating-note">Poses</p><div className="expression-grid">{activeModel.poses.map((pose) => <button type="button" key={pose} disabled={modelStatus !== "ready"} aria-pressed={activeExpression === pose} onClick={() => { void selectExpression(pose); }}>{pose}</button>)}</div></>}
-                {[...new Set(activeModel?.motions.map((motion) => motion.group) ?? [])].map((group) => <div className="model-motion-group" key={group}><p className="floating-note">{group || "Default"}</p><div className="expression-grid">{activeModel?.motions.filter((motion) => motion.group === group).map((motion) => <button type="button" key={motion.index} disabled={modelStatus !== "ready"} aria-pressed={activeMotion === `${group}:${motion.index}`} onClick={() => { void selectMotion(motion); }}>{motion.name}</button>)}</div></div>)}
+                {!!activeModel?.poses?.length && <><p className="floating-note">Poses</p><div className="expression-grid">{activeModel.poses.map((pose) => <button type="button" key={pose} disabled={modelStatus !== "ready"} aria-pressed={activeExpression === pose} onClick={() => { void selectExpression(activeExpression === pose ? null : pose); }}>{pose}</button>)}</div></>}
+                {[...new Set(activeModel?.motions.map((motion) => motion.group) ?? [])].map((group) => <div className="model-motion-group" key={group}><p className="floating-note">{group || "Default"}</p><div className="expression-grid">{activeModel?.motions.filter((motion) => motion.group === group).map((motion) => <button type="button" key={motion.index} disabled={modelStatus !== "ready"} aria-pressed={activeMotion === `${group}:${motion.index}`} onClick={() => { if (activeMotion === `${group}:${motion.index}`) { resetReaction(); void selectMotion(null); } else void selectMotion(motion); }}>{motion.name}</button>)}</div></div>)}
                 {!activeModel?.motions.length && !activeModel?.poses?.length && <p className="floating-note">{activeModel ? "This model does not include playable motions." : "Import a model in Models to discover its motions."}</p>}
               </>}
               {modelNotice && <p className="model-notice" role="alert">{modelNotice}</p>}
