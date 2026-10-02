@@ -1,45 +1,13 @@
 import { requireApiAccess } from "@/lib/auth/server";
 import { NextResponse } from "next/server";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
+import { fishSpeechText, speechSpeed, speechStyle, speechText } from "@/lib/speech";
 
 export const maxDuration = 30;
 
 // Fish's free endpoint can queue. Keep the request small and bounded so a slow
 // provider can never leave the companion UI in its "thinking" state indefinitely.
 const upstreamTimeoutMs = 14_000;
-
-function speechText(value: string) {
-  return value.split(/\n\s*แหล่งข้อมูล\s*:/i)[0]
-    .replace(/https?:\/\/\S+/g, "")
-    .replace(/[*_`]/g, "")
-    // The tilde is handled as a tone signal below; remove it only after the
-    // style has been selected so it never becomes a spoken syllable.
-    .replace(/[~〜～]/g, "")
-    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
-    // Keep Thai and English word boundaries audible to the tokenizer.
-    .replace(/([ก-๙])([A-Za-z])/g, "$1 $2")
-    .replace(/([A-Za-z])([ก-๙])/g, "$1 $2")
-    // Turn repeated words into a gentle spoken pause without removing them.
-    .replace(/\b([A-Za-zก-๙]{2,})(\s+\1\b)/giu, "$1, $1")
-    .replace(/([!?！？]){2,}/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function speechStyle(value: string) {
-  const affectionate = /~|〜|～/.test(value);
-  const exclamatory = /!|！/.test(value);
-  const question = /\?|？/.test(value);
-  const repeated = /\b([A-Za-zก-๙]{2,})\s+\1\b/iu.test(value);
-  return {
-    // A tilde should sound warmly affectionate, not drawn-out or nasal.
-    speedAdjustment: affectionate ? -.02 : exclamatory ? .01 : question ? -.015 : repeated ? -.01 : 0,
-    // A tighter sampling range keeps Thai consonants and English terms more
-    // consistent across sentences while retaining a little warmth.
-    temperature: affectionate ? .66 : exclamatory ? .64 : question ? .60 : .61,
-    topP: affectionate ? .74 : exclamatory ? .72 : .70,
-  };
-}
 
 export async function POST(request: Request) {
   const denied = await requireApiAccess(request);
@@ -52,11 +20,17 @@ export async function POST(request: Request) {
   if (!apiKey) return NextResponse.json({ error: "FISH_AUDIO_API_KEY is not configured" }, { status: 500 });
   if (!voiceId) return NextResponse.json({ error: "FISH_AUDIO_VOICE_ID is not configured" }, { status: 500 });
 
-  const { text, speed, language } = (await request.json()) as { text?: string; speed?: number; language?: string };
+  let body: unknown;
+  try { body = await request.json(); }
+  catch { return NextResponse.json({ error: "Invalid JSON body", status: 400 }, { status: 400 }); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Text is required", status: 400 }, { status: 400 });
+  const { text, speed, language } = body as Record<string, unknown>;
+  if (typeof text !== "string" || text.length > 5000) return NextResponse.json({ error: "Text is required and must be under 5000 characters", status: 400 }, { status: 400 });
   const speechLanguage = language === "global" || language === "en" || language === "ja" || language === "ko" || language === "zh" || language === "th" ? language : "global";
-  const cleanText = text ? speechText(text) : "";
-  if (!cleanText || cleanText.length > 5000) return NextResponse.json({ error: "Text is required and must be under 5000 characters" }, { status: 400 });
-  const style = speechStyle(text ?? "");
+  const cleanText = speechText(text);
+  if (!cleanText) return NextResponse.json({ error: "Text must contain spoken words", status: 400 }, { status: 400 });
+  const style = speechStyle(cleanText);
+  const model = process.env.FISH_AUDIO_MODEL ?? "s2.1-pro-free";
 
   let response: Response;
   try {
@@ -65,22 +39,17 @@ export async function POST(request: Request) {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        model: process.env.FISH_AUDIO_MODEL ?? "s2.1-pro-free",
+        model,
       },
       signal: AbortSignal.timeout(upstreamTimeoutMs),
       body: JSON.stringify({
-        // Keep the original voice delivery natural; the reference voice and
-        // punctuation already carry Vivian's conversational expression.
-        text: cleanText,
+        // The cloned voice stays the same; S2 gets a subtle delivery cue.
+        text: fishSpeechText(cleanText, style, model, speechLanguage),
         reference_id: voiceId,
-        // Keep Thai syllables relaxed while still allowing the user's voice
-        // speed preference to apply. Fish documents speed as the supported
-        // prosody control; pitch is intentionally not sent because it is not
-        // part of this endpoint's standard Prosody schema.
-        prosody: { speed: Math.min(1.06, Math.max(.90, (Number.isFinite(speed) ? speed! : .98) + style.speedAdjustment)), volume: 0, normalize_loudness: true },
+        prosody: { speed: speechSpeed(speed, style), volume: 0, normalize_loudness: true },
         temperature: style.temperature,
         top_p: style.topP,
-        repetition_penalty: 1.2,
+        repetition_penalty: style.repetitionPenalty,
         format: "mp3",
         sample_rate: 44100,
         mp3_bitrate: 192,
@@ -106,6 +75,6 @@ export async function POST(request: Request) {
   }
   const audio = await response.arrayBuffer();
   const elapsedMs = Date.now() - startedAt;
-  console.info("Fish Audio TTS ready", { elapsedMs, textLength: cleanText.length, language: speechLanguage, bytes: audio.byteLength });
+  console.info("Fish Audio TTS ready", { elapsedMs, textLength: cleanText.length, language: speechLanguage, delivery: style.delivery, bytes: audio.byteLength });
   return new NextResponse(audio, { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store", "Server-Timing": `fish;dur=${elapsedMs}` } });
 }

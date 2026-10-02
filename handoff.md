@@ -103,3 +103,15 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Passed: production build, TypeScript, diff whitespace checks, and four companion regression tests. Authentication policy (3 tests) and integration (6 tests) also passed, including page/API access guards and cross-site mutation rejection.
 - No explicit CLI production deployment requested or performed for this change; follow the continuation rule to deploy only on request. Do not claim the production alias contains this commit without verifying a deployment.
 - Preserve unrelated untracked `supabase/.temp/`.
+
+## 2026-10-02 — TTS delivery for tsundere Vivian
+
+- User requested matching TTS delivery, standard Central Thai with no regional/Isan accent, and readable stammers such as `B- B- Baka`.
+- Added `lib/speech.ts`: tsundere teasing/flustered/gentle delivery selection; supportive text takes precedence. Fish S2 receives one inline natural-language performance cue, with standard Central Thai pronunciation instructions for Thai or Thai-containing Global speech. Other configured model families receive plain text.
+- Keep the existing Fish voice/reference identity and MP3 settings. Inline accent instructions guide synthesis; actual pronunciation also depends on the selected voice and must be checked by listening. No claim of verified accent quality without an audio check.
+- Filter recognizable parenthesized stage directions and source URLs while retaining spoken explanations. Preserve ellipses and repeated syllables. Normalize the romaji interjection `B- B- Baka` to `Ba… Ba… Baka`, retaining the number of attempts, and request natural stammering rather than spelling letter names. Disable the repetition penalty for stammered lines so attempted syllables are not discouraged.
+- Speed adjustment stays subtle and now respects the UI's full 0.8–1.2 range. Hardened TTS JSON/text validation against malformed or non-string bodies. API Auth and provider timeout are retained.
+- Added `npm run test:speech`: six tests for spoken cleanup, emotional priority, repeated stammer syllables, standard Thai cues, other-language/model compatibility, and speed bounds. Updated README.md.
+- Local checks passed: speech tests, TypeScript, focused ESLint, diff whitespace, and production build. Live synthesis was unavailable because local Fish credentials were missing; no real audio was generated or pronunciation verified locally.
+- Prior personality commit `0cfc181` was automatically deployed by GitHub to production as `dpl_CWFSwUM6eZ1B5QhCwyAVGnhJPMaK` (READY). Current configured alias is `https://vivianlabs.vercel.app`, verified HTTP 200 at `/login`; old `vivian-chan.vercel.app` returned 404.
+- Push this TTS change to main and verify the automatic deployment. No explicit CLI deployment requested. Preserve unrelated `supabase/.temp/`.

@@ -177,7 +177,10 @@ Voice output uses **Fish Audio**.
 The current TTS path includes:
 
 - speech-speed control
-- punctuation/style-aware delivery tuning
+- tsundere delivery cues for teasing, flustered replies, and gentle reassurance on Fish S2 models
+- standard Central Thai pronunciation cues for Thai speech (no regional or Isan accent)
+- stage-direction filtering so gestures such as `(หลบตา)` are not read aloud
+- audible stammers: `B- B- Baka` keeps both interrupted `ba` syllables instead of spelling the letter B
 - Thai/English boundary cleanup
 - MP3 output
 - bounded upstream timeout handling
