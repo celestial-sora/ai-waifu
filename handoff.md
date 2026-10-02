@@ -156,3 +156,11 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Native `window.confirm` blocked Chrome automation on the original tab. The user is away from the computer; no reset had run. Replaced it with an inline, accessible confirmation in Settings so the explicitly authorized reset can be completed from a fresh Chrome tab.
 - The new Chrome tab works normally. TypeScript, whitespace checks, and production build passed for the confirmation change. Verify the new deployment before running the reset, then record the actual reset outcome.
 - Reset capability commit `4ad253c` deployed READY as `dpl_4VuYiFPScVWYc7DMB5WXXQM6SD2H`.
+
+### Production reset completed
+
+- Confirmation commit `c39df09` deployed READY as `dpl_32DJkiYGKvTVuo1MTShhcioaJby6`, with the configured production aliases available.
+- Executed the explicitly requested full reset through the fresh authenticated Chrome tab. Production logs confirm `DELETE /api/memory` returned 200; this endpoint verifies zero scoped messages, conversations, memories, and companion rows before returning success.
+- Settings displayed “รีเซ็ตแล้ว เริ่มคุยกันใหม่ได้เลยนะ”. Memories was empty; Mood was calm (“สงบ”), check-in 0, Affinity 22, Trust 18, Familiarity 8. Conversations showed only a fresh Daily Talk with no previous messages. Custom instructions were empty. Saved screenshots in `/tmp/vivian-reset-success.png` and `/tmp/vivian-reset-memories.png`.
+- Refreshing the fresh Chrome tab retained the reset. No user test chat was sent after resetting; automatic greetings do not write cloud history or relationship state. The original Chrome tab remains unavailable to automation; leave the fresh working tab open for the user.
+- Corrected the post-reset empty-message fallback to a short local welcome so the UI does not keep showing the initial “กำลังคิด” placeholder. This does not add a chat message or cloud state.

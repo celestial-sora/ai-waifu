@@ -1423,6 +1423,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       window.localStorage.setItem("vivian-active-conversation", id);
       setActiveConversationId(id);
       setConversations([]);
+      initialGreeting.current = { from: "vivian", text: "...ไง เริ่มคุยกันใหม่ได้เลยนะ" };
       setMessages([]);
       setHistoryMessages([]);
       setMemories([]);
