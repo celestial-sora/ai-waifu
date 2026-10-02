@@ -210,3 +210,10 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Retain the preceding expression-selection fix, normal idle playback, private imported assets, and existing rendering/layout.
 - Two regression tests cover persistent accessory values absent from idle, repeated resets, nonzero defaults, part opacity restoration, and separate model baselines. Included them in test:models. The previous 11 model tests passed; TypeScript, focused helper/test ESLint, whitespace checks, and production build passed after aligning the Cubism runtime type with its broad library declaration.
 - Push and deploy this fix, then verify Marymie in the user's existing production Chrome tab. Preserve unrelated untracked supabase/.temp/.
+
+### Marymie — production and current-tab verification
+
+- Fix commit `a8ab1b1` pushed and deployed READY as `dpl_AA31P75T4pCwqL48nPFAfauyYn5m`. `vercel inspect` confirms the user's alias `vivianlabs-celestial-sora1.vercel.app` and `vivianlabs.vercel.app` point to this deployment.
+- Reloaded the exact existing Chrome tab with the privately imported `marrymei` model. Verified Imported → 蝴蝶 on/off: before the fix, deselection retained the cloud/moon and raised-hand state; after the fix, deselection visibly removes the cloud/moon and returns the character to standing idle.
+- Also checked sitting expression on/off and Reset to idle pose after re-enabling 蝴蝶. Both selections clear. Left all pose/motion selections off, with Marymie loaded and Character → Pose open. Chrome warning/error logs empty. Screenshot: `/tmp/marymie-pose-fixed.png`.
+- All 13 model tests, production build, TypeScript, whitespace checks, and focused helper/test lint passed. No test user chat was sent and no model files were uploaded or changed.
