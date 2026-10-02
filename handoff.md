@@ -150,3 +150,9 @@ Follow up only where needed: verify live Google provider configuration and produ
 - The Supabase connector available here lists a different inactive project; no data in that unrelated project was read or changed. Perform the requested production reset through Vivian's existing secured server and authenticated Chrome UI.
 - Prior soft-personality commit `09d49bc` / `dpl_6Q5vq7rZJ3Q8n3nVyYpew5EvTdFb` was READY. Live Chrome greeting test returned a short, hesitant, polite reply to “ไง”. Run any further chat tests before resetting; do not repopulate cloud history with test messages afterward.
 - Push this reset capability and verify deployment before invoking the explicitly requested reset in Chrome. Confirm the reset success status, empty memory/history UI, and initial companion values, and save screenshot proof.
+
+### Reset confirmation follow-up
+
+- Native `window.confirm` blocked Chrome automation on the original tab. The user is away from the computer; no reset had run. Replaced it with an inline, accessible confirmation in Settings so the explicitly authorized reset can be completed from a fresh Chrome tab.
+- The new Chrome tab works normally. TypeScript, whitespace checks, and production build passed for the confirmation change. Verify the new deployment before running the reset, then record the actual reset outcome.
+- Reset capability commit `4ad253c` deployed READY as `dpl_4VuYiFPScVWYc7DMB5WXXQM6SD2H`.
