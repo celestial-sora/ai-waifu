@@ -31,7 +31,7 @@ const LANGUAGE_OPTIONS: Array<{ code: SpeechLanguage; label: string; nativeName:
 ];
 const greetings = [
   "...มีอะไรมาเล่าให้หนูฟังไหมคะ หนูฟังอยู่นะ...",
-  "...วันนี้เป็นยังไงบ้างคะ มีอะไรอยากเล่าให้หนูฟังไหม...",
+  "...วันนี้ที่โรงเรียนเป็นยังไงบ้างคะ มีอะไรอยากเล่าให้หนูฟังไหม...",
   "...มีเรื่องอยากคุยเหรอคะ เล่าให้หนูฟังได้นะ ไม่ต้องเกร็ง...",
 ];
 const greeting = (): Message => ({ from: "vivian", text: greetings[Math.floor(Math.random() * greetings.length)] });
