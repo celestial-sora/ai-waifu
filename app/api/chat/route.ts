@@ -4,9 +4,10 @@ import { applyConversationTurn, companionPromptBlock, type CompanionState } from
 import { VIVIAN_STORY } from "@/lib/vivian-story";
 import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { runTools, searchIntent, toolsPromptBlock } from "@/lib/tools";
+import { runTools, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
-import { needsCurrentInformation } from "@/lib/jev";
+import { decideVivian, type JevContext } from "@/lib/jev";
+import { resolveChatPlan } from "@/lib/chat-decision";
 import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, detectToolkits, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -108,6 +109,15 @@ async function callGemini(apiKey: string, payload: Record<string, unknown>, mode
     signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify(payload),
   });
+}
+
+async function executeChatTool(slug: string, rawArguments: string, allowedSlugs: ReadonlySet<string>): Promise<{ content: string }> {
+  if (!allowedSlugs.has(slug)) return { content: "Tool request rejected: tool was not offered for this turn." };
+  let args: unknown;
+  try { args = JSON.parse(rawArguments); }
+  catch { return { content: "Tool request rejected: invalid JSON arguments." }; }
+  if (!args || typeof args !== "object" || Array.isArray(args)) return { content: "Tool request rejected: arguments must be an object." };
+  return executeComposioTool({ slug, arguments: args as ComposioToolCall["arguments"] });
 }
 
 async function extractMemories(apiKey: string, userText: string) {
@@ -288,14 +298,26 @@ export async function POST(request: Request) {
   if (!passive && !contents.length && !hasImage) return NextResponse.json({ error: "กรุณาพิมพ์ข้อความหรือส่งรูปภาพก่อนค่ะ" }, { status: 400 });
 
   const lastUserText = passive ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
-  const explicitSearch = !passive && searchIntent.test(lastUserText);
-  const shouldSearch = explicitSearch || (!passive && Boolean(geminiApiKey) && await needsCurrentInformation(lastUserText));
   const composioToolkits = !passive ? detectToolkits(lastUserText) : [];
+  const decisionContext: JevContext = {
+    message: lastUserText,
+    recentTurns: recent.slice(0, -1).slice(-2),
+    hasImage,
+    memoryAvailable: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+    capabilities: { search: Boolean(geminiApiKey), integrations: Boolean(process.env.COMPOSIO_API_KEY) },
+    toolkitCandidates: composioToolkits,
+  };
+  // State loading does not depend on JEV; overlap it with the single decision pass.
+  const statePromise = loadCompanionState(userKey);
+  const decision = passive ? null : (await decideVivian(decisionContext)).decision;
+  const plan = resolveChatPlan(decisionContext, decision, passive);
+  const shouldSearch = plan.shouldSearch;
 
   // Run independent pre-flight tasks concurrently in Promise.all to save critical seconds
   const [memoriesRes, state, toolResults, composioAccounts, composioTools] = await Promise.all([
     // 1. Memories
     (async () => {
+      if (!plan.retrieveMemory) return [];
       try {
         const supabase = getSupabaseAdmin();
         const { data } = await withTimeout(supabase.from("memories").select("id,memory,category,importance,updated_at,last_used_at,use_count").eq("user_key", userKey).order("importance", { ascending: false }).order("updated_at", { ascending: false }).limit(30), supabaseTimeoutMs, "memory load");
@@ -312,24 +334,25 @@ export async function POST(request: Request) {
       }
     })(),
     // 2. Companion state
-    loadCompanionState(userKey),
+    statePromise,
     // 3. Local tools (weather / search)
-    passive ? Promise.resolve([]) : runTools(lastUserText, [], shouldSearch),
+    passive ? Promise.resolve([]) : runTools(lastUserText, [], shouldSearch, plan.localTools),
     // 4. Composio connected accounts
-    !passive ? getComposioConnectedAccounts().catch(() => []) : Promise.resolve([]),
+    plan.prepareIntegrations ? getComposioConnectedAccounts().catch(() => []) : Promise.resolve([]),
     // 5. Composio tools
     composioToolkits.length > 0 ? getComposioTools(composioToolkits, lastUserText, 10).catch(() => []) : Promise.resolve([]),
   ]);
 
   const memories = memoriesRes;
   const composioFunctions = composioTools.length ? composioToolsToFunctions(composioTools) : undefined;
+  const allowedToolSlugs = new Set(composioTools.map((tool) => tool.slug));
 
   const composioContext = composioAccounts.length
     ? `\n\nบริการที่เชื่อมต่อผ่าน Composio: ${composioAccounts.map((a: ComposioConnectedAccount) => a.toolkit?.name || a.appUniqueId).join(", ")}`
     : "";
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const toolContext = toolsPromptBlock(toolResults) + composioContext;
-  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, language, visionIdle);
+  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, language, visionIdle) + plan.responseHint;
   const promptContents: ProviderMessage[] = greeting
     ? [...contents.slice(-6), { role: "user", content: `[ระบบ: คำทักแรกของ session ใหม่] ข้อความก่อนหน้านี้เป็นบทสนทนาจาก session ที่แล้ว ให้ Vivian ทักผู้ใช้ด้วยข้อความใหม่สดๆ 1-2 ประโยค โดยอิงเรื่องล่าสุดที่ผู้ใช้เล่าหรือความจำที่เกี่ยวข้อง ถ้ามีเรื่องค้างอยู่ให้ชวนคุยต่ออย่างนุ่มนวล หากไม่มีบริบทให้ทักตามบุคลิกตามปกติ ห้ามทวนคำตอบเดิมหรือแต่งเหตุการณ์ที่ไม่รู้จริง ไม่อ้างว่าเห็นผู้ใช้ผ่านกล้องหรือรู้เวลาหรือสภาพอากาศ ห้ามพูดถึงระบบหรือ AI และห้ามใช้ emoji` }]
     : idle
@@ -388,7 +411,7 @@ export async function POST(request: Request) {
   let generatedData: any = null;
 
   // Capability route: Gemini handles image input directly.
-  if (hasImage && geminiApiKey) {
+  if (plan.modelRoute === "vision" && geminiApiKey) {
     const geminiVisionCandidates = Array.from(new Set([
       geminiPrimaryModel(),
       "gemini-2.5-flash",
@@ -414,7 +437,7 @@ export async function POST(request: Request) {
   }
 
   // 1. PRIMARY TEXT / TOOLS: Groq.
-  if (!generatedData && groqApiKey && !hasImage && !shouldSearch) {
+  if (!generatedData && groqApiKey && plan.modelRoute === "text") {
     const groqCandidates = [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
     for (const gModel of groqCandidates) {
@@ -431,9 +454,7 @@ export async function POST(request: Request) {
             const toolExecResults = [];
             for (const tc of choice.message.tool_calls) {
               const slug = tc.function.name;
-              let args = {};
-              try { args = JSON.parse(tc.function.arguments); } catch {}
-              const execRes = await executeComposioTool({ slug, arguments: args });
+              const execRes = await executeChatTool(slug, tc.function.arguments, allowedToolSlugs);
               toolExecResults.push({
                 role: "tool",
                 tool_call_id: tc.id,
@@ -467,7 +488,7 @@ export async function POST(request: Request) {
   }
 
   // 2. FALLBACK TEXT / TOOLS: Cerebras Qwen 3.8 27B.
-  if (!generatedData && cerebrasApiKey && !hasImage && !shouldSearch) {
+  if (!generatedData && cerebrasApiKey && plan.modelRoute === "text") {
     const cerebrasCandidates = [cerebrasModelName()];
 
     for (const cModel of cerebrasCandidates) {
@@ -483,9 +504,7 @@ export async function POST(request: Request) {
             const toolExecResults = [];
             for (const tc of choice.message.tool_calls) {
               const slug = tc.function.name;
-              let args = {};
-              try { args = JSON.parse(tc.function.arguments); } catch {}
-              const execRes = await executeComposioTool({ slug, arguments: args });
+              const execRes = await executeChatTool(slug, tc.function.arguments, allowedToolSlugs);
               toolExecResults.push({
                 role: "tool",
                 tool_call_id: tc.id,

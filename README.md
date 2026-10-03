@@ -33,7 +33,7 @@ Other features are optional:
 | Persistent memory | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Memory extraction and context compression | `CEREBRAS_API_KEY` |
 | Search and connected apps | `TAVILY_API_KEY`, `COMPOSIO_API_KEY` |
-| Jev current-information routing | `TYPESAFE_API_KEY` |
+| JEV decision layer | `TYPESAFE_API_KEY` (alias `JEV_API_KEY`) |
 | Speech input | `GROQ_API_KEY` (optional `GROQ_STT_MODEL`) |
 | Speech output | `FISH_AUDIO_API_KEY`, `FISH_AUDIO_VOICE_ID` (optional `FISH_AUDIO_MODEL`) |
 
@@ -119,7 +119,11 @@ Normal text chat currently uses this provider order:
 
 Vision and search requests are routed through Gemini because they depend on Gemini-specific multimodal/search capabilities.
 
-When `TYPESAFE_API_KEY` and `GEMINI_API_KEY` are configured, Jev checks whether less explicit user requests need current web information. A strong Jev signal routes the request through the existing Tavily/Gemini search flow. Explicit search wording still routes directly, and Jev errors or timeouts leave the existing chat behavior intact. Jev is a decision model; it does not generate Vivian's replies. Keep the key on the server in `.env.local` or the Vercel environment. Web Settings shows its configured status through `GET /api/jev/status` without returning the key.
+With `TYPESAFE_API_KEY` (or `JEV_API_KEY`), active chat makes one batched JEV decision request for fresh information, memory retrieval, vision relevance, supported local tools, integration preparation, broad intent, model class and response mode. Gemini is required only to act on fresh-information/vision routing. Explicit search and detected tools retain priority, and supplied images always keep vision routing. Fresh-information confidence must still be **>= 0.85**.
+
+JEV makes probabilistic decisions; the Harness validates them and executes existing capabilities; the main LLM reasons, speaks and maintains Vivian's personality. JEV receives bounded message/recent-turn text and capability metadata, never the memory database, image data, relationship summary or persona. Low confidence keeps conservative defaults. Disabled JEV, failures, malformed results and the two-second timeout retain existing chat routing and memory preparation. Passive greetings/idle skip JEV.
+
+Set `JEV_ENABLED=false` to disable the layer. Development logs status and elapsed milliseconds; `JEV_DEBUG=true` enables those metadata-only logs elsewhere. Normal production emits no JEV logs. Web Settings reads enabled/configured status through `GET /api/jev/status` without returning keys. Keep credentials server-side. Run `npm run test:jev` for decision/client and mocked chat integration regressions. See [the architecture audit and decision contract](docs/jev-decision-layer.md) for boundaries, thresholds, latency tradeoffs and future STT compatibility.
 
 Background memory extraction and conversation-context compression use Cerebras when configured. `OPENROUTER_API_KEY` may remain in the environment for future use, but the app does not currently call OpenRouter.
 
