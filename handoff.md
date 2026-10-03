@@ -282,3 +282,8 @@ Follow up only where needed: verify live Google provider configuration and produ
 - Browser verification used agent-browser + Chromium at 1440×900, 390×844 and 844×390: actual file upload, local preview, URL preview/import, SSRF error, label edit, image replacement, manual selection, reload persistence, mobile drop, Auto OFF/ON and active deletion fallback. No horizontal overflow, framework overlay or uncaught JS errors in the workflow. Separate failure/performance checks confirm unavailable images retain the prior background/preference, retry succeeds, ordinary chat causes no background download, and day/night toggles both directions.
 - Remaining limits: production Supabase/Google/JEV and real Internet imports were not tested (no live credentials available); mobile checks are responsive Chromium viewports, not physical-device certification. Cleanup retries are request-driven after one hour; unused/deleted-account orphan queues may require an operational cleanup job. This work is not deployed.
 - Full file/architecture/setup documentation: `docs/dynamic-scenes.md` and README's Dynamic scene backgrounds section.
+
+## 2026-10-03 — Remove floating status pill
+
+- Removed the static “V / Vivian / Online” pill shown in the user's screenshot, plus its unused avatar, dot and responsive CSS. Conversation-list avatars retain their styling.
+- `npx tsc --noEmit`, production build and `git diff --check` passed. Companion ESLint results match the committed baseline exactly (11 existing errors, 7 warnings). No new tests were added for this markup-only removal; authenticated browser behavior was not re-tested.

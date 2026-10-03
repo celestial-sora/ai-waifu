@@ -1463,7 +1463,6 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       <div className="scene-quick-controls">
         <button type="button" onClick={() => selectPresetScene(selectedPreset === "day" ? "night" : "day")} aria-label="Toggle day and night scene" title="Day / Night"><Icon name={selectedPreset === "day" ? "moon" : "sun"} size={20}/></button>
       </div>
-      <div className="vivian-status"><span className="status-avatar">V</span> Vivian <span className="status-dot"/> Online</div>
       <div className="camera-pip" style={{ display: cameraActive ? "flex" : "none" }} aria-label="Live Camera Vision">
         <div className="camera-pip-header">
           <div className="live-badge">
