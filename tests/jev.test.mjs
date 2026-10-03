@@ -30,6 +30,7 @@ const jev = load("../lib/jev.ts");
 const harness = load("../lib/chat-decision.ts", { "@/lib/tools": tools, "@/lib/jev": jev });
 const companion = load("../lib/companion.ts");
 const story = load("../lib/vivian-story.ts");
+const dialogue = load("../lib/vivian-dialogue.ts");
 const keys = ["needs_current_information", "needs_memory", "recalls_memory", "needs_vision", "needs_time", "needs_weather", "needs_calculator", "needs_integrations", "supportive_response", "explanatory_response"];
 function answers(values = {}) {
   return { answers: Object.fromEntries(keys.map((key) => [key, { type: "noul", noul: values[key] ?? (key === "needs_memory" ? 0.5 : 0.01) }])) };
@@ -234,6 +235,7 @@ function chatFixture({ values, jevFetch, env = {}, denied = null, groqReply, cer
     "@/lib/rate-limit": { rateLimit: () => ({ allowed: true }) },
     "@/lib/companion": companion,
     "@/lib/vivian-story": story,
+    "@/lib/vivian-dialogue": dialogue,
     "@/lib/companion-store": { loadCompanionState: async () => { calls.push({ kind: "state" }); return companion.defaultCompanionState(); }, saveCompanionState: () => assert.fail("Background writes must not run in fixtures") },
     "@/lib/supabase-admin": { getSupabaseAdmin() {
       return { from(table) {
@@ -279,6 +281,7 @@ test("chat integrates a single JEV pass; state starts in parallel; main LLM stil
   assert.equal(fixture.calls[0].kind, "state");
   const prompt = fixture.calls.find((call) => call.kind === "groq").body.messages[0].content;
   assert.match(prompt, /Vivian/); assert.match(prompt, /Likes tea/);
+  assert.ok(prompt.includes(dialogue.VIVIAN_DIALOGUE_EXAMPLE));
   assert.equal(fixture.background.length, 1);
   assert.equal(fixture.executions.length, 0);
 });

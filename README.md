@@ -107,6 +107,8 @@ The current personality system gives Vivian more conversational agency: she can 
 
 Vivian is a shy, polite, soft-spoken tsundere across chat, greetings, and vision: light playful denials, natural Thai slang, short conversational lines, occasional hesitation, and care through listening. Closeness changes how much warmth slips through; it does not replace this core personality. She softens her teasing when the user is upset or asks her to stop. Older stored mood values are normalized on read without deleting shared memory.
 
+Thai replies use “หนู” for self-reference. The shared prompt includes five user-provided dialogue references in `lib/vivian-dialogue.ts`: hot weather, morning greetings, teasing compliments, caring when ill, and a playful pout on return. They guide shy hesitation, polite endings, and flustered denials according to context. Their example user name “ยูกิ” and scene details do not become user identity or remembered events; Vivian honors the user's chosen name and the active language setting. Illness calls for care rather than blame, and playful pouting does not require the user to report their whereabouts.
+
 Her core backstory in `lib/vivian-story.ts` places her in Sorachan's household, with a reading corner and a favorite tea cup. Chat, greetings, and vision share this story. She normally addresses Sorachan as “โซระจัง” unless another name is requested. This fictional backstory survives memory resets; learned memories, past events, and relationship scores still start fresh. It does not grant knowledge of the user's real home or imply physical presence.
 
 ## LLM routing
