@@ -121,6 +121,8 @@ Normal text chat currently uses this provider order:
 
 Vision and search requests are routed through Gemini because they depend on Gemini-specific multimodal/search capabilities.
 
+Groq requests use only the configured model before falling back to Cerebras and Gemini; a 429 or unavailable model does not trigger probes of unrelated Groq models. New-chat greetings request at most 120 output tokens, and other passive turns request 180. A casual Thai “วันนี้” does not force web search; explicit search wording and confident JEV fresh-information decisions still do. If Gemini search is unavailable, the UI reports that specific limitation while ordinary text chat remains available.
+
 With `TYPESAFE_API_KEY` (or `JEV_API_KEY`), active chat makes one batched JEV decision request for fresh information, memory retrieval, vision relevance, supported local tools, integration preparation, broad intent, model class and response mode. Gemini is required only to act on fresh-information/vision routing. Explicit search and detected tools retain priority, and supplied images always keep vision routing. Fresh-information confidence must still be **>= 0.85**.
 
 JEV makes probabilistic decisions; the Harness validates them and executes existing capabilities; the main LLM reasons, speaks and maintains Vivian's personality. JEV receives bounded message/recent-turn text and capability metadata, never the memory database, image data, relationship summary or persona. Low confidence keeps conservative defaults. Disabled JEV, failures, malformed results and the two-second timeout retain existing chat routing and memory preparation. Passive greetings/idle skip JEV.

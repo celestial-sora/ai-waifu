@@ -1001,7 +1001,10 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
       console.error("Vivian response unavailable", error);
       resetReaction();
       if (!idle && !visionIdle) {
-        const message = error instanceof Error && error.message.includes("RATE_LIMITED") ? "ส่งถี่เกินไปค่ะ รอสักครู่นะคะ" : "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ";
+        const message = error instanceof Error && error.message.includes("RATE_LIMITED") ? "ส่งถี่เกินไปค่ะ รอสักครู่นะคะ"
+          : error instanceof Error && error.message === "SEARCH_UNAVAILABLE" ? "ตอนนี้ค้นเว็บไม่ได้ค่ะ แต่ยังคุยเรื่องทั่วไปได้นะคะ"
+          : error instanceof Error && error.message === "CHAT_NOT_CONFIGURED" ? "ตอนนี้ระบบแชตยังไม่พร้อมใช้งานค่ะ"
+          : "ตอนนี้เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้งนะคะ";
         setErrorNotice(message);
         setMessages((current) => [...current, { from: "vivian", text: message }]);
       }

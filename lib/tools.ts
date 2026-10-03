@@ -5,7 +5,7 @@ const weatherIntent = /อากาศ|ฝน|อุณหภูมิ|พยา
 const timeIntent = /กี่โมง|ตอนนี้เวลา|วันที่เท่าไหร่|วันอะไร|what time|date today|timezone/i;
 const calcIntent = /คำนวณ|เท่ากับเท่าไหร่|calculate|เท่าไหร่\s*[0-9]|[0-9]+\s*[\+\-\*x×÷\/]/i;
 const memoryIntent = /จำได้ไหม|เคยบอก|ที่เล่าไว้|recall|what did I tell|remember when/i;
-export const searchIntent = /(ค้นหา|search|หาให้หน่อย|ข่าว|ล่าสุด|วันนี้|ราคา|current|latest|look up|ออนไลน์|บนเว็บ|ในเน็ต)/i;
+export const searchIntent = /(ค้นหา|search|หาให้หน่อย|ข่าว|ล่าสุด|ราคา|current|latest|look up|ออนไลน์|บนเว็บ|ในเน็ต)/i;
 
 const weatherCodes: Record<number, string> = {
   0: "ท้องฟ้าโปร่ง",

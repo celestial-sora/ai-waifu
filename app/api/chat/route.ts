@@ -80,13 +80,13 @@ async function callGroq(
   apiKey: string,
   messages: any[],
   model = groqModelName(),
-  options: { tools?: any[]; tool_choice?: string; timeoutMs?: number } = {}
+  options: { tools?: any[]; tool_choice?: string; timeoutMs?: number; maxTokens?: number } = {}
 ) {
   const payload: Record<string, unknown> = {
     model,
     messages,
     temperature: 0.8,
-    max_tokens: 2500,
+    max_tokens: options.maxTokens ?? 2500,
   };
   if (options.tools && options.tools.length > 0) {
     payload.tools = options.tools;
@@ -267,7 +267,10 @@ export async function POST(request: Request) {
   const cerebrasApiKey = process.env.CEREBRAS_API_KEY;
   const groqApiKey = process.env.GROQ_API_KEY;
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (!cerebrasApiKey && !groqApiKey && !geminiApiKey) return NextResponse.json({ error: "No chat provider is configured" }, { status: 500 });
+  if (!cerebrasApiKey && !groqApiKey && !geminiApiKey) {
+    console.error("Chat configuration unavailable", { code: "CHAT_NOT_CONFIGURED" });
+    return NextResponse.json({ error: "ตอนนี้ระบบแชตยังไม่พร้อมใช้งานค่ะ", code: "CHAT_NOT_CONFIGURED" }, { status: 503 });
+  }
 
   const body = (await request.json()) as {
     messages?: ChatMessage[];
@@ -359,7 +362,12 @@ export async function POST(request: Request) {
       ? [{ role: "user", content: "[ระบบกล้อง Live] นี่คือภาพปัจจุบันจากกล้องของผู้ใช้ ให้ Vivian สังเกตและทักทายหรือแสดงความคิดเห็นสั้นๆ 1-2 ประโยคเกี่ยวกับสิ่งที่เห็นอย่างเป็นธรรมชาติและเป็นกันเอง" }]
       : contents;
 
-  if (shouldSearch && !geminiApiKey) return NextResponse.json({ error: "GEMINI_API_KEY is not configured for web search" }, { status: 500 });
+  if (shouldSearch && !geminiApiKey) {
+    console.warn("Chat search unavailable", { code: "SEARCH_UNAVAILABLE", mode: greeting ? "greeting" : idle ? "idle" : visionIdle ? "vision_idle" : "chat", hasImage });
+    return NextResponse.json({ error: "ตอนนี้ค้นเว็บไม่ได้ค่ะ แต่ยังคุยเรื่องทั่วไปได้นะคะ", code: "SEARCH_UNAVAILABLE" }, { status: 503 });
+  }
+
+  const responseTokenLimit = greeting ? 120 : passive ? 180 : 2500;
 
   // Text chat order: Groq -> Cerebras -> Gemini. Vision/search stay on Gemini because they require Gemini-specific capabilities.
   let provider: "cerebras" | "groq" | "gemini" = "gemini";
@@ -388,7 +396,7 @@ export async function POST(request: Request) {
   const geminiPayload = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: buildGeminiContents(),
-    generationConfig: { temperature: passive ? .9 : .8, maxOutputTokens: greeting ? 120 : 2500 },
+    generationConfig: { temperature: passive ? .9 : .8, maxOutputTokens: responseTokenLimit },
   };
 
   const groqMessages: ProviderTurn[] = hasImage
@@ -436,12 +444,13 @@ export async function POST(request: Request) {
 
   // 1. PRIMARY TEXT / TOOLS: Groq.
   if (!generatedData && groqApiKey && plan.modelRoute === "text") {
-    const groqCandidates = [groqModelName(), "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+    // Only request the configured model; provider fallback handles failures.
+    const groqCandidates = [groqModelName()];
 
     for (const gModel of groqCandidates) {
       try {
         const msgs = [{ role: "system" as const, content: systemPrompt }, ...promptContents];
-        const initialRes = await callGroq(groqApiKey, msgs, gModel, { tools: composioFunctions });
+        const initialRes = await callGroq(groqApiKey, msgs, gModel, { tools: composioFunctions, maxTokens: responseTokenLimit });
         if (initialRes.ok) {
           const initialData = await initialRes.json();
           const choice = initialData.choices?.[0];
@@ -477,7 +486,16 @@ export async function POST(request: Request) {
             break;
           }
         } else {
-          console.warn(`Groq (${gModel}) returned ${initialRes.status}`);
+          console.warn(`Groq (${gModel}) returned ${initialRes.status}`, {
+            mode: greeting ? "greeting" : passive ? "idle" : "chat",
+            limitTokens: initialRes.headers.get("x-ratelimit-limit-tokens"),
+            remainingTokens: initialRes.headers.get("x-ratelimit-remaining-tokens"),
+            limitRequests: initialRes.headers.get("x-ratelimit-limit-requests"),
+            remainingRequests: initialRes.headers.get("x-ratelimit-remaining-requests"),
+            resetTokens: initialRes.headers.get("x-ratelimit-reset-tokens"),
+            resetRequests: initialRes.headers.get("x-ratelimit-reset-requests"),
+            retryAfter: initialRes.headers.get("retry-after"),
+          });
         }
       } catch (err) {
         console.warn(`Groq (${gModel}) error`, err);
@@ -492,7 +510,7 @@ export async function POST(request: Request) {
     for (const cModel of cerebrasCandidates) {
       try {
         const msgs = [{ role: "system" as const, content: systemPrompt }, ...promptContents];
-        const initialRes = await callCerebras(cerebrasApiKey, msgs, cModel, { tools: composioFunctions });
+        const initialRes = await callCerebras(cerebrasApiKey, msgs, cModel, { tools: composioFunctions, maxTokens: responseTokenLimit });
         if (initialRes.ok) {
           const initialData = await initialRes.json();
           const choice = initialData.choices?.[0];

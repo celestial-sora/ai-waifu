@@ -297,6 +297,22 @@ test("chat fresh request uses Gemini search; explicit search survives low JEV co
   }
 });
 
+test("casual Thai today mentions use text chat without Gemini, while explicit search reports unavailable", async () => {
+  for (const message of ["วันนี้อากาศร้อนจังเลย", "วันนี้ชุดน่ารักจัง", "วันนี้เป็นยังไงบ้าง"]) {
+    const fixture = chatFixture({ env: { GEMINI_API_KEY: "" }, values: { needs_current_information: 0.01 } });
+    const response = await fixture.post(message);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).searchedWeb, false);
+    assert.ok(fixture.calls.some((call) => call.kind === "groq"));
+    assert.equal(fixture.calls.some((call) => call.kind === "gemini" || call.kind === "tavily"), false);
+  }
+  const explicit = chatFixture({ env: { GEMINI_API_KEY: "" } });
+  const response = await explicit.post("ค้นหาข่าวล่าสุดให้หน่อย");
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, "SEARCH_UNAVAILABLE");
+  assert.equal(explicit.calls.some((call) => ["groq", "cerebras", "gemini"].includes(call.kind)), false);
+});
+
 test("chat skips irrelevant durable memory, executes approved local tools and adds bounded response guidance", async () => {
   const fixture = chatFixture({ values: { needs_memory: 0.01, needs_calculator: 0.99, explanatory_response: 0.95 } });
   const response = await fixture.post("2 + 2");
@@ -354,7 +370,26 @@ test("JEV works without Gemini and normal text retains Groq → Cerebras → Gem
   assert.equal(noGemini.calls.find((call) => call.kind === "groq").kind, "groq");
   const fallback = chatFixture({ env: { CEREBRAS_API_KEY: "fixture-cerebras", JEV_ENABLED: "false" }, groqReply: () => new Response("fail", { status: 503 }), cerebrasReply: () => new Response("fail", { status: 503 }) });
   assert.equal((await fallback.post()).status, 200);
-  assert.deepEqual(fallback.calls.filter((call) => ["groq", "cerebras", "gemini"].includes(call.kind)).map((call) => call.kind), ["groq", "groq", "groq", "cerebras", "gemini"]);
+  assert.deepEqual(fallback.calls.filter((call) => ["groq", "cerebras", "gemini"].includes(call.kind)).map((call) => call.kind), ["groq", "cerebras", "gemini"]);
+});
+
+test("Groq quota or missing model goes directly to Cerebras without probing other Groq models", async () => {
+  for (const status of [429, 404]) {
+    const fixture = chatFixture({ env: { CEREBRAS_API_KEY: "fixture-cerebras" }, groqReply: () => new Response("unavailable", { status }) });
+    const response = await fixture.post();
+    assert.equal(response.status, 200);
+    assert.deepEqual(fixture.calls.filter((call) => ["groq", "cerebras", "gemini"].includes(call.kind)).map((call) => call.kind), ["groq", "cerebras"]);
+    assert.equal(fixture.calls.find((call) => call.kind === "groq").body.model, "openai/gpt-oss-120b");
+  }
+});
+
+test("fresh greetings request only 120 output tokens across text providers", async () => {
+  for (const provider of ["groq", "cerebras"]) {
+    const fixture = chatFixture({ env: { CEREBRAS_API_KEY: "fixture-cerebras" }, groqReply: provider === "cerebras" ? () => new Response("limited", { status: 429 }) : undefined });
+    assert.equal((await fixture.post("Hello", { mode: "greeting" })).status, 200);
+    assert.equal(fixture.calls.find((call) => call.kind === provider).body.max_tokens, 120);
+    assert.equal(fixture.background.length, 0);
+  }
 });
 
 test("passive greeting bypasses JEV and background persistence; access denial stops all preflight", async () => {
