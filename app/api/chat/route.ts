@@ -7,7 +7,8 @@ import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, toolsPromptBlock } from "@/lib/tools";
 import { rateLimit, rateLimitedResponse } from "@/lib/rate-limit";
-import { decideVivian, type JevContext } from "@/lib/jev";
+import { decideVivian, jevEnabled, type JevContext } from "@/lib/jev";
+import { loadSceneContext, executeSceneDecision } from "@/lib/scene-store";
 import { resolveChatPlan } from "@/lib/chat-decision";
 import { getComposioTools, getComposioConnectedAccounts, executeComposioTool, composioToolsToFunctions, composioResultsBlock, detectToolkits, type ComposioToolCall, type ComposioConnectedAccount } from "@/lib/composio";
 
@@ -260,7 +261,8 @@ ${memoryContext}${toolContext}`;
 }
 
 export async function POST(request: Request) {
-  const denied = await requireApiAccess(request);
+  let authenticatedUserId: string | null = null;
+  const denied = await requireApiAccess(request, (user) => { authenticatedUserId = user.id; });
   if (denied) return denied;
   const quota = rateLimit(request, "chat", 20);
   if (!quota.allowed) return rateLimitedResponse(quota.retryAfter);
@@ -300,6 +302,10 @@ export async function POST(request: Request) {
 
   const lastUserText = passive ? "" : ([...recent].reverse().find((message) => message.role === "user")?.content ?? (hasImage ? "ช่วยดูภาพนี้ให้หน่อยค่ะ" : ""));
   const composioToolkits = !passive ? detectToolkits(lastUserText) : [];
+  // Non-critical presentation lookups have their own short deadline. Start
+  // companion state first, preserving the existing overlap with JEV.
+  const statePromise = loadCompanionState(userKey);
+  const sceneContext = passive || !jevEnabled() ? null : await loadSceneContext(authenticatedUserId).catch(() => null);
   const decisionContext: JevContext = {
     message: lastUserText,
     recentTurns: recent.slice(0, -1).slice(-2),
@@ -307,9 +313,9 @@ export async function POST(request: Request) {
     memoryAvailable: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
     capabilities: { search: Boolean(geminiApiKey), integrations: Boolean(process.env.COMPOSIO_API_KEY) },
     toolkitCandidates: composioToolkits,
+    scenes: sceneContext ? { autoScene: sceneContext.autoScene, activeSceneId: sceneContext.activeSceneId, available: sceneContext.scenes } : undefined,
   };
   // State loading does not depend on JEV; overlap it with the single decision pass.
-  const statePromise = loadCompanionState(userKey);
   const decision = passive ? null : (await decideVivian(decisionContext)).decision;
   const plan = resolveChatPlan(decisionContext, decision, passive);
   const shouldSearch = plan.shouldSearch;
@@ -633,7 +639,9 @@ export async function POST(request: Request) {
       await saveCompanionState(userKey, nextState);
     } catch (error) { console.warn("Persistence unavailable", error); }
   });
+  const scene = await executeSceneDecision(sceneContext, plan.scene).catch(() => ({ change: false as const }));
   return NextResponse.json({
+    scene,
     text,
     searchedWeb: shouldSearch,
     tools: toolResults.map((item) => item.name),

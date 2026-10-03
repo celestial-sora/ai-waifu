@@ -361,3 +361,11 @@ Do not merge or push old branches/tags into the cleaned repository: that restore
 Settings → **Reset Vivian** permanently clears shared cloud memories, conversation history, the conversation summary, and companion relationship/mood state. It also clears this device's chats, check-in streak, idle timestamps, and custom instructions, then restores the initial companion scores. Imported models, voice/language preferences, and the login account are retained. Other devices retain their own local chat storage.
 
 The authenticated `DELETE /api/memory` request with `{ "scope": "all" }` deletes only the existing shared `default` identity and verifies empty cloud results before acknowledging success. Partial failures can be retried; this device's history is cleared only after a confirmed server response.
+
+## Dynamic scene backgrounds
+
+Open **Scenes → Add Scene**, enter your own short label, then upload/drop a JPG, PNG, WebP or AVIF image (up to 8 MB) or paste an HTTP(S) image URL. Vivian validates and imports both sources into private Supabase Storage. Edit labels, replace/delete images and apply scenes from their cards. **AI Auto Scene** is OFF by default; when ON, the existing batched JEV decision uses only your scene IDs and labels. Images are never analyzed or sent to a model.
+
+Apply `supabase/migrations/20261003032056_dynamic_scenes.sql` to the existing Vivian Supabase project before using this feature. It adds account-owned scene/preferences tables, a cleanup queue and the private `vivian-scenes` bucket; existing shared memories remain unchanged. Existing server Supabase credentials are required for scene persistence. Legacy browser-only scenes can be re-added with an explicit user-written label.
+
+Routes: `GET/POST /api/scenes`, `PATCH/DELETE /api/scenes/:id`, `GET /api/scenes/:id/image`, `POST /api/scenes/preview`, and `PATCH /api/scenes/preferences`. All routes authenticate independently, enforce account ownership and protect mutations against cross-site requests. See [Dynamic scene architecture, limits and testing](docs/dynamic-scenes.md). Run `npm run test:scenes` and, after a production build, `npm run test:scenes:integration`.

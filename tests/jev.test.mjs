@@ -221,7 +221,7 @@ for (const phase of ["headers", "body"]) {
 
 // Exercise the actual chat route, JEV client, parser and plan; mock only auth,
 // persistence and upstream services. Never send test messages to cloud memory.
-function chatFixture({ values, jevFetch, env = {}, denied = null, groqReply, cerebrasReply, timeout = 2000 } = {}) {
+function chatFixture({ values, jevFetch, env = {}, denied = null, groqReply, cerebrasReply, timeout = 2000, sceneContext = null, sceneFailure = false, sceneExecutionFailure = false } = {}) {
   const calls = [], executions = [], background = [], memoryLoads = [];
   const providerEnv = { TYPESAFE_API_KEY: "fixture-jev", GROQ_API_KEY: "fixture-groq", GEMINI_API_KEY: "fixture-gemini", COMPOSIO_API_KEY: "fixture-composio", SUPABASE_URL: "fixture-db", SUPABASE_SERVICE_ROLE_KEY: "fixture-admin", ...env };
   const fixtureJev = client(async (url, options) => {
@@ -231,6 +231,10 @@ function chatFixture({ values, jevFetch, env = {}, denied = null, groqReply, cer
   const fixturePlan = load("../lib/chat-decision.ts", { "@/lib/tools": tools, "@/lib/jev": fixtureJev });
   const fixtureTools = load("../lib/tools.ts", {}, { process: { env: {} }, fetch: async () => assert.fail("Unexpected live local tool request") });
   const imports = {
+    "@/lib/scene-store": {
+      loadSceneContext: async () => { if (sceneFailure) throw new Error("Storage offline"); return sceneContext; },
+      executeSceneDecision: async (_context, decision) => { if (sceneExecutionFailure) throw new Error("Storage offline"); return decision ?? { change: false }; },
+    },
     "@/lib/auth/server": { requireApiAccess: async () => denied },
     "@/lib/rate-limit": { rateLimit: () => ({ allowed: true }) },
     "@/lib/companion": companion,
@@ -439,3 +443,71 @@ for (const provider of ["groq", "cerebras"]) {
     });
   }
 }
+
+
+const sceneCatalog = [{ id: "00000000-0000-4000-8000-000000000001", label: "ห้องนอนตอนกลางคืน" }, { id: "00000000-0000-4000-8000-000000000002", label: "คาเฟ่" }];
+const autoSceneContext = { userId: "fixture-user", autoScene: true, activeSceneId: null, revision: "fixture-revision", scenes: sceneCatalog };
+function sceneAnswers(scores) {
+  const data = answers();
+  scores.forEach((noul, index) => { data.answers[`scene_${index}`] = { type: "noul", noul }; });
+  return data;
+}
+test("scene selection joins one batch and projects only IDs and manual labels", async () => {
+  const calls = [];
+  const fixture = client(async (_url, options) => { calls.push(JSON.parse(options.body)); return Response.json(sceneAnswers([0.99, 0.01])); });
+  const result = await fixture.module.decideVivian(context("ง่วงแล้ว กลับไปนอนกัน", { scenes: { autoScene: true, activeSceneId: null, available: sceneCatalog.map((scene) => ({ ...scene, image: "PRIVATE_IMAGE", imageUrl: "PRIVATE_URL", imageKey: "PRIVATE_KEY" })) } }));
+  assert.equal(calls.length, 1);
+  assert.equal(Object.keys(calls[0].questions).length, 12);
+  assert.deepEqual(JSON.parse(calls[0].state).availableScenes, sceneCatalog);
+  assert.doesNotMatch(JSON.stringify(calls), /PRIVATE/);
+  assert.equal(result.decision.scene.id, sceneCatalog[0].id);
+});
+test("no scene change, ties, missing/malformed scene answers keep the scene without discarding chat decisions", () => {
+  for (const scores of [[0.01, 0.01], [0.5, 0.5], [0.99, 0.98], [1.1, 0], [NaN, 0], []]) {
+    const decision = jev.parseJevDecision(sceneAnswers(scores), sceneCatalog);
+    assert.equal(decision.scene.change, false);
+    assert.ok(decision.memory);
+  }
+});
+test("Harness rejects unknown scene IDs, disabled auto scenes, passive changes and same-scene changes", () => {
+  const decision = jev.parseJevDecision(sceneAnswers([0.99, 0]), sceneCatalog);
+  const ctx = context("sleep", { scenes: { autoScene: true, activeSceneId: null, available: sceneCatalog } });
+  assert.equal(harness.resolveChatPlan(ctx, decision, false).scene.id, sceneCatalog[0].id);
+  for (const [input, proposal, passive] of [
+    [{ ...ctx, scenes: { ...ctx.scenes, autoScene: false } }, decision, false],
+    [ctx, { ...decision, scene: { change: true, id: "another-users-scene" } }, false],
+    [ctx, decision, true],
+    [{ ...ctx, scenes: { ...ctx.scenes, activeSceneId: sceneCatalog[0].id } }, decision, false],
+    [ctx, { ...decision, scene: { change: "true", id: sceneCatalog[0].id } }, false],
+  ]) assert.equal(harness.resolveChatPlan(input, proposal, passive).scene.change, false);
+});
+test("Auto Scene OFF adds no catalog or scene questions to the JEV request", async () => {
+  const fixture = client(async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.equal(Object.keys(body.questions).length, 10);
+    assert.equal(JSON.parse(body.state).availableScenes, undefined);
+    return Response.json(answers());
+  });
+  const result = await fixture.module.decideVivian(context("sleep", { scenes: { autoScene: false, available: sceneCatalog, activeSceneId: null } }));
+  assert.equal(result.decision.scene.change, false);
+});
+test("valid scene decision returns through normal chat JSON without image data in any model request", async () => {
+  const fixture = chatFixture({ sceneContext: autoSceneContext, jevFetch: async () => Response.json(sceneAnswers([0.99, 0.01])) });
+  const response = await fixture.post("ง่วงแล้ว กลับไปนอนกัน");
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.scene.id, sceneCatalog[0].id);
+  assert.equal(body.text, "Vivian fixture reply");
+  assert.equal(fixture.calls.filter((call) => call.kind === "jev").length, 1);
+  assert.doesNotMatch(JSON.stringify(fixture.calls), /imageKey|imageUrl|thumbnailUrl|vivian-scenes/);
+});
+test("scene context or execution/storage failure cannot prevent normal chat from completing", async () => {
+  for (const options of [{ sceneFailure: true }, { sceneContext: autoSceneContext, jevFetch: async () => new Response("unavailable", { status: 503 }) }, { sceneExecutionFailure: true, sceneContext: autoSceneContext }, { sceneContext: autoSceneContext, jevFetch: async () => Response.json(sceneAnswers([])) }]) {
+    const fixture = chatFixture(options);
+    const response = await fixture.post();
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.text, "Vivian fixture reply");
+    assert.equal(body.scene.change, false);
+  }
+});

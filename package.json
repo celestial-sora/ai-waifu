@@ -13,18 +13,22 @@
     "test:companion": "node --experimental-strip-types --test tests/companion.test.mjs",
     "test:auth": "node --experimental-strip-types --test tests/auth-policy.test.mjs",
     "test:auth:integration": "node --test tests/auth.integration.test.mjs",
-    "test:models": "node --experimental-strip-types --test tests/local-models.test.mjs tests/model-textures.test.mjs tests/model-rest-state.test.mjs"
+    "test:models": "node --experimental-strip-types --test tests/local-models.test.mjs tests/model-textures.test.mjs tests/model-rest-state.test.mjs",
+    "test:scenes": "node --experimental-strip-types --test tests/scenes.test.mjs",
+    "test:scenes:integration": "node --test tests/scenes.integration.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",
     "fflate": "^0.8.3",
+    "ipaddr.js": "2.3.0",
     "next": "16.3.3",
     "pixi-live2d-display": "^0.4.0",
     "pixi.js": "^6.5.10",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

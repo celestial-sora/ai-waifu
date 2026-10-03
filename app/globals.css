@@ -234,3 +234,28 @@ button { cursor: pointer; }
 .expression-grid button[aria-pressed="true"] { background: #a95e8d; border-color: #edb9d6; }
 .model-notice { margin-top: 12px; padding: 10px 12px; border: 1px solid #d8949b55; border-radius: 12px; color: #ffd5dd; background: #7c303033; font: 12px/1.5 system-ui, sans-serif; }
 .model-import-actions button:disabled, .model-select-label select:disabled, .expression-grid button:disabled, .floating-option:disabled { opacity: .5; cursor: wait; }
+
+/* Scene library reuses the existing floating workspace and control palette. */
+.scene-background.scene-layer { animation: none; }
+.scene-background.scene-entering { animation: scene-fade-in .42s ease both; }
+.scene-auto-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.scene-manager button:disabled { opacity: .55; cursor: wait; }
+.scene-editor { padding: 12px; margin: 12px 0; border: 1px solid #ffffff26; border-radius: 14px; background: #ffffff0c; font: 13px system-ui, sans-serif; }
+.scene-editor h3 { margin: 0 0 14px; font-size: 15px; }
+.scene-editor label { display: grid; gap: 7px; margin: 12px 0 6px; }
+.scene-editor input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #ffffff30; border-radius: 10px; color: #fff; background: #ffffff10; font: 16px system-ui, sans-serif; }
+.scene-editor small { color: #dec9d9; font-size: 11px; }
+.scene-drop-area { display: grid; gap: 10px; width: 100%; padding: 22px 12px; border: 1px dashed #e8a3cd88; border-radius: 12px; color: #fff; background: #ffffff0a; cursor: pointer; overflow-wrap: anywhere; }
+.scene-preview img { display: block; width: 100%; max-height: 180px; object-fit: contain; border-radius: 10px; }
+.scene-editor-actions { display: flex; gap: 8px; margin-top: 14px; }
+.scene-editor-actions button { flex: 1; text-align: center; }
+.custom-scene-image { object-fit: cover; }
+.scene-card-menu { position: relative; padding: 0 8px 8px; }
+.scene-card-menu summary { margin-left: auto; width: 44px; min-height: 38px; text-align: center; list-style: none; cursor: pointer; border-radius: 10px; background: #ffffff14; font: 24px system-ui, sans-serif; }
+.scene-card-menu summary::-webkit-details-marker { display: none; }
+.scene-card-menu div { display: grid; gap: 4px; padding-top: 6px; }
+.scene-card-menu button { min-height: 40px; padding: 8px; border: 0; border-radius: 8px; color: #fff; background: #ffffff14; text-align: left; font: 12px system-ui, sans-serif; }
+.scene-delete-confirm { padding: 8px; font: 12px system-ui, sans-serif; }
+.scene-delete-confirm button { width: 100%; margin-bottom: 6px; }
+.scene-manager :is(button, input, summary):focus-visible { outline: 2px solid #e8a3cd; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .scene-background.scene-entering { animation: none; } }

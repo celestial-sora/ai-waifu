@@ -61,7 +61,7 @@ export const getAuthAccess = cache(async (accessToken?: string): Promise<AccessR
   }
 });
 
-export async function requireApiAccess(request: Request): Promise<NextResponse | null> {
+export async function requireApiAccess(request: Request, onAuthorized?: (user: User) => void): Promise<NextResponse | null> {
   if (!isSameOriginMutation(request)) {
     return NextResponse.json({ error: "Cross-site request rejected", status: 403, code: "ACCESS_DENIED" }, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
@@ -70,8 +70,8 @@ export async function requireApiAccess(request: Request): Promise<NextResponse |
   if (authorization && !bearer) {
     return NextResponse.json({ error: "Please sign in", status: 401, code: "AUTH_REQUIRED" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
   }
-  const { error } = await getAuthAccess(bearer);
-  if (!error) return null;
+  const { user, error } = await getAuthAccess(bearer);
+  if (!error) { onAuthorized?.(user); return null; }
   return NextResponse.json({ error: error.message, status: error.status, code: error.code }, {
     status: error.status,
     headers: { "Cache-Control": "private, no-store" },

@@ -2,6 +2,7 @@ import { detectTools, type ToolName } from "@/lib/tools";
 import { jevConfidenceThreshold, type BooleanDecision, type JevContext, type VivianDecision } from "@/lib/jev";
 
 export interface ChatPlan {
+  scene: import("@/lib/scenes").SceneDecision;
   shouldSearch: boolean;
   retrieveMemory: boolean;
   prepareIntegrations: boolean;
@@ -33,7 +34,11 @@ export function resolveChatPlan(context: JevContext, decision: VivianDecision | 
     if (decision.responseMode.mode === "explanation") hints.push("Explain the answer clearly with enough reasoning for the request, while keeping Vivian's established personality.");
   }
   if (!passive && !context.hasImage && confidentYes(decision?.vision)) hints.push("No image was supplied. If seeing the subject is necessary, ask for an image; do not claim to see it.");
+  const scene = decision?.scene;
+  const validatedScene = !passive && context.scenes?.autoScene && scene?.change === true && typeof scene.id === "string" && scene.id !== context.scenes.activeSceneId && context.scenes.available.some((item) => item.id === scene.id)
+    ? { change: true as const, id: scene.id } : { change: false as const };
   return {
+    scene: validatedScene,
     shouldSearch,
     retrieveMemory,
     prepareIntegrations,
