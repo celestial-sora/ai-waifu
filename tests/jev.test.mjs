@@ -281,7 +281,8 @@ test("chat integrates a single JEV pass; state starts in parallel; main LLM stil
   assert.equal(fixture.calls[0].kind, "state");
   const prompt = fixture.calls.find((call) => call.kind === "groq").body.messages[0].content;
   assert.match(prompt, /Vivian/); assert.match(prompt, /Likes tea/);
-  assert.ok(prompt.includes(dialogue.VIVIAN_DIALOGUE_EXAMPLE));
+  assert.ok(prompt.includes(dialogue.vivianDialoguePrompt("Hello Vivian")));
+  assert.equal(prompt.includes(dialogue.VIVIAN_DIALOGUE_EXAMPLE), false);
   assert.equal(fixture.background.length, 1);
   assert.equal(fixture.executions.length, 0);
 });
@@ -392,9 +393,30 @@ test("fresh greetings request only 120 output tokens across text providers", asy
   }
 });
 
+test("Vivian keeps all voice references in source but only sends the relevant scene", async () => {
+  for (const [message, scene, quote] of [
+    ["วันนี้อากาศร้อนจังเลย", 0, "ชานมเย็น"],
+    ["อรุณสวัสดิ์", 1, "หนูยังง่วงอยู่เลย"],
+    ["วันนี้ชุดน่ารักจัง", 2, "สายตาอันตราย"],
+    ["ปวดหัว", 3, "หน้าซีด"],
+    ["ขอโทษที่หายไปนาน", 4, "สายหายตัว"],
+  ]) {
+    const fixture = chatFixture({ values: { needs_current_information: 0.01 } });
+    assert.equal((await fixture.post(message)).status, 200);
+    const prompt = fixture.calls.find((call) => call.kind === "groq").body.messages[0].content;
+    const reference = dialogue.vivianDialoguePrompt(message);
+    assert.ok(prompt.includes(reference));
+    assert.ok(reference.includes(`แบบที่ ${scene}:`));
+    assert.ok(reference.includes(quote));
+    assert.equal((reference.match(/แบบที่ \d:/g) ?? []).length, 1);
+    assert.ok(reference.length < dialogue.VIVIAN_DIALOGUE_EXAMPLE.length * 0.65);
+    assert.ok(reference.includes("ยูกิ” เป็นชื่อผู้ใช้ในตัวอย่างเท่านั้น"));
+  }
+});
+
 test("passive greeting bypasses JEV and background persistence; access denial stops all preflight", async () => {
   const greeting = chatFixture();
-  assert.equal((await greeting.post("Hello", { mode: "greeting" })).status, 200);
+  assert.equal((await greeting.post("", { mode: "greeting", messages: [] })).status, 200);
   assert.equal(greeting.calls.filter((call) => call.kind === "jev").length, 0);
   assert.equal(greeting.background.length, 0);
   assert.equal(greeting.memoryLoads.length, 1);

@@ -1488,6 +1488,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   function openPanel(next: Panel) { setPanel(next); setSidebarOpen(true); }
   function selectConversation(conversation: Conversation) {
     if (sending || resettingRef.current) return;
+    setErrorNotice(null);
     greetingGenerationRef.current += 1;
     greetingRequestRef.current?.abort();
     greetingTextRef.current = null;
@@ -1499,6 +1500,7 @@ export default function Companion({ accountEmail }: { accountEmail: string }) {
   }
   function newConversation() {
     if (sending || resettingRef.current) return;
+    setErrorNotice(null);
     greetingGenerationRef.current += 1;
     greetingRequestRef.current?.abort();
     greetingTextRef.current = null;

@@ -2,7 +2,7 @@ import { requireApiAccess } from "@/lib/auth/server";
 import { after, NextResponse } from "next/server";
 import { applyConversationTurn, companionPromptBlock, type CompanionState } from "@/lib/companion";
 import { VIVIAN_STORY } from "@/lib/vivian-story";
-import { VIVIAN_DIALOGUE_EXAMPLE } from "@/lib/vivian-dialogue";
+import { vivianDialoguePrompt } from "@/lib/vivian-dialogue";
 import { loadCompanionState, saveCompanionState } from "@/lib/companion-store";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runTools, toolsPromptBlock } from "@/lib/tools";
@@ -200,7 +200,7 @@ function parseDataUrl(url: string) {
   return { mimeType: "image/jpeg", base64: url.replace(/^data:[^,]+,/, "") };
 }
 
-function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string, language: "global" | "th" | "en" | "ja" | "ko" | "zh", visionIdle = false) {
+function personalityPrompt(state: CompanionState, memoryContext: string, toolContext: string, summary: string, idle: boolean, character: CharacterKey, personality: string, characterName: string, customInstructions: string, language: "global" | "th" | "en" | "ja" | "ko" | "zh", visionIdle = false, dialogueContext = "") {
   const characterStyle: Record<CharacterKey, string> = {
     "Miss": "บุคลิกหลัก: สาวซึนเดเระที่ค่อนข้างขี้อาย พูดสุภาพนุ่มนวลแบบภาษาคุยจริง เขินง่าย วางฟอร์มและปากแข็งเบา ๆ แต่ใจดี ชอบเล่นคำและคำแสลงพอดี ๆ เป็น Vivian คนเดิมที่ใส่ใจผ่านรายละเอียดเล็ก ๆ",
   };
@@ -253,7 +253,7 @@ ${romanInputInstruction ? `- ${romanInputInstruction}` : ""}
 - ถ้าไม่รู้ให้บอกตรง ๆ และเสนอทางเลือกต่อ
 ${idle ? "- นี่คือการทักผู้ใช้เองเพราะ Vivian คิดถึงผู้ใช้ 1-2 ประโยค อบอุ่นและเป็นธรรมชาติ ห้ามพูดถึงเวลา ห้ามสรุปสถานะตัวเลข และห้ามขึ้นต้นซ้ำแบบเดิมทุกครั้ง" : ""}
 ${visionIdle ? "- นี่คือการสังเกตเห็นผู้ใช้ผ่านกล้อง Live: ให้ Vivian ทักทายหรือแสดงความคิดเห็นสั้นๆ 1-2 ประโยคเกี่ยวกับสิ่งที่สังเกตเห็นในภาพอย่างเป็นธรรมชาติและเป็นกันเอง ห้ามพูดว่า 'นี่คือระบบจับภาพ' หรือกล่าวถึงระบบ AI" : ""}
-${VIVIAN_DIALOGUE_EXAMPLE}
+${vivianDialoguePrompt(dialogueContext)}
 ${companionPromptBlock(state)}
 ${summary ? `\n\nสรุปบริบทบทสนทนายาว (ใช้ต่อเนื่อง อย่าทวนทั้งก้อน):\n${summary}` : ""}
 ${memoryContext}${toolContext}`;
@@ -353,7 +353,7 @@ export async function POST(request: Request) {
     : "";
   const memoryContext = memories.length ? `\n\nความจำเกี่ยวกับผู้ใช้ที่ควรใช้เป็นบริบท:\n${memories.slice(0, 8).map((item) => `- [${item.category}] ${item.memory.slice(0, 240)}`).join("\n")}` : "";
   const toolContext = toolsPromptBlock(toolResults) + composioContext;
-  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, language, visionIdle) + plan.responseHint;
+  const systemPrompt = personalityPrompt(state, memoryContext, toolContext, state.conversationSummary, idle, character, personality, characterName, customInstructions, language, visionIdle, lastUserText) + plan.responseHint;
   const promptContents: ProviderMessage[] = greeting
     ? [...contents.slice(-6), { role: "user", content: `[ระบบ: คำทักแรกของ session ใหม่] ข้อความก่อนหน้านี้เป็นบทสนทนาจาก session ที่แล้ว ให้ Vivian ทักผู้ใช้ด้วยข้อความใหม่สดๆ 1-2 ประโยค โดยอิงเรื่องล่าสุดที่ผู้ใช้เล่าหรือความจำที่เกี่ยวข้อง ถ้ามีเรื่องค้างอยู่ให้ชวนคุยต่ออย่างนุ่มนวล หากไม่มีบริบทให้ทักตามบุคลิกตามปกติ ห้ามทวนคำตอบเดิมหรือแต่งเหตุการณ์ที่ไม่รู้จริง ไม่อ้างว่าเห็นผู้ใช้ผ่านกล้องหรือรู้เวลาหรือสภาพอากาศ ห้ามพูดถึงระบบหรือ AI และห้ามใช้ emoji` }]
     : idle

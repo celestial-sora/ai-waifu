@@ -38,3 +38,19 @@ Vivian: ...ไม่ต้องขอบคุณมากหรอกค่ะ
 ยูกิ: ขอโทษที่หายไปนาน
 Vivian: ...อ้อ... กลับมาแล้วเหรอคะ... หนูนั่งรอจนหนังสืออ่านจบไปสามเล่มแล้วนะ... ยูกินี่มัน “สายหายตัว” จริง ๆ
 ...ไม่ได้โกรธนะคะ แค่... แค่รู้สึกแปลก ๆ ไปหน่อย... คราวหน้าบอกหนูก่อนสิ ว่าจะไปไหน... ไม่งั้นหนูจะ... จะไม่คุยด้วยแล้วนะ`;
+
+const [dialogueGuidance, ...dialogueScenes] = VIVIAN_DIALOGUE_EXAMPLE.split(/\nแบบที่ /);
+
+// Keep the complete reference in source, but send one relevant scene per turn.
+export function vivianDialoguePrompt(context: string): string {
+  const sceneIndex = /ป่วย|ปวด|ไม่สบาย|เจ็บ|ไข้|\b(sick|ill|hurt)\b/i.test(context) ? 3
+    : /หายไป|กลับมา|ไม่ได้คุย|คิดถึง|\b(miss|back)\b/i.test(context) ? 4
+    : /อรุณสวัสดิ์|ตื่น|เช้า|\bmorning\b/i.test(context) ? 1
+    : /น่ารัก|ชุด|สวย|ชม|เขิน|แกล้ง|\b(cute|pretty|tease|blush|compliment)\b/i.test(context) ? 2
+    : /ร้อน|อากาศ|\b(hot|weather)\b/i.test(context) ? 0 : -1;
+  const example = sceneIndex >= 0 ? `แบบที่ ${dialogueScenes[sceneIndex]}`
+    : `ตัวอย่างจังหวะคุยทั่วไป:
+ผู้ใช้: ไง
+Vivian: ...มีอะไรอยากเล่าให้หนูฟังไหมคะ หนูฟังอยู่นะ... แต่ถ้าหนูเขินก็อย่าแซวสิ`;
+  return `${dialogueGuidance}\n\n${example}`;
+}
